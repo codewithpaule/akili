@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Graph — AKILI</title>
+<link rel="stylesheet" href="css/main.css"><link rel="stylesheet" href="css/components.css">
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script></head>
+<body><div id="nav-mount"></div><script>fetch('partials/nav.html').then(r=>r.text()).then(h=>document.getElementById('nav-mount').innerHTML=h);</script>
+<main style="display:grid;grid-template-columns:260px 1fr 300px;height:calc(100vh - 60px)">
+<aside class="card" style="margin:1rem;border-radius:var(--radius)"><h3 class="label-sm">Filters</h3>
+<label><input type="checkbox" checked> Domain</label><br><label><input type="checkbox" checked> IP</label><br>
+<button class="btn btn-outline btn-sm" style="margin-top:1rem" id="reset">Reset layout</button></aside>
+<div id="graph-canvas" style="background:var(--navy);margin:1rem 0;border-radius:var(--radius)"></div>
+<aside class="card" id="detail" style="margin:1rem">Select a node</aside>
+</main>
+<script src="js/config.js"></script><script src="js/app.js"></script><script src="js/graph.js"></script>
+</body></html>

@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Subdomains — AKILI</title>
+<link rel="stylesheet" href="css/main.css"><link rel="stylesheet" href="css/components.css"></head>
+<body><div id="nav-mount"></div><script>fetch('partials/nav.html').then(r=>r.text()).then(h=>document.getElementById('nav-mount').innerHTML=h);</script>
+<main class="container" style="padding:2rem 1.5rem">
+<div class="card" style="border-top:4px solid var(--mod-subdomain)"><h1>Subdomain Discovery</h1></div>
+<div class="card"><input id="domain" placeholder="example.com" style="width:100%;padding:0.75rem;border:1px solid var(--border);margin-bottom:1rem">
+<button class="btn btn-primary" id="scan-btn" style="background:var(--mod-subdomain)">SCAN</button></div>
+<div id="terminal" class="terminal-panel hidden"></div><section id="results" class="hidden"><div id="findings-grid"></div></section>
+</main>
+<script src="js/config.js"></script><script src="js/app.js"></script>
+<script>window.AKILI_SCAN={module:'subdomains',endpoint:'/api/v1/scan/subdomains',buildBody:()=>({domain:document.getElementById('domain').value})};</script>
+<script src="js/scan.js"></script></body></html>

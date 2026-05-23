@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — AKILI</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/pages.css">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body class="admin-page akili-cursor">
+  <header class="admin-topbar">
+    <div class="admin-topbar-brand">
+      <span class="admin-badge">Admin</span>
+      <strong>AKILI Control</strong>
+    </div>
+    <div class="admin-topbar-meta">
+      <span id="admin-user-email" class="label-sm"></span>
+      <button type="button" class="btn btn-outline btn-sm" id="admin-logout">Sign out</button>
+    </div>
+  </header>
+
+  <div class="admin-layout">
+    <nav class="admin-sidebar" id="admin-nav">
+      <button type="button" class="admin-nav-item active" data-tab="overview">Overview</button>
+      <button type="button" class="admin-nav-item" data-tab="users">Users</button>
+      <button type="button" class="admin-nav-item" data-tab="scans">Scans</button>
+      <button type="button" class="admin-nav-item" data-tab="keys">API keys</button>
+      <button type="button" class="admin-nav-item" data-tab="contacts">Contacts</button>
+      <button type="button" class="admin-nav-item" data-tab="monitors">Monitors</button>
+      <button type="button" class="admin-nav-item" data-tab="billing">Billing</button>
+      <button type="button" class="admin-nav-item" data-tab="events">Audit log</button>
+    </nav>
+
+    <main class="admin-main">
+      <section class="admin-panel active" id="tab-overview">
+        <h1>Overview</h1>
+        <p class="admin-lead">Platform health, growth, and recent activity.</p>
+        <div class="admin-stats" id="admin-stats"></div>
+        <div class="admin-charts-grid">
+          <div class="admin-card">
+            <h3>Signups (30 days)</h3>
+            <div style="position: relative; height: 180px; width: 100%;">
+              <canvas id="chart-signups"></canvas>
+            </div>
+          </div>
+          <div class="admin-card">
+            <h3>Scans (30 days)</h3>
+            <div style="position: relative; height: 180px; width: 100%;">
+              <canvas id="chart-scans"></canvas>
+            </div>
+          </div>
+          <div class="admin-card">
+            <h3>Users by plan</h3>
+            <div style="position: relative; height: 180px; width: 100%;">
+              <canvas id="chart-plans"></canvas>
+            </div>
+          </div>
+          <div class="admin-card admin-card-mrr">
+            <h3>Estimated MRR</h3>
+            <p class="admin-mrr" id="admin-mrr">—</p>
+            <p class="label-sm" id="admin-mrr-sub">Premium subscribers</p>
+          </div>
+        </div>
+        <div class="admin-split">
+          <div class="admin-card">
+            <h3>Recent users</h3>
+            <div id="recent-users" class="admin-table-wrap"></div>
+          </div>
+          <div class="admin-card">
+            <h3>Recent scans</h3>
+            <div id="recent-scans" class="admin-table-wrap"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="admin-panel" id="tab-users">
+        <div class="admin-panel-head">
+          <h1>Users</h1>
+          <div class="admin-filters">
+            <input type="search" id="users-q" placeholder="Search email, name…" class="admin-input">
+            <select id="users-plan" class="admin-input">
+              <option value="">All plans</option>
+              <option value="free">free</option>
+              <option value="premium">premium</option>
+              <option value="trial">trial</option>
+            </select>
+            <select id="users-role" class="admin-input">
+              <option value="">All roles</option>
+              <option value="user">user</option>
+              <option value="admin">admin</option>
+            </select>
+            <button type="button" class="btn btn-primary btn-sm" id="users-search">Search</button>
+          </div>
+        </div>
+        <div id="users-table" class="admin-table-wrap"></div>
+        <div class="admin-pagination" id="users-pager"></div>
+      </section>
+
+      <section class="admin-panel" id="tab-scans">
+        <div class="admin-panel-head">
+          <h1>Scans</h1>
+          <div class="admin-filters">
+            <input type="search" id="scans-q" placeholder="Target…" class="admin-input">
+            <input type="text" id="scans-user" placeholder="User ID (optional)" class="admin-input">
+            <button type="button" class="btn btn-primary btn-sm" id="scans-search">Search</button>
+          </div>
+        </div>
+        <div id="scans-table" class="admin-table-wrap"></div>
+        <div class="admin-pagination" id="scans-pager"></div>
+      </section>
+
+      <section class="admin-panel" id="tab-keys">
+        <h1>API keys</h1>
+        <div id="keys-table" class="admin-table-wrap"></div>
+        <div class="admin-pagination" id="keys-pager"></div>
+      </section>
+
+      <section class="admin-panel" id="tab-contacts">
+        <h1>Contact messages</h1>
+        <div id="contacts-table" class="admin-table-wrap"></div>
+        <div class="admin-pagination" id="contacts-pager"></div>
+      </section>
+
+      <section class="admin-panel" id="tab-monitors">
+        <h1>Monitors</h1>
+        <div id="monitors-table" class="admin-table-wrap"></div>
+      </section>
+
+      <section class="admin-panel" id="tab-billing">
+        <h1>Billing &amp; Paystack Console</h1>
+        <p class="admin-lead">Track active premium subscriptions, pending checkouts, and verify transaction references manually.</p>
+        
+        <div class="admin-split" style="margin-top:1.5rem;">
+          <div class="admin-card">
+            <h3>Verify Paystack Reference Manually</h3>
+            <p class="label-sm" style="margin-bottom:1rem;">Force verification of a Paystack reference for a user if automatic webhook failed.</p>
+            <div style="display:grid; gap:0.75rem;">
+              <input type="text" id="manual-verify-email" placeholder="User email (e.g. user@example.com)" class="admin-input" style="width:100%;">
+              <input type="text" id="manual-verify-ref" placeholder="Paystack reference (e.g. akili_xxxx)" class="admin-input" style="width:100%;">
+              <button type="button" class="btn btn-primary btn-sm" id="btn-manual-verify" style="justify-content:center;">Verify &amp; Activate Premium</button>
+            </div>
+          </div>
+          <div class="admin-card" id="billing-status-card">
+            <h3>Paystack Gateway Status</h3>
+            <div id="billing-status" style="font-size:0.9rem;">Loading gateway state...</div>
+          </div>
+        </div>
+
+        <div class="admin-card" style="margin-top:1.5rem;">
+          <h3>Active Premium Subscriptions</h3>
+          <p class="label-sm" style="margin-bottom:0.75rem;">Users currently on the Premium tier sorted by renewal due date.</p>
+          <div id="active-subs-table" class="admin-table-wrap">Loading active renewals...</div>
+        </div>
+
+        <div class="admin-card" style="margin-top:1.5rem;">
+          <h3>Pending Checkout References</h3>
+          <p class="label-sm" style="margin-bottom:0.75rem;">Users who clicked checkout but haven't completed verification.</p>
+          <div id="pending-subs-table" class="admin-table-wrap">Loading pending...</div>
+        </div>
+
+        <div class="admin-card" style="margin-top:1.5rem;">
+          <h3>Cancelled &amp; Inactive Subscriptions</h3>
+          <p class="label-sm" style="margin-bottom:0.75rem;">Users who previously held premium access but are now inactive/lapsed.</p>
+          <div id="inactive-subs-table" class="admin-table-wrap">Loading historical...</div>
+        </div>
+      </section>
+
+      <section class="admin-panel" id="tab-events">
+        <div class="admin-panel-head">
+          <h1>Audit log</h1>
+          <div class="admin-filters">
+            <input type="search" id="audit-q" placeholder="Search email, IP, action…" class="admin-input">
+            <button type="button" class="btn btn-primary btn-sm" id="audit-search">Search</button>
+          </div>
+        </div>
+        <p class="admin-lead">Every sensitive action with user, IP address, and timestamp — for compliance and support.</p>
+        <div id="audit-table" class="admin-table-wrap">Loading…</div>
+        <div class="admin-pagination" id="audit-pager"></div>
+      </section>
+    </main>
+  </div>
+
+  <div id="user-drawer" class="admin-drawer" hidden>
+    <div class="admin-drawer-inner">
+      <button type="button" class="admin-drawer-close" id="drawer-close">&times;</button>
+      <h2 id="drawer-title">User</h2>
+      <div id="drawer-body"></div>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/admin.js"></script>
+  <script>
+    if (!AKILI_ADMIN.requireAdmin()) throw new Error('redirect');
+
+    const esc = AKILI_ADMIN.esc;
+    const fmt = AKILI_ADMIN.fmtTime;
+    let usersPage = 1;
+    let scansPage = 1;
+    let keysPage = 1;
+    let contactsPage = 1;
+    let auditPage = 1;
+    let chartSignups = null;
+    let chartScans = null;
+    let chartPlans = null;
+
+    const u = AKILI_ADMIN.getUser();
+    document.getElementById('admin-user-email').textContent = u?.email || '';
+    document.getElementById('admin-logout').onclick = () => AKILI_ADMIN.logout();
+
+    document.querySelectorAll('.admin-nav-item').forEach((btn) => {
+      btn.onclick = () => {
+        document.querySelectorAll('.admin-nav-item').forEach((b) => b.classList.remove('active'));
+        document.querySelectorAll('.admin-panel').forEach((p) => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+        loadTab(btn.dataset.tab);
+      };
+    });
+
+    function tableHtml(headers, rows) {
+      if (!rows.length) return '<p class="label-sm">No records.</p>';
+      return `<table class="admin-table"><thead><tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
+    }
+
+    function pager(el, page, total, limit, onPage) {
+      const pages = Math.max(1, Math.ceil(total / limit));
+      if (pages <= 1) { el.innerHTML = ''; return; }
+      el.innerHTML = `
+        <button class="btn btn-outline btn-sm" ${page <= 1 ? 'disabled' : ''} data-p="${page - 1}">Prev</button>
+        <span class="label-sm">Page ${page} / ${pages} (${total} total)</span>
+        <button class="btn btn-outline btn-sm" ${page >= pages ? 'disabled' : ''} data-p="${page + 1}">Next</button>`;
+      el.querySelectorAll('[data-p]').forEach((b) => {
+        b.onclick = () => onPage(parseInt(b.dataset.p, 10));
+      });
+    }
+
+    async function loadOverview() {
+      const data = await AKILI_ADMIN.api('/api/v1/admin/dashboard');
+      const s = data.stats;
+      const cards = [
+        ['Users', s.users_total],
+        ['Premium', s.premium_users],
+        ['Trial active', s.trial_active],
+        ['Scans (30d)', s.scans_last_30d],
+        ['Scans (all)', s.scans_total],
+        ['API keys', s.api_keys_active],
+        ['Contacts', s.contacts_total],
+        ['Usage events', s.usage_events_this_month],
+      ];
+      document.getElementById('admin-stats').innerHTML = cards.map(([l, v]) =>
+        `<article class="admin-stat"><span class="label-sm">${esc(l)}</span><p>${esc(v)}</p></article>`
+      ).join('');
+
+      document.getElementById('recent-users').innerHTML = tableHtml(
+        ['Email', 'Plan', 'Joined'],
+        (s.recent_users || []).map((r) =>
+          `<tr><td><button type="button" class="admin-link" data-uid="${r.user_id}">${esc(r.email)}</button></td><td>${esc(r.plan)}</td><td>${fmt(r.created_at)}</td></tr>`
+        )
+      );
+      document.getElementById('recent-scans').innerHTML = tableHtml(
+        ['Type', 'Target', 'Score', 'When'],
+        (s.recent_scans || []).map((r) =>
+          `<tr><td>${esc(r.scan_type)}</td><td>${esc(r.target)}</td><td>${esc(r.score)} ${esc(r.grade || '')}</td><td>${fmt(r.timestamp)}</td></tr>`
+        )
+      );
+      bindUserLinks();
+
+      renderCharts(data.charts || {});
+    }
+
+    function renderCharts(ch) {
+      if (!window.Chart || !ch.labels) return;
+      const opts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } };
+      if (chartSignups) chartSignups.destroy();
+      if (chartScans) chartScans.destroy();
+      if (chartPlans) chartPlans.destroy();
+      chartSignups = new Chart(document.getElementById('chart-signups'), {
+        type: 'line',
+        data: { labels: ch.labels, datasets: [{ label: 'Signups', data: ch.signups_per_day || [], borderColor: '#2563EB', backgroundColor: 'rgba(37,99,235,0.1)', fill: true, tension: 0.3 }] },
+        options: opts,
+      });
+      chartScans = new Chart(document.getElementById('chart-scans'), {
+        type: 'bar',
+        data: { labels: ch.labels, datasets: [{ label: 'Scans', data: ch.scans_per_day || [], backgroundColor: '#059669' }] },
+        options: opts,
+      });
+      const plans = ch.users_by_plan || {};
+      chartPlans = new Chart(document.getElementById('chart-plans'), {
+        type: 'doughnut',
+        data: {
+          labels: Object.keys(plans),
+          datasets: [{ data: Object.values(plans), backgroundColor: ['#2563EB', '#7C3AED', '#94a3b8', '#f59e0b'] }],
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } },
+      });
+      const mrr = ch.estimated_mrr_ngn || 0;
+      document.getElementById('admin-mrr').textContent = 'NGN ' + Number(mrr).toLocaleString('en-NG');
+      document.getElementById('admin-mrr-sub').textContent = (ch.premium_subscribers || 0) + ' premium subscribers';
+    }
+
+    async function loadUsers(page = usersPage) {
+      usersPage = page;
+      const q = document.getElementById('users-q').value;
+      const plan = document.getElementById('users-plan').value;
+      const role = document.getElementById('users-role').value;
+      const params = new URLSearchParams({ page, limit: 25 });
+      if (q) params.set('q', q);
+      if (plan) params.set('plan', plan);
+      if (role) params.set('role', role);
+      const data = await AKILI_ADMIN.api('/api/v1/admin/users?' + params);
+      document.getElementById('users-table').innerHTML = tableHtml(
+        ['Email', 'Name', 'Plan', 'Role', 'Status', ''],
+        data.items.map((r) =>
+          `<tr>
+            <td>${esc(r.email)}</td>
+            <td>${esc(r.name)}</td>
+            <td>${esc(r.effective_plan || r.plan)}</td>
+            <td>${esc(r.role)}</td>
+            <td>${r.is_active ? 'active' : 'off'}</td>
+            <td><button type="button" class="btn btn-outline btn-sm admin-manage-btn" data-uid="${r.user_id}">Manage</button></td>
+          </tr>`
+        )
+      );
+      bindUserLinks();
+      pager(document.getElementById('users-pager'), page, data.total, data.limit, loadUsers);
+    }
+
+    async function openUser(userId) {
+      if (!userId) return;
+      let u;
+      try {
+        u = await AKILI_ADMIN.api('/api/v1/admin/users/' + encodeURIComponent(userId));
+      } catch (err) {
+        AKILI.showToast(err.message || 'Could not load user', 'error');
+        return;
+      }
+      document.getElementById('drawer-title').textContent = u.email;
+      document.getElementById('drawer-body').innerHTML = `
+        <dl class="admin-dl">
+          <dt>Name</dt><dd>${esc(u.name)}</dd>
+          <dt>Plan</dt><dd>${esc(u.plan)} / effective: ${esc(u.effective_plan)}</dd>
+          <dt>Role</dt><dd>${esc(u.role)}</dd>
+          <dt>Subscription</dt><dd>${esc(u.subscription_status || '—')}</dd>
+          <dt>Scans</dt><dd>${u.scan_count}</dd>
+          <dt>API keys</dt><dd>${u.api_key_count}</dd>
+          <dt>Joined</dt><dd>${fmt(u.created_at)}</dd>
+        </dl>
+        <div class="admin-drawer-actions">
+          <button type="button" class="btn btn-primary btn-sm" id="act-premium">Grant Premium</button>
+          <button type="button" class="btn btn-outline btn-sm" id="act-free">Set Free</button>
+          <button type="button" class="btn btn-outline btn-sm" id="act-trial">Extend trial</button>
+          <select id="act-role" class="admin-input">
+            <option value="user" ${u.role === 'user' ? 'selected' : ''}>user</option>
+            <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>admin</option>
+          </select>
+          <button type="button" class="btn btn-outline btn-sm" id="act-save-role">Save role</button>
+          <button type="button" class="btn btn-outline btn-sm" id="act-deactivate">Deactivate</button>
+        </div>
+        <details style="margin-top:1rem">
+          <summary class="label-sm">Usage this month</summary>
+          <pre class="admin-pre">${esc(JSON.stringify(u.usage_this_month || {}, null, 2))}</pre>
+        </details>`;
+      const drawer = document.getElementById('user-drawer');
+      drawer.removeAttribute('hidden');
+      drawer.style.display = 'flex';
+      document.getElementById('act-premium').onclick = async () => {
+        await AKILI_ADMIN.api('/api/v1/admin/users/' + userId + '/plan', { method: 'POST', body: JSON.stringify({ plan_id: 'premium_monthly' }) });
+        AKILI.showToast('Premium granted', 'success');
+        openUser(userId);
+        loadUsers(usersPage);
+      };
+      document.getElementById('act-free').onclick = async () => {
+        await AKILI_ADMIN.api('/api/v1/admin/users/' + userId + '/plan', { method: 'POST', body: JSON.stringify({ plan_id: 'free' }) });
+        AKILI.showToast('Set to free', 'success');
+        openUser(userId);
+      };
+      document.getElementById('act-trial').onclick = async () => {
+        await AKILI_ADMIN.api('/api/v1/admin/users/' + userId + '/plan', { method: 'POST', body: JSON.stringify({ plan_id: 'trial' }) });
+        AKILI.showToast('Trial extended', 'success');
+        openUser(userId);
+      };
+      document.getElementById('act-save-role').onclick = async () => {
+        const role = document.getElementById('act-role').value;
+        await AKILI_ADMIN.api('/api/v1/admin/users/' + userId, { method: 'PATCH', body: JSON.stringify({ role }) });
+        AKILI.showToast('Role updated', 'success');
+        openUser(userId);
+      };
+      const deactBtn = document.getElementById('act-deactivate');
+      if (u.is_active) {
+        deactBtn.textContent = 'Deactivate';
+        deactBtn.className = 'btn btn-outline btn-sm';
+        deactBtn.style.color = '#ef4444';
+        deactBtn.style.borderColor = '#fca5a5';
+        deactBtn.onclick = async () => {
+          if (!confirm('Deactivate this user?')) return;
+          await AKILI_ADMIN.api('/api/v1/admin/users/' + userId, { method: 'DELETE' });
+          AKILI.showToast('User deactivated', 'success');
+          openUser(userId);
+          loadUsers(usersPage);
+        };
+      } else {
+        deactBtn.textContent = 'Activate';
+        deactBtn.className = 'btn btn-primary btn-sm';
+        deactBtn.style.removeProperty('color');
+        deactBtn.style.removeProperty('border-color');
+        deactBtn.onclick = async () => {
+          await AKILI_ADMIN.api('/api/v1/admin/users/' + userId, {
+            method: 'PATCH',
+            body: JSON.stringify({ is_active: true })
+          });
+          AKILI.showToast('User activated', 'success');
+          openUser(userId);
+          loadUsers(usersPage);
+        };
+      }
+    }
+
+    function bindUserLinks() {
+      document.querySelectorAll('.admin-link[data-uid], .admin-manage-btn[data-uid]').forEach((btn) => {
+        btn.onclick = (e) => {
+          e.preventDefault();
+          openUser(btn.getAttribute('data-uid'));
+        };
+      });
+    }
+
+    document.getElementById('drawer-close').onclick = () => {
+      const drawer = document.getElementById('user-drawer');
+      drawer.setAttribute('hidden', '');
+      drawer.style.display = 'none';
+    };
+
+    async function loadScans(page = scansPage) {
+      scansPage = page;
+      const q = document.getElementById('scans-q').value;
+      const uid = document.getElementById('scans-user').value;
+      const params = new URLSearchParams({ page, limit: 30 });
+      if (q) params.set('q', q);
+      if (uid) params.set('user_id', uid);
+      const data = await AKILI_ADMIN.api('/api/v1/admin/scans?' + params);
+      document.getElementById('scans-table').innerHTML = tableHtml(
+        ['Type', 'Target', 'User', 'Score', 'When', ''],
+        data.items.map((r) =>
+          `<tr>
+            <td>${esc(r.scan_type)}</td>
+            <td>${esc(r.target)}</td>
+            <td>${esc(r.user_email || r.user_id || '—')}</td>
+            <td>${esc(r.score)}</td>
+            <td>${fmt(r.timestamp)}</td>
+            <td>
+              <a class="btn btn-outline btn-sm" href="report.html?id=${encodeURIComponent(r.scan_id)}&admin=1" target="_blank">View</a>
+              <button type="button" class="btn btn-outline btn-sm" data-del-scan="${r.scan_id}">Delete</button>
+            </td>
+          </tr>`
+        )
+      );
+      document.querySelectorAll('[data-del-scan]').forEach((btn) => {
+        btn.onclick = async () => {
+          if (!confirm('Delete this scan?')) return;
+          await AKILI_ADMIN.api('/api/v1/admin/scans/' + btn.dataset.delScan, { method: 'DELETE' });
+          AKILI.showToast('Scan deleted', 'success');
+          loadScans(scansPage);
+        };
+      });
+      pager(document.getElementById('scans-pager'), page, data.total, data.limit, loadScans);
+    }
+
+    async function loadKeys(page = keysPage) {
+      keysPage = page;
+      const data = await AKILI_ADMIN.api('/api/v1/admin/keys?page=' + page + '&limit=30');
+      document.getElementById('keys-table').innerHTML = tableHtml(
+        ['Name', 'Preview', 'User', 'Tier', 'Active', ''],
+        data.items.map((k) =>
+          `<tr>
+            <td>${esc(k.key_name)}</td>
+            <td><code>${esc(k.key_preview)}</code></td>
+            <td>${esc(k.user_email || k.user_id)}</td>
+            <td>${esc(k.tier)}</td>
+            <td>${k.is_active ? 'yes' : 'no'}</td>
+            <td>${k.is_active ? `<button type="button" class="btn btn-outline btn-sm" data-revoke="${esc(k.key_id)}">Revoke</button>` : ''}</td>
+          </tr>`
+        )
+      );
+      document.querySelectorAll('[data-revoke]').forEach((btn) => {
+        btn.onclick = async () => {
+          await AKILI_ADMIN.api('/api/v1/admin/keys/' + btn.dataset.revoke, { method: 'DELETE' });
+          AKILI.showToast('Key revoked', 'success');
+          loadKeys(keysPage);
+        };
+      });
+      pager(document.getElementById('keys-pager'), page, data.total, data.limit, loadKeys);
+    }
+
+    async function loadContacts(page = contactsPage) {
+      contactsPage = page;
+      const data = await AKILI_ADMIN.api('/api/v1/admin/contacts?page=' + page + '&limit=30');
+      document.getElementById('contacts-table').innerHTML = tableHtml(
+        ['From', 'Subject', 'Message', 'When'],
+        data.items.map((c) =>
+          `<tr>
+            <td>${esc(c.name)} &lt;${esc(c.email)}&gt;</td>
+            <td>${esc(c.subject)}</td>
+            <td>${esc(c.message)}</td>
+            <td>${fmt(c.timestamp)}</td>
+          </tr>`
+        )
+      );
+      pager(document.getElementById('contacts-pager'), page, data.total, data.limit, loadContacts);
+    }
+
+    async function loadMonitors() {
+      const data = await AKILI_ADMIN.api('/api/v1/admin/monitors');
+      document.getElementById('monitors-table').innerHTML = tableHtml(
+        ['Target', 'Type', 'Alert email', 'Active', ''],
+        (data.monitors || []).map((m) =>
+          `<tr>
+            <td>${esc(m.target)}</td>
+            <td>${esc(m.target_type)}</td>
+            <td>${esc(m.alert_email)}</td>
+            <td>${m.is_active ? 'yes' : 'no'}</td>
+            <td>${m.is_active ? `<button type="button" class="btn btn-outline btn-sm" data-del-mon="${esc(m.monitor_id)}">Remove</button>` : ''}</td>
+          </tr>`
+        )
+      );
+      document.querySelectorAll('[data-del-mon]').forEach((btn) => {
+        btn.onclick = async () => {
+          await AKILI_ADMIN.api('/api/v1/admin/monitors/' + btn.dataset.delMon, { method: 'DELETE' });
+          AKILI.showToast('Monitor removed', 'success');
+          loadMonitors();
+        };
+      });
+    }
+
+    async function loadBillingConsole() {
+      try {
+        const overviewData = await AKILI_ADMIN.api('/api/v1/admin/dashboard');
+        const b = overviewData.billing || {};
+        document.getElementById('billing-status').innerHTML = `
+          <p><strong>Paystack configured:</strong> ${b.paystack_enabled ? 'Yes' : 'No'}</p>
+          <pre class="admin-pre">${esc(JSON.stringify(b.paystack_status || {}, null, 2))}</pre>
+        `;
+
+        const records = await AKILI_ADMIN.api('/api/v1/admin/billing/records');
+
+        const activeRows = records.active_subscriptions.map((s) => {
+          const isPast = s.premium_until * 1000 < Date.now();
+          const color = isPast ? '#ef4444' : 'inherit';
+          const weight = isPast ? 'bold' : 'normal';
+          const needsSync = s.billing_source === 'manual' || String(s.customer_code || '').includes('Not linked');
+          const syncBtn = needsSync
+            ? `<button type="button" class="btn btn-outline btn-sm" data-sync-uid="${s.user_id}">Sync Paystack</button>`
+            : '';
+          return `<tr>
+            <td>${esc(s.email)}</td>
+            <td>${esc(s.name || '—')}</td>
+            <td>${esc(s.billing_source || '—')}</td>
+            <td><span class="badge" style="background:#eff6ff;color:#2563eb;font-size:0.75rem;padding:0.15rem 0.45rem;border-radius:4px;">${esc(s.status)}</span></td>
+            <td style="color:${color};font-weight:${weight};">${fmt(s.premium_until)}</td>
+            <td><code>${esc(s.customer_code)}</code></td>
+            <td><code>${esc(s.subscription_code)}</code></td>
+            <td>${syncBtn}</td>
+          </tr>`;
+        });
+        document.getElementById('active-subs-table').innerHTML = tableHtml(
+          ['Email', 'Name', 'Source', 'Status', 'Renews', 'Customer', 'Subscription', ''],
+          activeRows
+        );
+        document.querySelectorAll('[data-sync-uid]').forEach((btn) => {
+          btn.onclick = async () => {
+            try {
+              await AKILI_ADMIN.api('/api/v1/admin/billing/sync-user/' + btn.dataset.syncUid, { method: 'POST' });
+              AKILI.showToast('Paystack codes synced', 'success');
+              loadBillingConsole();
+            } catch (e) { AKILI.showToast(e.message, 'error'); }
+          };
+        });
+
+        const pendingRows = records.pending_payments.map((p) => `<tr>
+          <td>${esc(p.email)}</td>
+          <td>${esc(p.name || '—')}</td>
+          <td><code>${esc(p.reference)}</code></td>
+          <td>${esc(p.plan_id)}</td>
+          <td>${fmt(p.initiated_at)}</td>
+        </tr>`);
+        document.getElementById('pending-subs-table').innerHTML = tableHtml(
+          ['Email', 'Name', 'Payment Reference', 'Plan ID', 'Initiated At'],
+          pendingRows
+        );
+
+        const inactiveRows = records.inactive_subscriptions.map((s) => `<tr>
+          <td>${esc(s.email)}</td>
+          <td>${esc(s.name || '—')}</td>
+          <td><span class="badge" style="background:#f1f5f9;color:#475569;font-size:0.75rem;padding:0.15rem 0.45rem;border-radius:4px;">${esc(s.status)}</span></td>
+          <td>${fmt(s.last_active)}</td>
+          <td><code>${esc(s.customer_code)}</code></td>
+          <td><code>${esc(s.subscription_code)}</code></td>
+        </tr>`);
+        document.getElementById('inactive-subs-table').innerHTML = tableHtml(
+          ['Email', 'Name', 'Status', 'Last Activity', 'Customer Code', 'Subscription Code'],
+          inactiveRows
+        );
+
+        document.getElementById('btn-manual-verify').onclick = async () => {
+          const emailInput = document.getElementById('manual-verify-email').value.trim();
+          const refInput = document.getElementById('manual-verify-ref').value.trim();
+          if (!emailInput || !refInput) {
+            AKILI.showToast('Please fill out both fields.', 'error');
+            return;
+          }
+          try {
+            document.getElementById('btn-manual-verify').disabled = true;
+            document.getElementById('btn-manual-verify').textContent = 'Verifying...';
+            const res = await AKILI_ADMIN.api('/api/v1/admin/billing/verify-manual', {
+              method: 'POST',
+              body: JSON.stringify({ reference: refInput, user_email: emailInput })
+            });
+            AKILI.showToast('Reference verified successfully! Premium active.', 'success');
+            document.getElementById('manual-verify-email').value = '';
+            document.getElementById('manual-verify-ref').value = '';
+            loadBillingConsole();
+          } catch (err) {
+            AKILI.showToast(err.message || 'Verification failed.', 'error');
+          } finally {
+            document.getElementById('btn-manual-verify').disabled = false;
+            document.getElementById('btn-manual-verify').textContent = 'Verify & Activate Premium';
+          }
+        };
+
+      } catch (err) {
+        AKILI.showToast(err.message || 'Failed to load billing console.', 'error');
+      }
+    }
+
+    async function loadAuditLogs(page = auditPage) {
+      auditPage = page;
+      try {
+        const q = document.getElementById('audit-q')?.value || '';
+        const params = new URLSearchParams({ page, limit: 50 });
+        if (q) params.set('q', q);
+        const data = await AKILI_ADMIN.api('/api/v1/admin/audit-logs?' + params);
+        document.getElementById('audit-table').innerHTML = tableHtml(
+          ['When', 'Action', 'User', 'IP', 'Detail'],
+          (data.items || []).map((e) =>
+            `<tr>
+              <td>${fmt(e.timestamp)}</td>
+              <td><code>${esc(e.action)}</code>${e.is_admin ? ' <span class="admin-badge" style="font-size:0.6rem;padding:0.1rem 0.3rem">admin</span>' : ''}</td>
+              <td>${esc(e.user_email || e.user_id || '—')}</td>
+              <td><code>${esc(e.ip_address || '—')}</code></td>
+              <td>${esc(e.detail || '')}</td>
+            </tr>`
+          )
+        );
+        pager(document.getElementById('audit-pager'), page, data.total, data.limit, loadAuditLogs);
+      } catch (err) {
+        AKILI.showToast(err.message || 'Failed to load audit logs.', 'error');
+      }
+    }
+
+    function loadTab(tab) {
+      if (tab === 'overview') loadOverview();
+      if (tab === 'users') loadUsers();
+      if (tab === 'scans') loadScans();
+      if (tab === 'keys') loadKeys();
+      if (tab === 'contacts') loadContacts();
+      if (tab === 'monitors') loadMonitors();
+      if (tab === 'billing') loadBillingConsole();
+      if (tab === 'events') loadAuditLogs();
+    }
+
+    document.getElementById('users-search').onclick = () => loadUsers(1);
+    document.getElementById('scans-search').onclick = () => loadScans(1);
+    document.getElementById('audit-search').onclick = () => loadAuditLogs(1);
+
+    document.getElementById('user-drawer').addEventListener('click', (e) => {
+      if (e.target.id === 'user-drawer') {
+        const drawer = document.getElementById('user-drawer');
+        drawer.setAttribute('hidden', '');
+        drawer.style.display = 'none';
+      }
+    });
+
+    loadOverview();
+    if (window.lucide) lucide.createIcons();
+  </script>
+</body>
+</html>

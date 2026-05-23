@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>IP Intelligence — AKILI</title>
+<link rel="stylesheet" href="css/main.css"><link rel="stylesheet" href="css/components.css"></head>
+<body><div id="nav-mount"></div><script>fetch('partials/nav.html').then(r=>r.text()).then(h=>document.getElementById('nav-mount').innerHTML=h);</script>
+<main class="container" style="padding:2rem 1.5rem">
+<div class="card" style="border-top:4px solid var(--mod-ip)"><h1>IP Intelligence</h1><p style="color:var(--slate)">Public IPs only.</p></div>
+<div class="card"><input id="ip" placeholder="8.8.8.8" style="width:100%;padding:0.75rem;border:1px solid var(--border);margin-bottom:1rem">
+<button class="btn btn-primary" id="scan-btn" style="background:var(--mod-ip)">SCAN</button></div>
+<div id="terminal" class="terminal-panel hidden"></div>
+<section id="results" class="hidden">
+  <p id="summary"></p>
+  <div class="card" id="ip-websites-card" style="margin-top:1rem">
+    <h3 class="label-sm">Websites on this IP</h3>
+    <p id="ip-websites-summary" class="label-sm" style="color:var(--slate)"></p>
+    <ul id="ip-websites-list"></ul>
+  </div>
+  <div class="card" style="margin-top:1rem"><h3 class="label-sm">Location</h3><p id="ip-geo"></p></div>
+  <div class="card" style="margin-top:1rem"><h3 class="label-sm">Open ports</h3><table class="data-table" id="ip-ports-table"><thead><tr><th>Port</th><th>Status</th></tr></thead><tbody></tbody></table></div>
+</section>
+</main>
+<script src="js/config.js"></script><script src="js/app.js"></script>
+<script>window.AKILI_SCAN={module:'ip',endpoint:'/api/v1/scan/ip',buildBody:()=>({ip:document.getElementById('ip').value})};</script>
+<script src="js/scan.js"></script></body></html>

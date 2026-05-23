@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign up — AKILI</title>
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/pages.css">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+  <div id="nav-mount"></div>
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <h1>Create your account</h1>
+      <p class="sub"><strong>14-day free trial</strong> — all modules unlocked. Then free tier + premium upgrades.</p>
+      <p class="label-sm" style="margin-bottom:0.5rem">Continue with Google</p>
+      <div id="google-btn" class="google-btn-mount"></div>
+      <p class="auth-divider">or sign up with email</p>
+      <form id="signup-form">
+        <div class="auth-field"><label>Name</label><input type="text" id="name" autocomplete="name"></div>
+        <div class="auth-field"><label>Phone (optional)</label><input type="tel" id="phone" autocomplete="tel"></div>
+        <div class="auth-field"><label>Email</label><input type="email" id="email" required autocomplete="email"></div>
+        <div class="auth-field"><label>Password (8+ chars)</label><input type="password" id="password" required minlength="8" autocomplete="new-password"></div>
+        <div class="auth-field"><label>Confirm password</label><input type="password" id="password-confirm" required minlength="8" autocomplete="new-password"></div>
+        <button type="submit" class="btn btn-primary" style="width:100%">Start free trial</button>
+      </form>
+      <p style="margin-top:1.25rem;font-size:0.9rem;color:var(--slate)">Already have an account? <a href="login.html">Sign in</a></p>
+      <!-- <details class="auth-google-help" style="margin-top:1rem;font-size:0.85rem;color:var(--slate)">
+        <summary>Google sign-in Error 401 invalid_client?</summary>
+        <ol style="margin:0.5rem 0 0 1rem;padding:0">
+          <li><strong>You do not need</strong> Client Secret or Redirect URI for AKILI — only a <strong>Web application</strong> Client ID.</li>
+          <li>Google Cloud → Credentials → Create OAuth client → type <strong>Web application</strong> (not Desktop).</li>
+          <li>Authorized JavaScript origins only: <code>http://localhost:5501</code> and <code>http://127.0.0.1:5501</code></li>
+          <li>Leave redirect URIs empty (or add <code>http://localhost:5501</code> if Google requires one).</li>
+          <li>Copy Client ID into <code>frontend/js/config.js</code> and <code>backend/.env</code> — same value, no extra spaces.</li>
+          <li>Open <code>http://localhost:5501/signup.html</code> (not file://).</li>
+        </ol>
+      </details> -->
+    </div>
+  </div>
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    function goAfterSignup() { AKILI_AUTH.goToDashboard(); }
+    document.getElementById('signup-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const pw = document.getElementById('password').value;
+      const pw2 = document.getElementById('password-confirm').value;
+      if (pw !== pw2) {
+        AKILI.showToast('Passwords do not match', 'error');
+        return;
+      }
+      try {
+        const data = await AKILI_AUTH.api('/api/v1/auth/register', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: document.getElementById('name').value,
+            phone: document.getElementById('phone').value,
+            email: document.getElementById('email').value,
+            password: pw,
+            confirm_password: pw2,
+          }),
+        });
+        AKILI_AUTH.setSession(data.token, data.user);
+        AKILI.showToast('Welcome to AKILI!', 'success');
+        goAfterSignup();
+      } catch (err) { AKILI.showToast(err.message, 'error'); }
+    };
+    AKILI_AUTH.waitForGoogleButton('google-btn', goAfterSignup);
+  </script>
+</body>
+</html>

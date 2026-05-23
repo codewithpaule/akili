@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Email — AKILI</title>
+<link rel="stylesheet" href="css/main.css"><link rel="stylesheet" href="css/components.css"></head>
+<body><div id="nav-mount"></div><script>fetch('partials/nav.html').then(r=>r.text()).then(h=>document.getElementById('nav-mount').innerHTML=h);</script>
+<main class="container" style="padding:2rem 1.5rem">
+<div class="card" style="border-top:4px solid var(--mod-email)"><h1>Email Investigator</h1></div>
+<div class="card"><input id="email" type="email" placeholder="user@example.com" style="width:100%;padding:0.75rem;border:1px solid var(--border);margin-bottom:1rem">
+<button class="btn btn-primary" id="scan-btn">SCAN</button></div>
+<div id="terminal" class="terminal-panel hidden"></div>
+<section id="results" class="hidden" style="margin-top:1.5rem">
+  <div id="summary"></div>
+  <div class="card" style="margin-top:1rem">
+    <h3 class="label-sm">Data breaches</h3>
+    <ul id="breach-list"></ul>
+  </div>
+  <div class="card" style="margin-top:1rem">
+    <h3 class="label-sm">Recommendations</h3>
+    <div id="email-recommendations"></div>
+  </div>
+</section>
+</main>
+<script src="js/config.js"></script><script src="js/app.js"></script>
+<script>window.AKILI_SCAN={module:'email',endpoint:'/api/v1/scan/email',buildBody:()=>({email:document.getElementById('email').value})};</script>
+<script src="js/scan.js"></script></body></html>

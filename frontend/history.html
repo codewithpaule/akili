@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>History — AKILI</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+  <div id="nav-mount"></div>
+  <script>fetch('partials/nav.html').then(r=>r.text()).then(h=>document.getElementById('nav-mount').innerHTML=h);</script>
+  <main class="container" style="padding:2rem 1.5rem">
+    <h1>Scan History</h1>
+    <input type="search" id="q" placeholder="Filter target..." style="padding:0.5rem;border:1px solid var(--border);border-radius:var(--radius);margin:1rem 0;width:100%;max-width:320px">
+    <table class="data-table"><thead><tr><th>Type</th><th>Target</th><th>Score</th><th>When</th><th></th></tr></thead><tbody id="rows"></tbody></table>
+  </main>
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    if (!AKILI_AUTH.requireAuth()) throw new Error('auth');
+    async function load() {
+      const q = document.getElementById('q').value;
+      const res = await AKILI.apiFetch('/api/v1/history?limit=20' + (q ? '&q=' + encodeURIComponent(q) : ''));
+      const data = await res.json();
+      const tbody = document.getElementById('rows');
+      if (!data.items.length) { tbody.innerHTML = '<tr><td colspan="5">No scans yet.</td></tr>'; return; }
+      tbody.innerHTML = data.items.map(s => `<tr>
+        <td>${s.scan_type}</td><td>${AKILI.escapeHtml(s.target)}</td>
+        <td>${s.score}${s.grade ? ' ('+s.grade+')' : ''}</td>
+        <td>${AKILI.relativeTime(s.timestamp)}</td>
+        <td>
+          <a href="report.html?id=${s.scan_id}" class="btn btn-sm btn-outline">View</a>
+          <button type="button" class="btn btn-sm btn-outline share-row" data-id="${s.scan_id}">Share</button>
+        </td>
+      </tr>`).join('');
+    }
+    document.getElementById('q').oninput = () => clearTimeout(window._t) || (window._t = setTimeout(load, 400));
+
+    document.getElementById('rows').addEventListener('click', async (e) => {
+      const btn = e.target.closest('.share-row');
+      if (!btn) return;
+      try {
+        const data = await AKILI_AUTH.api('/api/v1/report/' + encodeURIComponent(btn.dataset.id) + '/share', { method: 'POST' });
+        const u = new URL('report.html', location.href);
+        u.searchParams.set('share', data.share_token);
+        await AKILI.copyText(u.href);
+        AKILI.showToast('Share link copied', 'success');
+      } catch (err) { AKILI.showToast(err.message, 'error'); }
+    });
+
+    load();
+  </script>
+</body>
+</html>

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Report — AKILI</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/pages.css">
+</head>
+<body class="akili-cursor report-page">
+  <div id="nav-mount"></div>
+  <main class="container report-shell">
+    <div class="report-toolbar no-print" id="toolbar">
+      <a href="history.html" class="btn btn-outline btn-sm" id="back-history">← History</a>
+      <a href="dashboard.html" class="btn btn-outline btn-sm" id="back-dash" style="display:none">← Dashboard</a>
+      <button type="button" class="btn btn-primary btn-sm" id="share-btn">Copy share link</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="window.print()">Print / PDF</button>
+    </div>
+    <div id="public-banner" class="report-public-banner" style="display:none">
+      Shared AKILI report — read-only. Sign in to run your own scans.
+    </div>
+    <div id="content" class="report-card">
+      <p class="label-sm">Loading report…</p>
+    </div>
+  </main>
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const shareToken = params.get('share');
+    const scanId = params.get('id');
+    let cachedReport = null;
+    let activeShareToken = shareToken || '';
+
+    function shareUrl(token) {
+      const u = new URL('report.html', window.location.href);
+      u.searchParams.set('share', token);
+      u.searchParams.delete('id');
+      return u.href;
+    }
+
+    function gradeClass(g) {
+      const x = (g || 'C').toUpperCase().charAt(0);
+      return ['A', 'B', 'C', 'D', 'F'].includes(x) ? x : 'C';
+    }
+
+    function renderFindings(findings) {
+      if (!findings || !findings.length) return '';
+      return `<section class="report-section">
+        <h2>Findings</h2>
+        <ul class="report-findings">${findings.map((f) => `
+          <li class="report-finding severity-${(f.severity || 'info').toLowerCase()}">
+            <span class="report-finding-sev">${AKILI.escapeHtml(f.severity || 'info')}</span>
+            <strong>${AKILI.escapeHtml(f.title || f.message || 'Finding')}</strong>
+            ${f.detail || f.description ? `<p>${AKILI.escapeHtml(f.detail || f.description || '')}</p>` : ''}
+          </li>`).join('')}</ul>
+      </section>`;
+    }
+
+    function renderReport(report) {
+      cachedReport = report;
+      const grade = gradeClass(report.grade);
+      const summary = report.summary || report.ai_summary || report.profile_narrative || '';
+      const meta = [
+        report.scan_type && `Type: ${report.scan_type}`,
+        report.timestamp && AKILI.formatTime(report.timestamp),
+        report.score != null && `Score: ${report.score}`,
+      ].filter(Boolean).join(' · ');
+      document.title = `${report.target || 'Report'} — AKILI`;
+      document.getElementById('content').innerHTML = `
+        <header class="report-header">
+          <p class="report-eyebrow">AKILI intelligence report</p>
+          <h1>${AKILI.escapeHtml(report.target || report.name || report.email || 'Scan target')}</h1>
+          <p class="label-sm">${AKILI.escapeHtml(meta)}</p>
+          <div class="grade-lg grade-${grade}">${report.grade || '—'}</div>
+        </header>
+        ${summary ? `<section class="report-section"><h2>Summary</h2><p class="report-summary">${AKILI.escapeHtml(summary)}</p></section>` : ''}
+        ${renderFindings(report.findings)}
+        <details class="report-raw-details no-print">
+          <summary>Full report data (JSON)</summary>
+          <pre class="code-block report-raw">${AKILI.escapeHtml(JSON.stringify(report, null, 2))}</pre>
+        </details>
+        <p class="report-footer-note label-sm">Automated OSINT / security analysis — verify before acting.</p>`;
+    }
+
+    async function fetchReport() {
+      if (shareToken) {
+        const res = await fetch(`${AKILI.API()}/api/v1/public/report/${encodeURIComponent(shareToken)}`);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || 'Shared report not found');
+        }
+        return res.json();
+      }
+      if (!scanId) throw new Error('Missing report id or share link');
+      const isAdminView = params.get('admin') === '1' && AKILI_AUTH?.getUser?.()?.is_admin;
+      const path = isAdminView
+        ? '/api/v1/admin/scans/' + encodeURIComponent(scanId) + '/report'
+        : '/api/v1/report/' + encodeURIComponent(scanId);
+      const res = isAdminView
+        ? await fetch(AKILI.API() + path, { headers: { Authorization: 'Bearer ' + (AKILI_AUTH.getToken() || '') } })
+        : await AKILI.apiFetch(path);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Report not found — sign in or use a share link');
+      }
+      return res.json();
+    }
+
+    function setupToolbar(report) {
+      const isPublic = !!shareToken;
+      document.getElementById('public-banner').style.display = isPublic ? '' : 'none';
+      document.getElementById('back-history').style.display = isPublic ? 'none' : '';
+      document.getElementById('back-dash').style.display = isPublic ? '' : 'none';
+      if (report.share_token) activeShareToken = report.share_token;
+      const shareBtn = document.getElementById('share-btn');
+      if (isPublic) {
+        shareBtn.textContent = 'Copy share link';
+        shareBtn.onclick = () => AKILI.copyText(location.href);
+        return;
+      }
+      shareBtn.onclick = async () => {
+        try {
+          let token = activeShareToken;
+          if (!token && scanId && AKILI_AUTH.getToken()) {
+            const data = await AKILI_AUTH.api('/api/v1/report/' + encodeURIComponent(scanId) + '/share', { method: 'POST' });
+            token = data.share_token;
+            activeShareToken = token;
+          }
+          if (!token) {
+            AKILI.showToast('Sign in to create a share link', 'error');
+            return;
+          }
+          const url = shareUrl(token);
+          await AKILI.copyText(url);
+          AKILI.showToast('Share link copied — anyone with the link can view', 'success');
+        } catch (e) {
+          AKILI.showToast(e.message, 'error');
+        }
+      };
+    }
+
+    fetchReport()
+      .then((report) => {
+        renderReport(report);
+        setupToolbar(report);
+      })
+      .catch((e) => {
+        document.getElementById('content').innerHTML = `
+          <div class="report-error">
+            <h2>Could not load report</h2>
+            <p>${AKILI.escapeHtml(e.message)}</p>
+            ${shareToken ? '<p><a href="login.html">Sign in</a> to view your own reports.</p>' : '<p><a href="login.html">Sign in</a> or ask for a share link (<code>?share=…</code>).</p>'}
+          </div>`;
+        document.getElementById('share-btn').style.display = 'none';
+      });
+  </script>
+</body>
+</html>

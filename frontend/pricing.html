@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pricing — AKILI</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/pages.css">
+  <script src="https://js.paystack.co/v1/inline.js"></script>
+</head>
+<body class="akili-cursor">
+  <div id="nav-mount"></div>
+  <main class="container pricing-page">
+    <header class="pricing-hero">
+      <p class="dash-eyebrow">Pricing</p>
+      <h1>Plans for every stage</h1>
+      <p class="lead">14-day trial on signup. Premium is billed monthly in NGN via Paystack — card on file for auto-debit. If payment fails, your account returns to your previous plan.</p>
+    </header>
+    <div id="paystack-alert" style="display:none;margin-bottom:1.25rem"></div>
+    <div id="pricing-grid" class="pricing-grid">Loading plans…</div>
+    <section class="dash-panel" style="margin-top:2rem">
+      <h2>Module reference prices</h2>
+      <p class="label-sm">Included in Premium — listed for transparency</p>
+      <div id="module-prices" class="pricing-module-table"></div>
+    </section>
+    <p id="paystack-note" class="label-sm" style="margin-top:2rem;text-align:center"></p>
+  </main>
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/billing.js"></script>
+</body>
+</html>

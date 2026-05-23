@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Profile — AKILI</title>
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/pages.css">
+</head>
+<body>
+  <div id="nav-mount"></div>
+  <main class="container" style="padding:2rem 1.5rem;max-width:640px">
+    <h1>Your profile</h1>
+    <p class="lead" style="margin-bottom:1.5rem">Name, contact details, and organization are saved to your account. Scan history is linked to this profile.</p>
+    <div class="card usage-account-card" id="profile-usage" style="margin-bottom:1.25rem;padding:1rem 1.25rem"></div>
+    <form id="profile-form" class="card" style="display:grid;gap:1rem">
+      <div class="auth-field">
+        <label>Full name</label>
+        <input type="text" id="name" autocomplete="name" maxlength="120">
+      </div>
+      <div class="auth-field">
+        <label>Email</label>
+        <input type="email" id="email" disabled style="opacity:0.7;cursor:not-allowed">
+        <p class="label-sm">Email cannot be changed here.</p>
+      </div>
+      <div class="auth-field">
+        <label>Phone</label>
+        <input type="tel" id="phone" autocomplete="tel" maxlength="40">
+      </div>
+      <div class="auth-field">
+        <label>Organization</label>
+        <input type="text" id="organization" maxlength="200">
+      </div>
+      <div class="auth-field">
+        <label>Job title</label>
+        <input type="text" id="job_title" maxlength="120">
+      </div>
+      <div class="auth-field">
+        <label>Country</label>
+        <input type="text" id="country" maxlength="80">
+      </div>
+      <div class="auth-field">
+        <label>Plan</label>
+        <input type="text" id="plan" disabled style="opacity:0.7">
+      </div>
+      <div class="auth-field">
+        <label>Member since</label>
+        <input type="text" id="created" disabled style="opacity:0.7">
+      </div>
+      <button type="submit" class="btn btn-primary">Save profile</button>
+    </form>
+    <p style="margin-top:1.5rem">
+      <a href="dashboard.html#billing-panel">Manage plan &amp; payment →</a> ·
+      <a href="history.html">Scan history →</a>
+    </p>
+
+    <section class="card profile-danger" style="margin-top:2rem;border-color:#fecaca">
+      <h2 style="font-size:1.1rem;color:#b91c1c;margin-bottom:0.5rem">Delete account</h2>
+      <p class="label-sm" style="margin-bottom:1rem">Permanently removes your profile, scan history, and API keys. This cannot be undone.</p>
+      <div class="auth-field" id="delete-password-wrap">
+        <label>Password</label>
+        <input type="password" id="delete-password" autocomplete="current-password" placeholder="Required for email accounts">
+      </div>
+      <div class="auth-field">
+        <label>Type DELETE to confirm</label>
+        <input type="text" id="delete-confirm" placeholder="DELETE" autocomplete="off">
+      </div>
+      <button type="button" class="btn btn-outline" id="delete-account-btn" style="border-color:#b91c1c;color:#b91c1c">Delete my account</button>
+    </section>
+  </main>
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    if (!AKILI_AUTH.requireAuth()) throw new Error('auth');
+    async function load() {
+      const [data, me] = await Promise.all([
+        AKILI_AUTH.api('/api/v1/auth/profile'),
+        AKILI_AUTH.api('/api/v1/auth/me'),
+      ]);
+      const u = data.user;
+      const usage = me.usage || {};
+      const plan = usage.plan_label || usage.plan || 'free';
+      const mUsed = usage.monthly_scans_used ?? 0;
+      const mCap = usage.monthly_total_limit ?? 50;
+      document.getElementById('profile-usage').innerHTML = `
+        <div class="usage-account-head" style="margin-bottom:0.75rem">
+          <strong>Account usage</strong>
+          <span class="dash-plan-badge plan-${usage.plan || 'free'}">${AKILI.escapeHtml(plan)}</span>
+        </div>
+        <p style="margin:0;font-size:0.9rem;color:var(--slate)">
+          Scans this month: <strong>${mUsed} / ${mCap}</strong> ·
+          API keys: <strong>${usage.active_api_keys ?? 0} / ${usage.max_api_keys ?? 1}</strong> ·
+          Hourly limit: <strong>${usage.hourly_limit ?? '—'}</strong>
+        </p>
+        <p style="margin:0.5rem 0 0"><a href="dashboard.html">Full usage on dashboard →</a></p>`;
+      document.getElementById('name').value = u.name || '';
+      document.getElementById('email').value = u.email || '';
+      document.getElementById('phone').value = u.phone || '';
+      document.getElementById('organization').value = u.organization || '';
+      document.getElementById('job_title').value = u.job_title || '';
+      document.getElementById('country').value = u.country || '';
+      document.getElementById('plan').value = (usage.plan_label || u.effective_plan || u.plan || 'free').toString();
+      document.getElementById('created').value = u.created_at
+        ? new Date(u.created_at * 1000).toLocaleString()
+        : '—';
+      AKILI_AUTH.setSession(AKILI_AUTH.getToken(), u);
+      const pwWrap = document.getElementById('delete-password-wrap');
+      if (pwWrap) pwWrap.style.display = u.google_id ? 'none' : '';
+    }
+    document.getElementById('profile-form').onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        const data = await AKILI_AUTH.api('/api/v1/auth/profile', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            name: document.getElementById('name').value,
+            phone: document.getElementById('phone').value,
+            organization: document.getElementById('organization').value,
+            job_title: document.getElementById('job_title').value,
+            country: document.getElementById('country').value,
+          }),
+        });
+        AKILI_AUTH.setSession(AKILI_AUTH.getToken(), data.user);
+        AKILI.showToast('Profile saved', 'success');
+      } catch (err) {
+        AKILI.showToast(err.message, 'error');
+      }
+    };
+    document.getElementById('delete-account-btn').onclick = async () => {
+      if (!confirm('Delete your AKILI account permanently?')) return;
+      try {
+        await AKILI_AUTH.api('/api/v1/auth/account', {
+          method: 'DELETE',
+          body: JSON.stringify({
+            password: document.getElementById('delete-password').value,
+            confirmation: document.getElementById('delete-confirm').value,
+          }),
+        });
+        AKILI_AUTH.clearSession();
+        AKILI.showToast('Account deleted', 'success');
+        location.href = 'index.html';
+      } catch (err) {
+        AKILI.showToast(err.message, 'error');
+      }
+    };
+
+    load().catch((e) => AKILI.showToast(e.message, 'error'));
+  </script>
+</body>
+</html>

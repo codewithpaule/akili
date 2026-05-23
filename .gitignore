@@ -1,0 +1,7 @@
+backend/.env
+backend/akili.db
+backend/.venv/
+backend/**/__pycache__/
+*.pyc
+frontend/js/config.local.js
+.DS_Store

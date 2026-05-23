@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign in — AKILI</title>
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/pages.css">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+  <div id="nav-mount"></div>
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="hero-mark-wrap" style="margin-bottom:1rem">
+        <svg class="akili-mark" viewBox="0 0 32 32" fill="none" style="width:36px;height:36px"><circle cx="16" cy="16" r="14" stroke="#2563EB" stroke-width="2"/><circle cx="16" cy="16" r="6" fill="#2563EB"/><circle cx="18" cy="14" r="2" fill="#fff"/></svg>
+        <span class="logo-text" style="font-size:1.5rem">AKILI</span>
+      </div>
+      <h1>Welcome back</h1>
+      <p class="sub">Sign in to run scans, API keys, and sandbox demos.</p>
+      <p class="label-sm" style="margin-bottom:0.5rem">Continue with Google</p>
+      <div id="google-btn" class="google-btn-mount"></div>
+      <p class="auth-divider">or with email</p>
+      <form id="login-form">
+        <div id="error-box" style="display: none; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2); color: #ef4444; border-radius: var(--radius); padding: 0.75rem 1rem; margin-bottom: 1.25rem; font-size: 0.88rem; line-height: 1.4; text-align: left;"></div>
+        <div class="auth-field"><label>Email</label><input type="email" id="email" required autocomplete="email"></div>
+        <div class="auth-field"><label>Password</label><input type="password" id="password" required autocomplete="current-password"></div>
+        <p style="text-align:right;margin:-0.5rem 0 0.75rem;font-size:0.85rem"><a href="forgot-password.html">Forgot password?</a></p>
+        <button type="submit" class="btn btn-primary" style="width:100%">Sign in</button>
+      </form>
+      <p style="margin-top:1.25rem;font-size:0.9rem;color:var(--slate)">No account? <a href="signup.html">Create one — 14-day trial</a></p>
+      <!-- <details class="auth-google-help" style="margin-top:1rem;font-size:0.85rem;color:var(--slate)">
+        <summary>Google sign-in shows Error 401 invalid_client?</summary>
+        <ol style="margin:0.5rem 0 0 1rem;padding:0">
+          <li><strong>No Client Secret</strong> and <strong>no callback URI</strong> needed for AKILI’s Google button — only Client ID + JavaScript origins.</li>
+          <li>Create OAuth client type <strong>Web application</strong> (not Desktop / Android).</li>
+          <li>Authorized JavaScript origins: <code>http://localhost:5501</code> and <code>http://127.0.0.1:5501</code></li>
+          <li>Same Client ID in <code>frontend/js/config.js</code> and <code>backend/.env</code>; restart uvicorn after changing.</li>
+          <li>Open <code>http://localhost:5501/login.html</code> (not file://).</li>
+        </ol>
+      </details> -->
+    </div>
+  </div>
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    function go() {
+      const next = new URLSearchParams(location.search).get('next');
+      location.href = next && next.endsWith('.html') ? next : 'dashboard.html';
+    }
+    if (AKILI_AUTH.isRealSession && AKILI_AUTH.isRealSession()) go();
+    document.getElementById('login-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const errBox = document.getElementById('error-box');
+      if (errBox) { errBox.style.display = 'none'; errBox.textContent = ''; }
+      try {
+        const data = await AKILI_AUTH.api('/api/v1/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({
+            email: document.getElementById('email').value,
+            password: document.getElementById('password').value,
+          }),
+        });
+        AKILI_AUTH.setSession(data.token, data.user);
+        AKILI.showToast('Signed in', 'success');
+        go();
+      } catch (err) {
+        AKILI.showToast(err.message, 'error');
+        if (errBox) {
+          errBox.textContent = err.message;
+          errBox.style.display = 'block';
+        }
+      }
+    };
+    AKILI_AUTH.waitForGoogleButton('google-btn', go);
+  </script>
+</body>
+</html>

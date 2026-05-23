@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Person Search — AKILI</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/pages.css">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <div id="nav-mount"></div>
+  <main class="container person-page" style="padding:1.5rem 1.5rem 4rem">
+    <p class="breadcrumb">Home &gt; Intelligence &gt; Person</p>
+    <div class="card" style="border-top:4px solid var(--mod-person)">
+      <h1>Person Search</h1>
+      <p style="color:var(--slate)">Public OSINT due diligence only.</p>
+    </div>
+    <div class="disclaimer">Uses only publicly available information. Results may match multiple individuals with the same name.</div>
+    <div class="card">
+      <input type="text" id="name" placeholder="Full name or username" style="width:100%;padding:0.75rem;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:0.75rem">
+      <input type="text" id="keywords" placeholder="Keywords e.g. developer, Lagos" style="width:100%;padding:0.75rem;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:1rem">
+      <button class="btn btn-primary" id="scan-btn" style="background:var(--mod-person)">SEARCH</button>
+    </div>
+    <div id="terminal" class="terminal-panel hidden"></div>
+    <section id="results" class="hidden person-results">
+      <div class="card person-summary-card">
+        <h2 id="person-name" style="margin-bottom:0.25rem"></h2>
+        <p class="person-confidence"><span id="confidence-value">—</span> <span class="label-sm">confidence</span></p>
+        <details class="person-details-block" open>
+          <summary class="label-sm">Confidence breakdown</summary>
+          <ul id="confidence-breakdown"></ul>
+        </details>
+        <div id="platforms-block" class="person-details-block hidden">
+          <p class="label-sm">Platforms</p>
+          <div id="platforms-list"></div>
+        </div>
+        <div id="breaches-block" class="person-details-block hidden">
+          <p class="label-sm">Breach signals</p>
+          <ul id="breaches-list"></ul>
+        </div>
+      </div>
+      <div class="card person-profile-card" id="profile-narrative-block" style="display:none">
+        <p class="label-sm">Profile (from public data)</p>
+        <p id="profile-narrative"></p>
+        <ul id="profile-facts" class="label-sm" style="margin-top:0.75rem;color:var(--slate)"></ul>
+      </div>
+      <div class="card person-ai-card">
+        <p class="label-sm">AKILI assessment</p>
+        <div id="ai-summary"></div>
+        <p id="overall-assessment" class="person-assessment"></p>
+      </div>
+      <details class="card person-images-panel">
+        <summary class="label-sm">Verified profile images</summary>
+        <div id="verified-image-grid" class="person-img-grid"></div>
+      </details>
+      <details class="card person-images-panel person-images-warn">
+        <summary class="label-sm">Web images (unverified — same name warning)</summary>
+        <p class="person-images-note">May show different people who share this name.</p>
+        <div id="web-image-grid" class="person-img-grid"></div>
+      </details>
+    </section>
+  </main>
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    window.AKILI_SCAN = {
+      module: 'person',
+      endpoint: '/api/v1/scan/person',
+      buttonLabel: 'SEARCH',
+      buildBody: () => ({ name: document.getElementById('name').value, keywords: document.getElementById('keywords').value }),
+      validate: (b) => { if (!b.name || b.name.length < 2) { AKILI.showToast('Name required', 'error'); return true; } return false; }
+    };
+  </script>
+  <script src="js/scan.js"></script>
+</body>
+</html>

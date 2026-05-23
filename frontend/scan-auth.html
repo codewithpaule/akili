@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Authenticated Scan — AKILI</title>
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+  <div id="nav-mount"></div>
+  <script>fetch('partials/nav.html').then(r=>r.text()).then(h=>document.getElementById('nav-mount').innerHTML=h);</script>
+  <main class="container" style="padding:2rem 1.5rem">
+    <div class="card" style="border-top:4px solid #6366F1"><h1>Authenticated Scan</h1></div>
+    <div class="disclaimer">This module tests systems you own or have explicit written authorization to test. Credentials are used only to establish a session and are permanently discarded. They are never stored or logged.</div>
+    <div class="card">
+      <label><input type="checkbox" id="authorized"> I confirm I own this system or have explicit written authorization to test it.</label>
+      <input type="url" id="url" placeholder="https://app.example.com/login" style="width:100%;padding:0.75rem;border:1px solid var(--border);border-radius:var(--radius);margin:1rem 0">
+      <label class="label-sm">Auth type</label>
+      <select id="auth-type" style="width:100%;padding:0.5rem;margin-bottom:1rem">
+        <option value="form">Form login</option>
+        <option value="basic">Basic auth</option>
+        <option value="token">API token</option>
+        <option value="cookie">Session cookie</option>
+      </select>
+      <div id="cred-fields">
+        <input id="username" placeholder="Username / email" style="width:100%;padding:0.75rem;margin-bottom:0.5rem;border:1px solid var(--border);border-radius:var(--radius)">
+        <input id="password" type="password" placeholder="Password" style="width:100%;padding:0.75rem;margin-bottom:1rem;border:1px solid var(--border);border-radius:var(--radius)">
+      </div>
+      <button class="btn btn-primary" id="scan-btn" disabled style="background:#6366F1">SCAN</button>
+    </div>
+    <div id="terminal" class="terminal-panel hidden"></div>
+    <section id="results" class="hidden"><div id="findings-grid"></div><p id="summary"></p></section>
+  </main>
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    const auth = document.getElementById('authorized');
+    const btn = document.getElementById('scan-btn');
+    auth.onchange = () => { btn.disabled = !auth.checked; };
+    btn.onclick = async () => {
+      const type = document.getElementById('auth-type').value;
+      const creds = type === 'cookie'
+        ? { cookie_name: prompt('Cookie name') || 'session', cookie_value: prompt('Cookie value') || '' }
+        : type === 'token'
+        ? { token: document.getElementById('password').value, header_name: 'Authorization' }
+        : { username: document.getElementById('username').value, password: document.getElementById('password').value };
+      const res = await fetch(`${AKILI.API()}/api/v1/scan/auth`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: document.getElementById('url').value, auth_type: type, credentials: creds, authorized: true, depth: 'standard' }),
+      });
+      const text = await res.text();
+      document.getElementById('terminal').classList.remove('hidden');
+      document.getElementById('terminal').textContent = text;
+      const m = text.match(/COMPLETE:(\{[\s\S]*\})/);
+      if (m) {
+        const report = JSON.parse(m[1]);
+        document.getElementById('results').classList.remove('hidden');
+        document.getElementById('summary').textContent = report.summary || '';
+        document.getElementById('findings-grid').innerHTML = (report.findings || []).map(f =>
+          `<div class="card"><span class="badge badge-${f.severity}">${f.severity}</span><h4>${f.name}</h4><p>${f.explanation}</p><p style="color:var(--blue)">${f.recommendation}</p><p class="label-sm">${f.category || ''}</p></div>`
+        ).join('');
+      }
+    };
+  </script>
+</body>
+</html>

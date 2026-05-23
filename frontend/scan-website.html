@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Website Scan — AKILI</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/components.css">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <div id="nav-mount"></div>
+  <script>fetch('partials/nav.html').then(r=>r.text()).then(h=>document.getElementById('nav-mount').innerHTML=h);</script>
+  <main class="container" style="padding:2rem 1.5rem 4rem">
+    <p class="breadcrumb">Home &gt; Scan &gt; Website</p>
+    <div class="card scan-accent" style="--accent:var(--mod-website);border-top:4px solid var(--mod-website)">
+      <h1><i data-lucide="shield"></i> Website Scan</h1>
+      <p style="color:var(--slate)">Security headers, SSL, ports, tech stack, and AI assessment.</p>
+    </div>
+    <div class="disclaimer">Only scan websites you own or have explicit permission to test.</div>
+    <div class="card">
+      <label class="label-sm">Target URL</label>
+      <input type="url" id="url" placeholder="https://example.com" style="width:100%;padding:0.75rem;border:1px solid var(--border);border-radius:var(--radius);margin:0.5rem 0 1rem">
+      <button class="btn btn-primary" id="scan-btn" style="background:var(--mod-website)">SCAN</button>
+    </div>
+    <div id="terminal" class="terminal-panel hidden"></div>
+    <section id="results" class="hidden" style="margin-top:2rem">
+      <div class="card" id="grade"></div>
+      <p id="summary" style="margin:1rem 0;color:var(--slate)"></p>
+      <div class="card" id="site-intel-card" style="margin-top:1rem">
+        <h3 class="label-sm">What this site does</h3>
+        <p id="site-purpose" style="margin:0.5rem 0"></p>
+        <h3 class="label-sm" style="margin-top:1rem">Legitimacy</h3>
+        <p id="site-legitimacy"><span id="legitimacy-badge" class="badge badge-info"></span> <span id="legitimacy-notes"></span></p>
+      </div>
+      <div id="findings-grid" style="display:grid;gap:1rem;margin:1.5rem 0"></div>
+      <div class="card"><h3 class="label-sm">Ports</h3><table class="data-table" id="ports-table"><thead><tr><th>Port</th><th>Service</th><th>Status</th><th>Risk</th></tr></thead><tbody></tbody></table></div>
+      <section id="score-timeline-section" class="hidden card" style="margin-top:1rem">
+        <h3 class="label-sm">Your security score over time</h3>
+        <p id="score-timeline-msg" style="font-size:0.9rem;margin-bottom:1rem"></p>
+        <canvas id="score-chart" height="120"></canvas>
+      </section>
+      <section id="tech-changes-section" class="hidden" style="margin-top:1rem">
+        <h3 class="label-sm">Changes Since Last Scan</h3>
+        <div id="tech-changes"></div>
+      </section>
+      <div class="card" style="margin-top:1rem">
+        <h3 class="label-sm">Technology Stack & CVEs</h3>
+        <div id="tech-stack-cards"></div>
+      </div>
+      <div class="card" style="margin-top:1rem">
+        <button type="button" class="btn btn-outline btn-sm" id="verify-domain-btn">Verify I own this domain</button>
+        <span id="verify-badge" class="badge badge-info" style="margin-left:0.5rem">Unverified</span>
+        <p id="verify-instructions" class="label-sm" style="margin-top:0.5rem;color:var(--slate)"></p>
+      </div>
+      <div class="card" style="margin-top:1rem"><h3 class="label-sm">DNS</h3><table class="data-table" id="dns-table"><thead><tr><th>Type</th><th>Value</th></tr></thead><tbody></tbody></table></div>
+      <button class="btn btn-outline no-print" id="export-btn" style="margin-top:1rem">Export Report</button>
+    </section>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/cve-ui.js"></script>
+  <script>
+    window.AKILI_SCAN = {
+      module: 'website',
+      endpoint: '/api/v1/scan/website',
+      buttonLabel: 'SCAN',
+      buildBody: () => ({ url: document.getElementById('url').value.trim() }),
+      validate: (b) => { if (!b.url) { AKILI.showToast('Enter a URL', 'error'); return true; } return false; }
+    };
+  </script>
+  <script src="js/scan.js"></script>
+</body>
+</html>

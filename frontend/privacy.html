@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy — AKILI</title>
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/pages.css">
+</head>
+<body>
+  <div id="nav-mount"></div>
+  <main class="container" style="padding:1.5rem 1.5rem 4rem;max-width:800px">
+    <div class="page-hero" style="padding-top:0.5rem">
+      <h1>Privacy Policy</h1>
+      <p class="lead"><em>Last updated: May 2025</em> — How AKILI handles your account, scans, and API usage.</p>
+    </div>
+    <section class="legal-section card" style="padding:1.5rem">
+      <h2>1. What we collect</h2>
+      <ul>
+        <li>Account: email, name, password (bcrypt hash), optional Google ID</li>
+        <li>Scan reports stored by scan ID (target, findings, scores)</li>
+        <li>API key previews and usage counters (not raw keys)</li>
+        <li>Per-module monthly usage for rate limits</li>
+      </ul>
+    </section>
+    <section class="legal-section card" style="padding:1.5rem;margin-top:1rem">
+      <h2>2. What we do not store</h2>
+      <ul>
+        <li>Raw API keys (only SHA-256 hashes)</li>
+        <li>Passwords in plain text</li>
+        <li>Full request logs of every URL you scan in production logging</li>
+      </ul>
+    </section>
+    <section class="legal-section card" style="padding:1.5rem;margin-top:1rem">
+      <h2>3. Third-party services</h2>
+      <p>Scans may call external providers (search, threat intel, AI inference). Their policies apply to data they process. Configure keys in your server <code>.env</code>.</p>
+    </section>
+    <section class="legal-section card" style="padding:1.5rem;margin-top:1rem">
+      <h2>4. Your rights</h2>
+      <p>Where GDPR or NDPR applies, you may request access, correction, or deletion via <a href="mailto:hello@akili.io">hello@akili.io</a>.</p>
+    </section>
+    <section class="legal-section card" style="padding:1.5rem;margin-top:1rem">
+      <h2>5. Security</h2>
+      <p>HTTPS in production, JWT sessions, rate limits, and tiered access to premium modules. Report issues responsibly via Contact.</p>
+    </section>
+    <p style="margin-top:1.5rem"><a href="index.html">← Back to home</a></p>
+  </main>
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quick scan — AKILI</title>
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/pages.css">
+</head>
+<body class="akili-cursor">
+  <div id="nav-mount"></div>
+  <main class="container" style="padding:1.5rem 1.5rem 3rem;max-width:720px">
+    <header class="page-hero" style="padding-top:0.5rem">
+      <p class="dash-eyebrow">No login required</p>
+      <h1>Quick scan</h1>
+      <p class="lead">Lightweight website or email check — fewer tools and no deep AI follow-up. <a href="signup.html">Create a free account</a> for full scans, history, and Premium depth.</p>
+    </header>
+    <div class="card" style="margin-bottom:1rem">
+      <div style="display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap">
+        <button type="button" class="btn btn-primary btn-sm" id="tab-web">Website</button>
+        <button type="button" class="btn btn-outline btn-sm" id="tab-email">Email</button>
+      </div>
+      <div id="panel-web">
+        <label class="label-sm">Website URL</label>
+        <input id="url" type="url" placeholder="https://example.com" style="width:100%;padding:0.75rem;border:1px solid var(--border);border-radius:var(--radius);margin:0.5rem 0 1rem">
+      </div>
+      <div id="panel-email" class="hidden">
+        <label class="label-sm">Email address</label>
+        <input id="email" type="email" placeholder="user@example.com" style="width:100%;padding:0.75rem;border:1px solid var(--border);border-radius:var(--radius);margin:0.5rem 0 1rem">
+      </div>
+      <button type="button" class="btn btn-primary" id="scan-btn">Run quick scan</button>
+      <p class="label-sm" style="margin-top:0.75rem">Guest tier: headers-only website check or basic email intel. Signed-in Free/Trial/Premium run deeper.</p>
+    </div>
+    <div id="terminal" class="terminal-panel hidden"></div>
+    <section id="results" class="hidden" style="margin-top:1.5rem"><div id="summary"></div></section>
+  </main>
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    let mode = 'web';
+    document.getElementById('tab-web').onclick = () => {
+      mode = 'web';
+      document.getElementById('panel-web').classList.remove('hidden');
+      document.getElementById('panel-email').classList.add('hidden');
+      document.getElementById('tab-web').className = 'btn btn-primary btn-sm';
+      document.getElementById('tab-email').className = 'btn btn-outline btn-sm';
+    };
+    document.getElementById('tab-email').onclick = () => {
+      mode = 'email';
+      document.getElementById('panel-email').classList.remove('hidden');
+      document.getElementById('panel-web').classList.add('hidden');
+      document.getElementById('tab-email').className = 'btn btn-primary btn-sm';
+      document.getElementById('tab-web').className = 'btn btn-outline btn-sm';
+    };
+    function applyScanConfig() {
+      if (mode === 'email') {
+        window.AKILI_SCAN = {
+          public: true,
+          module: 'email',
+          endpoint: '/api/v1/public/scan/email',
+          buildBody: () => ({ email: document.getElementById('email').value }),
+        };
+      } else {
+        window.AKILI_SCAN = {
+          public: true,
+          module: 'website',
+          endpoint: '/api/v1/public/scan/website',
+          buildBody: () => ({ url: document.getElementById('url').value }),
+        };
+      }
+    }
+    applyScanConfig();
+    document.getElementById('tab-web').addEventListener('click', applyScanConfig);
+    document.getElementById('tab-email').addEventListener('click', applyScanConfig);
+  </script>
+  <script src="js/scan.js"></script>
+</body>
+</html>

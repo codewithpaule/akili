@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Documentation — AKILI</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/docs.css">
+</head>
+<body class="akili-cursor docs-page">
+  <div id="nav-mount"></div>
+
+  <div class="docs-shell">
+    <aside class="docs-sidebar">
+      <p class="docs-sidebar-brand">Developer</p>
+      <p class="docs-sidebar-title">API Reference</p>
+      <nav id="docs-nav">
+        <div class="docs-nav-group">
+          <span class="docs-nav-label">Start</span>
+          <a href="#overview">Overview</a>
+          <a href="#quickstart">Quick start</a>
+          <a href="#auth">Authentication</a>
+          <a href="#streaming">Streaming</a>
+          <a href="#limits">Rate limits</a>
+        </div>
+        <div class="docs-nav-group">
+          <span class="docs-nav-label">Scans</span>
+          <a href="#scan-website">Website</a>
+          <a href="#scan-vuln">Vulnerability</a>
+          <a href="#scan-subdomains">Subdomains</a>
+          <a href="#scan-ip">IP</a>
+          <a href="#scan-person">Person</a>
+          <a href="#scan-email">Email</a>
+          <a href="#scan-domain">Domain</a>
+          <a href="#scan-org">Organization</a>
+          <a href="#scan-company">Company</a>
+        </div>
+        <div class="docs-nav-group">
+          <span class="docs-nav-label">Data</span>
+          <a href="#report">Reports</a>
+          <a href="#history">History</a>
+          <a href="#keys">API keys</a>
+        </div>
+        <div class="docs-nav-group">
+          <span class="docs-nav-label">Other</span>
+          <a href="#sandbox">Sandbox</a>
+          <a href="#errors">Errors</a>
+          <a href="#plans">Plans</a>
+        </div>
+      </nav>
+    </aside>
+
+    <article class="docs-main">
+      <header class="docs-hero" id="overview">
+        <h1>AKILI API</h1>
+        <p class="docs-hero-lead">
+          REST API for security scans and OSINT modules. Responses stream as plain text during scans,
+          then finish with a JSON report. Sign in on the web app or use named API keys from the dashboard.
+        </p>
+        <div class="docs-badges">
+          <span class="docs-badge version">v1</span>
+          <span class="docs-badge">JSON reports</span>
+          <span class="docs-badge">Streaming scans</span>
+        </div>
+        <div class="docs-base-url">
+          <span class="label-sm">Base URL</span>
+          <code id="base-url">—</code>
+          <button type="button" class="btn btn-outline btn-sm" id="copy-base">Copy</button>
+        </div>
+      </header>
+
+      <section class="docs-section" id="quickstart">
+        <h2>Quick start</h2>
+        <p>1. Create an account and open <strong>Developers</strong> in the dashboard.</p>
+        <p>2. Generate a <strong>named</strong> live key (<code class="docs-inline-code">ak_live_…</code>).</p>
+        <p>3. POST to a scan endpoint with <code class="docs-inline-code">Authorization: Bearer &lt;session&gt;</code> or <code class="docs-inline-code">X-API-Key</code>.</p>
+        <p>4. Read the stream until you see <code class="docs-inline-code">COMPLETE:{...json...}</code>, or fetch the report later by <code class="docs-inline-code">scan_id</code>.</p>
+        <div class="docs-endpoint">
+          <div class="docs-endpoint-head">
+            <span class="docs-method post">POST</span>
+            <span class="docs-endpoint-path">/api/v1/scan/website</span>
+          </div>
+          <div class="docs-endpoint-body">
+            <div class="docs-code-wrap">
+              <button type="button" class="docs-copy-btn" data-copy>Copy</button>
+              <pre id="curl-quick">curl -X POST BASE/api/v1/scan/website \
+  -H "Authorization: Bearer YOUR_JWT" \
+  -H "X-API-Key: ak_live_xxxx" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com"}'</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="docs-section" id="auth">
+        <h2>Authentication</h2>
+        <p>All scan routes require a signed-in user. Use either method below (both can be sent together).</p>
+        <div class="docs-table-wrap">
+          <table class="docs-table">
+            <thead><tr><th>Header</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>Authorization</code></td><td><code>Bearer &lt;JWT&gt;</code> from <code>POST /api/v1/auth/login</code> or register</td></tr>
+              <tr><td><code>X-API-Key</code></td><td>Named key from <code>POST /api/v1/keys/generate</code> (<code>ak_live_</code> or <code>ak_test_</code>)</td></tr>
+              <tr><td><code>X-Session-Token</code></td><td>Same JWT as Bearer (browser convenience)</td></tr>
+              <tr><td><code>Content-Type</code></td><td><code>application/json</code> on POST bodies</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3>Session endpoints</h3>
+        <div class="docs-endpoint">
+          <div class="docs-endpoint-head"><span class="docs-method post">POST</span><span class="docs-endpoint-path">/api/v1/auth/register</span></div>
+          <div class="docs-endpoint-body">
+            <p>Body: <code class="docs-inline-code">email</code>, <code class="docs-inline-code">password</code>, <code class="docs-inline-code">confirm_password</code>, optional <code class="docs-inline-code">name</code>, <code class="docs-inline-code">phone</code>.</p>
+            <div class="docs-code-wrap"><button type="button" class="docs-copy-btn" data-copy>Copy</button><pre>{"email":"you@example.com","password":"secret123","confirm_password":"secret123","name":"Ada Lovelace"}</pre></div>
+          </div>
+        </div>
+        <div class="docs-endpoint">
+          <div class="docs-endpoint-head"><span class="docs-method post">POST</span><span class="docs-endpoint-path">/api/v1/auth/login</span></div>
+          <div class="docs-endpoint-body">
+            <div class="docs-code-wrap"><button type="button" class="docs-copy-btn" data-copy>Copy</button><pre>{"email":"you@example.com","password":"secret123"}</pre></div>
+          </div>
+        </div>
+        <div class="docs-endpoint">
+          <div class="docs-endpoint-head"><span class="docs-method get">GET</span><span class="docs-endpoint-path">/api/v1/auth/me</span></div>
+          <div class="docs-endpoint-body"><p>Returns <code class="docs-inline-code">user</code> and <code class="docs-inline-code">usage</code> (plan, monthly module counts, caps).</p></div>
+        </div>
+      </section>
+
+      <section class="docs-section" id="streaming">
+        <h2>Streaming scans</h2>
+        <p>Scan POST endpoints return <code class="docs-inline-code">text/plain</code> with one line per event, for example:</p>
+        <div class="docs-code-wrap"><button type="button" class="docs-copy-btn" data-copy>Copy</button><pre>[AKILI] Starting website assessment…
+[TOOL] fingerprint — running
+[FOUND] Missing HSTS header
+[DONE] Report ready
+COMPLETE:{"scan_id":"…","score":72,"grade":"B",…}</pre></div>
+        <p>Parse the final line starting with <code class="docs-inline-code">COMPLETE:</code> as JSON, or call <code class="docs-inline-code">GET /api/v1/report/{scan_id}</code> afterward.</p>
+        <div class="docs-callout warn">
+          Results are automated OSINT/security signals — verify important findings before you act.
+        </div>
+      </section>
+
+      <section class="docs-section" id="limits">
+        <h2>Rate limits</h2>
+        <p>Limits depend on your plan and module. Response headers:</p>
+        <div class="docs-table-wrap">
+          <table class="docs-table">
+            <thead><tr><th>Header</th><th>Meaning</th></tr></thead>
+            <tbody>
+              <tr><td><code>X-RateLimit-Limit</code></td><td>Max requests in the window</td></tr>
+              <tr><td><code>X-RateLimit-Remaining</code></td><td>Requests left</td></tr>
+              <tr><td><code>X-RateLimit-Reset</code></td><td>Unix reset time</td></tr>
+              <tr><td><code>X-AKILI-Tier</code></td><td>Effective tier (free, trial, premium, sandbox)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>HTTP <code class="docs-inline-code">429</code> when monthly module quota or hourly cap is exceeded. HTTP <code class="docs-inline-code">403</code> for premium-only modules on free plan.</p>
+      </section>
+
+      <section class="docs-section" id="scan-website">
+        <h2>Scan endpoints</h2>
+        <p>All require authentication. Body must be JSON. Unless noted, response is a streaming scan.</p>
+
+        <div class="docs-endpoint" id="scan-vuln">
+          <div class="docs-endpoint-head"><span class="docs-method post">POST</span><span class="docs-endpoint-path">/api/v1/scan/website</span></div>
+          <div class="docs-endpoint-body">
+            <p>Website security: headers, SSL, DNS, ports, tech stack.</p>
+            <div class="docs-code-wrap"><button type="button" class="docs-copy-btn" data-copy>Copy</button><pre>{"url":"https://example.com"}</pre></div>
+          </div>
+        </div>
+        <div class="docs-endpoint">
+          <div class="docs-endpoint-head"><span class="docs-method post">POST</span><span class="docs-endpoint-path">/api/v1/scan/vulnerability</span></div>
+          <div class="docs-endpoint-body">
+            <p>Misconfiguration and exposure checks (CORS, cookies, etc.).</p>
+            <div class="docs-code-wrap"><button type="button" class="docs-copy-btn" data-copy>Copy</button><pre>{"url":"https://example.com"}</pre></div>
+          </div>
+        </div>
+        <div class="docs-endpoint" id="scan-subdomains">
+          <div class="docs-endpoint-head"><span class="docs-method post">POST</span><span class="docs-endpoint-path">/api/v1/scan/subdomains</span></div>
+          <div class="docs-endpoint-body">
+            <div class="docs-code-wrap"><button type="button" class="docs-copy-btn" data-copy>Copy</button><pre>{"domain":"example.com"}</pre></div>
+          </div>
+        </div>
+        <div class="docs-endpoint" id="scan-ip">
+          <div class="docs-endpoint-head"><span class="docs-method post">POST</span><span class="docs-endpoint-path">/api/v1/scan/ip</span></div>
+          <div class="docs-endpoint-body">
+            <div class="docs-code-wrap"><button type="button" class="docs-copy-btn" data-copy>Copy</button><pre>{"ip":"8.8.8.8"}</pre></div>
+          </div>
+        </div>
+        <div class="docs-endpoint" id="scan-person">
+          <div class="docs-endpoint-head"><span class="docs-method post">POST</span><span class="docs-endpoint-path">/api/v1/scan/person</span></div>
+          <div class="docs-endpoint-body">
+            <p>Public OSINT only — authorized due diligence.</p>
+            <div class="docs-code-wrap"><button type="button" class="docs-copy-btn" data-copy>Copy</button><pre>{"name":"Jane Doe","keywords":"engineer Lagos"}</pre></div>
+          </div>
+        </div>
+        <div class="docs-endpoint" id="scan-email">
+          <div class="docs-endpoint-head"><span class="docs-method post">POST</span><span class="docs-endpoint-path">/api/v1/scan/email</span></div>
+          <div class="docs-endpoint-body">
+            <div class="docs-code-wrap"><button type="button" class="docs-copy-btn" data-copy>Copy</button><pre>{"email":"user@example.com"}</pre></div>
+          </div>
+        </div>
+        <div class="docs-endpoint" id="scan-domain">
+          <div class="docs-endpoint-head"><span class="docs-method post">POST</span><span class="docs-endpoint-path">/api/v1/scan/domain</span></div>
+          <div class="docs-endpoint-body">
+            <div class="docs-code-wrap"><button type="button" class="docs-copy-btn" data-copy>Copy</button><pre>{"domain":"example.com"}</pre></div>
+          </div>
+        </div>
+        <div class="docs-endpoint" id="scan-org">
+          <div class="docs-endpoint-head"><span class="docs-method post">POST</span><span class="docs-endpoint-path">/api/v1/scan/organization</span></div>
+          <div class="docs-endpoint-body">
+            <p>Premium / trial. ASN and organizational footprint.</p>
+            <div class="docs-code-wrap"><button type="button" class="docs-copy-btn" data-copy>Copy</button><pre>{"name":"Acme Corp","domain":"acme.com"}</pre></div>
+          </div>
+        </div>
+        <div class="docs-endpoint" id="scan-company">
+          <div class="docs-endpoint-head"><span class="docs-method post">POST</span><span class="docs-endpoint-path">/api/v1/scan/company</span></div>
+          <div class="docs-endpoint-body">
+            <div class="docs-code-wrap"><button type="button" class="docs-copy-btn" data-copy>Copy</button><pre>{"name":"Acme Corp","domain":"acme.com"}</pre></div>
+          </div>
+        </div>
+        <div class="docs-endpoint">
+          <div class="docs-endpoint-head"><span class="docs-method post">POST</span><span class="docs-endpoint-path">/api/v1/scan/template</span></div>
+          <div class="docs-endpoint-body">
+            <p>Multi-module template: <code class="docs-inline-code">pre_launch</code>, <code class="docs-inline-code">freelancer</code>, <code class="docs-inline-code">vendor</code>, <code class="docs-inline-code">full</code>, etc.</p>
+            <div class="docs-code-wrap"><button type="button" class="docs-copy-btn" data-copy>Copy</button><pre>{"template":"pre_launch","target":"https://example.com"}</pre></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="docs-section" id="report">
+        <h2>Reports &amp; history</h2>
+        <div class="docs-endpoint">
+          <div class="docs-endpoint-head"><span class="docs-method get">GET</span><span class="docs-endpoint-path">/api/v1/report/{scan_id}</span></div>
+          <div class="docs-endpoint-body"><p>Full JSON report for a completed scan (must belong to your account).</p></div>
+        </div>
+        <div class="docs-endpoint" id="history">
+          <div class="docs-endpoint-head"><span class="docs-method get">GET</span><span class="docs-endpoint-path">/api/v1/history?limit=20&amp;page=1&amp;q=</span></div>
+          <div class="docs-endpoint-body"><p>Paginated list of your scans. Query params: <code class="docs-inline-code">type</code>, <code class="docs-inline-code">q</code> (target filter).</p></div>
+        </div>
+        <div class="docs-endpoint">
+          <div class="docs-endpoint-head"><span class="docs-method delete">DELETE</span><span class="docs-endpoint-path">/api/v1/report/{scan_id}</span></div>
+          <div class="docs-endpoint-body"><p>Delete one report from your history.</p></div>
+        </div>
+      </section>
+
+      <section class="docs-section" id="keys">
+        <h2>API keys</h2>
+        <div class="docs-callout">
+          Keys must have a <strong>name</strong> when created. The full secret is shown once.
+        </div>
+        <div class="docs-endpoint">
+          <div class="docs-endpoint-head"><span class="docs-method post">POST</span><span class="docs-endpoint-path">/api/v1/keys/generate</span></div>
+          <div class="docs-endpoint-body">
+            <div class="docs-code-wrap"><button type="button" class="docs-copy-btn" data-copy>Copy</button><pre>{"name":"Production CI","sandbox":false}</pre></div>
+          </div>
+        </div>
+        <div class="docs-endpoint">
+          <div class="docs-endpoint-head"><span class="docs-method get">GET</span><span class="docs-endpoint-path">/api/v1/keys/list</span></div>
+          <div class="docs-endpoint-body"><p>Lists named keys (preview only, not the secret).</p></div>
+        </div>
+        <div class="docs-endpoint">
+          <div class="docs-endpoint-head"><span class="docs-method delete">DELETE</span><span class="docs-endpoint-path">/api/v1/keys/{key_id}</span></div>
+          <div class="docs-endpoint-body"><p>Revoke a key.</p></div>
+        </div>
+      </section>
+
+      <section class="docs-section" id="sandbox">
+        <h2>Sandbox</h2>
+        <p>Mock data for demos — use <code class="docs-inline-code">ak_test_</code> keys or sandbox routes without hitting live targets.</p>
+        <div class="docs-endpoint">
+          <div class="docs-endpoint-head"><span class="docs-method post">POST</span><span class="docs-endpoint-path">/api/v1/sandbox/scan/website?scenario=clean_scan</span></div>
+          <div class="docs-endpoint-body">
+            <p>Scenarios include <code class="docs-inline-code">clean_scan</code>, <code class="docs-inline-code">risky_scan</code>. Same modules as production sandbox paths.</p>
+          </div>
+        </div>
+        <div class="docs-endpoint">
+          <div class="docs-endpoint-head"><span class="docs-method get">GET</span><span class="docs-endpoint-path">/api/v1/sandbox/report/{module}</span></div>
+          <div class="docs-endpoint-body"><p>Instant mock JSON report (no stream).</p></div>
+        </div>
+      </section>
+
+      <section class="docs-section" id="errors">
+        <h2>Errors</h2>
+        <div class="docs-table-wrap">
+          <table class="docs-table">
+            <thead><tr><th>Status</th><th>Typical cause</th></tr></thead>
+            <tbody>
+              <tr><td><code>401</code></td><td>Missing or invalid session / API key</td></tr>
+              <tr><td><code>403</code></td><td>Module not on your plan</td></tr>
+              <tr><td><code>404</code></td><td>Unknown scan_id or report not yours</td></tr>
+              <tr><td><code>429</code></td><td>Rate or monthly quota exceeded</td></tr>
+              <tr><td><code>400</code></td><td>Validation (URL, email, IP, key name missing)</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="docs-section" id="plans">
+        <h2>Plans</h2>
+        <div class="docs-endpoint">
+          <div class="docs-endpoint-head"><span class="docs-method get">GET</span><span class="docs-endpoint-path">/api/v1/plans</span></div>
+          <div class="docs-endpoint-body"><p>Public list of modules, trial length, and limit tables.</p></div>
+        </div>
+        <div class="docs-endpoint">
+          <div class="docs-endpoint-head"><span class="docs-method get">GET</span><span class="docs-endpoint-path">/api/v1/health</span></div>
+          <div class="docs-endpoint-body"><p>API and optional Groq LLM connectivity status.</p></div>
+        </div>
+      </section>
+
+      <footer class="docs-footer-cta">
+        <p>Ready to integrate? Generate a named key in the dashboard or sign in to run scans from the browser.</p>
+        <a href="signup.html" class="btn btn-primary">Start free trial</a>
+        <a href="dashboard.html" class="btn btn-outline" style="margin-left:0.5rem">Dashboard</a>
+      </footer>
+    </article>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    (function () {
+      const base = (window.AKILI_CONFIG && AKILI_CONFIG.API_BASE) || 'http://localhost:8001';
+      const baseEl = document.getElementById('base-url');
+      const curlEl = document.getElementById('curl-quick');
+      if (baseEl) baseEl.textContent = base;
+      if (curlEl) curlEl.textContent = curlEl.textContent.replace(/BASE/g, base);
+
+      document.getElementById('copy-base')?.addEventListener('click', () => {
+        navigator.clipboard.writeText(base).then(() => {
+          if (window.AKILI) AKILI.showToast('Base URL copied', 'success');
+        });
+      });
+
+      document.querySelectorAll('[data-copy]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const pre = btn.parentElement?.querySelector('pre');
+          if (!pre) return;
+          navigator.clipboard.writeText(pre.textContent).then(() => {
+            btn.textContent = 'Copied';
+            setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+            if (window.AKILI) AKILI.showToast('Copied', 'success');
+          });
+        });
+      });
+
+      const navLinks = document.querySelectorAll('#docs-nav a');
+      const sections = [...navLinks].map((a) => {
+        const id = a.getAttribute('href')?.slice(1);
+        return id ? document.getElementById(id) : null;
+      }).filter(Boolean);
+
+      function onScroll() {
+        let current = sections[0]?.id;
+        const y = window.scrollY + 120;
+        for (const sec of sections) {
+          if (sec.offsetTop <= y) current = sec.id;
+        }
+        navLinks.forEach((a) => {
+          a.classList.toggle('is-active', a.getAttribute('href') === '#' + current);
+        });
+      }
+      window.addEventListener('scroll', onScroll, { passive: true });
+      onScroll();
+    })();
+  </script>
+</body>
+</html>

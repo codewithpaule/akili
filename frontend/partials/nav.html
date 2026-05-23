@@ -1,0 +1,46 @@
+<nav class="navbar">
+  <a href="index.html" class="logo" id="nav-logo">
+    <svg class="akili-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><circle cx="16" cy="16" r="14" stroke="#2563EB" stroke-width="2"/><circle cx="16" cy="16" r="6" fill="#2563EB"/><circle cx="18" cy="14" r="2" fill="#fff"/></svg>
+    AKILI
+  </a>
+  <button class="hamburger" id="nav-hamburger" aria-label="Menu"><i data-lucide="menu"></i></button>
+  <div class="nav-inner" id="nav-inner">
+    <div class="nav-drawer-header">
+      <div class="nav-drawer-brand">
+        <svg class="akili-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><circle cx="16" cy="16" r="14" stroke="#2563EB" stroke-width="2"/><circle cx="16" cy="16" r="6" fill="#2563EB"/><circle cx="18" cy="14" r="2" fill="#fff"/></svg>
+        <span>AKILI</span>
+      </div>
+      <button class="nav-drawer-close" id="nav-drawer-close" aria-label="Close menu"><i data-lucide="x"></i></button>
+    </div>
+    <ul class="nav-links">
+      <li><a href="index.html" data-page="index.html" id="nav-home">Home</a></li>
+      <li><a href="quick-scan.html" data-page="quick-scan.html" id="nav-quick-scan">Quick Scan</a></li>
+      <li class="nav-guest-only"><a href="about.html" data-page="about.html">About</a></li>
+      <li class="nav-guest-only"><a href="contact.html" data-page="contact.html">Contact</a></li>
+      <li class="nav-guest-only"><a href="privacy.html" data-page="privacy.html">Privacy</a></li>
+      <li class="nav-guest-only"><a href="pricing.html" data-page="pricing.html">Pricing</a></li>
+      <li class="nav-guest-only"><a href="docs.html" data-page="docs.html">Docs</a></li>
+    </ul>
+    <div class="nav-drawer-auth nav-guest-only">
+      <a href="login.html" class="drawer-signin">Sign in</a>
+      <a href="signup.html" class="drawer-cta">Start free</a>
+    </div>
+    <div class="nav-drawer-auth nav-auth-only" style="display:none">
+      <a href="dashboard.html" class="drawer-signin">Dashboard</a>
+      <a href="profile.html" class="drawer-signin">Profile</a>
+      <button type="button" class="drawer-cta" id="nav-drawer-logout">Sign out</button>
+    </div>
+  </div>
+  <div class="nav-right">
+    <a href="dashboard.html" class="hide-mobile nav-auth-only" id="nav-dashboard" style="display:none;font-weight:600">Dashboard</a>
+    <a href="profile.html" class="hide-mobile nav-auth-only" id="nav-profile" style="display:none">Profile</a>
+    <button type="button" class="btn btn-outline btn-sm hide-mobile nav-auth-only" id="nav-logout" style="display:none">Sign out</button>
+    <a href="login.html" class="hide-mobile nav-guest-only" id="nav-login">Sign in</a>
+    <!-- <a href="signup.html" class="hide-mobile nav-guest-only" id="nav-signup" style="font-size:0.85rem">Sign up</a> -->
+    <span id="health-dot" class="health-dot" title="API status"></span>
+    <span id="health-label" class="hide-mobile" style="font-size:0.7rem;color:#64748B;margin-left:4px">…</span>
+    <a href="signup.html" class="btn btn-primary btn-sm hide-mobile nav-guest-only" id="nav-cta">Start free</a>
+  </div>
+  <div class="nav-overlay" id="nav-overlay"></div>
+</nav>
+

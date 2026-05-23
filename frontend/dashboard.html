@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — AKILI</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/pages.css">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="akili-cursor dashboard-page">
+  <div class="dashboard-layout">
+    
+    <!-- Sidebar -->
+    <aside class="dash-sidebar" id="dash-sidebar">
+      <div class="sidebar-header">
+        <a href="index.html" class="logo">
+          <svg class="akili-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+            <circle cx="16" cy="16" r="14" stroke="#2563EB" stroke-width="2"/>
+            <circle cx="16" cy="16" r="6" fill="#2563EB"/>
+            <circle cx="18" cy="14" r="2" fill="#fff"/>
+          </svg>
+          AKILI
+        </a>
+        <button class="sidebar-close" id="sidebar-close" aria-label="Close menu"><i data-lucide="x"></i></button>
+      </div>
+      
+      <div class="sidebar-scroller">
+        <nav class="sidebar-nav">
+          <!-- Overview Section -->
+          <div class="sidebar-group">
+            <span class="sidebar-group-title">Navigation</span>
+            <ul class="sidebar-menu">
+              <li>
+                <a href="dashboard.html" class="sidebar-menu-item active" style="--accent:var(--blue)">
+                  <span class="sidebar-menu-icon" style="background:var(--blue-light);color:var(--blue)">
+                    <i data-lucide="layout-dashboard"></i>
+                  </span>
+                  <span class="sidebar-menu-text">Workspace Overview</span>
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Security Scans Section -->
+          <div class="sidebar-group">
+            <span class="sidebar-group-title">Security Scans</span>
+            <ul class="sidebar-menu" id="sidebar-scans"></ul>
+          </div>
+          
+          <!-- OSINT Intelligence Section -->
+          <div class="sidebar-group">
+            <span class="sidebar-group-title">Intelligence</span>
+            <ul class="sidebar-menu" id="sidebar-intel"></ul>
+          </div>
+          
+          <!-- Demos & Developer Tools Section -->
+          <div class="sidebar-group">
+            <span class="sidebar-group-title">Tools & Platform</span>
+            <ul class="sidebar-menu" id="sidebar-tools"></ul>
+          </div>
+          
+          <!-- Account Section -->
+          <div class="sidebar-group">
+            <span class="sidebar-group-title">Account</span>
+            <ul class="sidebar-menu">
+              <li>
+                <a href="profile.html" class="sidebar-menu-item" style="--accent:var(--blue)">
+                  <span class="sidebar-menu-icon" style="background:var(--blue-light);color:var(--blue)"><i data-lucide="user"></i></span>
+                  <span class="sidebar-menu-text">Profile Details</span>
+                </a>
+              </li>
+              <li>
+                <a href="history.html" class="sidebar-menu-item" style="--accent:var(--blue)">
+                  <span class="sidebar-menu-icon" style="background:var(--blue-light);color:var(--blue)"><i data-lucide="clock"></i></span>
+                  <span class="sidebar-menu-text">Scan History</span>
+                </a>
+              </li>
+              <li>
+                <a href="docs.html" class="sidebar-menu-item" style="--accent:var(--blue)">
+                  <span class="sidebar-menu-icon" style="background:var(--blue-light);color:var(--blue)"><i data-lucide="book-open"></i></span>
+                  <span class="sidebar-menu-text">API Docs</span>
+                </a>
+              </li>
+              <li>
+                <button type="button" class="sidebar-menu-item logout-btn" id="logout-sidebar-btn" style="--accent:var(--red);width:100%;text-align:left;border:none;background:transparent;cursor:pointer;">
+                  <span class="sidebar-menu-icon" style="background:var(--red-light);color:var(--red)"><i data-lucide="log-out"></i></span>
+                  <span class="sidebar-menu-text">Sign Out</span>
+                </button>
+              </li>
+            </ul>
+          </div>
+        </nav>
+      </div>
+    </aside>
+    
+    <!-- Backdrop Overlay for Mobile -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+    
+    <!-- Main Shell -->
+    <div class="dash-main-content">
+      <!-- Dashboard Mobile Topbar -->
+      <header class="dash-topbar no-print">
+        <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Open menu"><i data-lucide="menu"></i></button>
+        <div class="dash-topbar-brand">
+          <svg class="akili-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true" style="width:24px;height:24px;">
+            <circle cx="16" cy="16" r="14" stroke="#2563EB" stroke-width="2"/>
+            <circle cx="16" cy="16" r="6" fill="#2563EB"/>
+            <circle cx="18" cy="14" r="2" fill="#fff"/>
+          </svg>
+          <span style="font-weight:700;color:var(--navy);font-size:1.15rem;margin-left:0.35rem;">AKILI</span>
+        </div>
+        <div class="dash-topbar-right">
+          <span id="health-dot" class="health-dot" title="API status"></span>
+          <span id="health-label" class="hide-mobile" style="font-size:0.7rem;color:#64748B;margin-left:4px">…</span>
+        </div>
+      </header>
+
+      <main class="container dashboard-shell">
+        <header class="dash-header">
+          <div>
+            <p class="dash-eyebrow">Workspace</p>
+            <h1 id="welcome">Welcome back</h1>
+            <p class="dash-sub" id="welcome-email"></p>
+          </div>
+          <div class="dash-header-actions">
+            <a href="profile.html" class="btn btn-outline btn-sm">Edit profile</a>
+            <button type="button" class="btn btn-primary btn-sm" id="upgrade-btn">Upgrade plan</button>
+            <button type="button" class="btn btn-outline btn-sm" id="cancel-sub-btn" style="display:none">Cancel subscription</button>
+          </div>
+        </header>
+
+        <section class="dash-stats">
+          <article class="dash-stat-card">
+            <span class="label-sm">Plan</span>
+            <p class="dash-stat-value" id="plan-name">—</p>
+            <span class="dash-plan-badge" id="plan-badge"></span>
+          </article>
+          <article class="dash-stat-card">
+            <span class="label-sm">Scans this month</span>
+            <p class="dash-stat-value" id="monthly-scans">—</p>
+            <div class="usage-bar usage-bar-sm"><span id="monthly-scans-bar" style="width:0%"></span></div>
+          </article>
+          <article class="dash-stat-card">
+            <span class="label-sm">Hourly API limit</span>
+            <p class="dash-stat-value" id="hourly-limit">—</p>
+          </article>
+          <article class="dash-stat-card">
+            <span class="label-sm">API keys</span>
+            <p class="dash-stat-value" id="api-keys-count">—</p>
+            <a href="developer.html" class="label-sm" style="margin-top:0.35rem;display:inline-block">Manage keys →</a>
+          </article>
+          <article class="dash-stat-card">
+            <span class="label-sm">Trial ends</span>
+            <p class="dash-stat-value" id="trial-ends">—</p>
+          </article>
+          <article class="dash-stat-card dash-stat-link">
+            <a href="history.html">
+              <span class="label-sm">Scan history</span>
+              <p class="dash-stat-value">View all →</p>
+            </a>
+          </article>
+        </section>
+
+        <section class="dash-panel" id="billing-panel">
+          <div class="dash-panel-head">
+            <h2>Plans &amp; payment</h2>
+            <p class="label-sm">Choose a plan and pay with Paystack — you stay on the dashboard until checkout opens.</p>
+          </div>
+          <div id="dash-paystack-alert" class="billing-alert" style="display:none"></div>
+          <div id="dash-billing-picker" class="billing-picker-grid">Loading plans…</div>
+        </section>
+
+        <section class="dash-panel">
+          <div class="dash-panel-head">
+            <h2>Account usage</h2>
+            <p class="label-sm" id="usage-plan-desc">Module quotas for your plan</p>
+          </div>
+          <div id="usage-bars" class="dash-usage"></div>
+        </section>
+
+        <section class="dash-panel" id="dash-keys-panel" style="display:none">
+          <div class="dash-panel-head">
+            <h2>API key usage</h2>
+            <p class="label-sm">Calls tracked per named key (today / this month vs hourly tier limit)</p>
+          </div>
+          <div id="dash-keys-usage" class="dash-keys-usage"></div>
+        </section>
+      </main>
+    </div>
+
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/billing.js"></script>
+  <script>
+    if (!AKILI_AUTH.requireAuth()) throw new Error('auth');
+
+    // Sidebar navigation items data
+    const SCAN_MODULES = [
+      { href: 'scan-website.html', icon: 'globe', color: 'var(--mod-website)', name: 'Website Scan', desc: 'Headers, SSL, DNS, ports' },
+      { href: 'scan-vulnerability.html', icon: 'bug', color: 'var(--mod-vuln)', name: 'Vulnerability', desc: 'CORS, CSRF, misconfigs' },
+      { href: 'scan-subdomains.html', icon: 'git-branch', color: 'var(--mod-subdomain)', name: 'Subdomains', desc: 'CT logs, hidden hosts' },
+      { href: 'scan-ip.html', icon: 'network', color: 'var(--mod-ip)', name: 'IP Intelligence', desc: 'Geo, ports, reputation' },
+      { href: 'scan-organization.html', icon: 'building-2', color: 'var(--mod-org)', name: 'Organization', desc: 'ASN and footprint', premium: true },
+      { href: 'scan-auth.html', icon: 'lock', color: '#6366F1', name: 'Authenticated Scan', desc: 'Authorized login testing', premium: true },
+    ];
+    const INTEL_MODULES = [
+      { href: 'person.html', icon: 'user-search', color: 'var(--mod-person)', name: 'Person Search', desc: 'Public OSINT due diligence' },
+      { href: 'company.html', icon: 'briefcase', color: 'var(--mod-company)', name: 'Company Intel', desc: 'Domains, people, stack', premium: true },
+      { href: 'email.html', icon: 'mail', color: 'var(--mod-email)', name: 'Email Investigator', desc: 'MX, breaches, validity' },
+      { href: 'domain.html', icon: 'shield-check', color: 'var(--mod-domain)', name: 'Domain Reputation', desc: 'Age, typos, safe browsing' },
+      { href: 'graph.html', icon: 'share-2', color: 'var(--mod-graph)', name: 'Relationship Graph', desc: 'Visual entity mapping', premium: true },
+    ];
+    const QUICK_MODULES = [
+      { href: 'quick-scan.html', icon: 'zap', color: '#f59e0b', name: 'Quick scan (guest)', desc: 'No login — light website or email check' },
+      { href: 'scan-website.html', icon: 'globe', color: 'var(--mod-website)', name: 'Full website scan', desc: 'Depth depends on your plan' },
+      { href: 'email.html', icon: 'mail', color: 'var(--mod-email)', name: 'Full email scan', desc: 'Depth depends on your plan' },
+    ];
+    const TOOL_MODULES = [
+      { href: 'templates.html', icon: 'layers', color: 'var(--amber)', name: 'Scan Templates', desc: 'Multi-module one-click runs', premium: true },
+      { href: 'monitor.html', icon: 'activity', color: 'var(--blue)', name: 'Monitor', desc: 'Scheduled re-checks', premium: true },
+      { href: 'sandbox.html', icon: 'flask-conical', color: 'var(--slate)', name: 'Sandbox Demo', desc: 'Mock data, no live targets' },
+      { href: 'developer.html', icon: 'terminal', color: 'var(--navy)', name: 'Developers', desc: 'Named API keys & limits' },
+    ];
+
+    // Responsive Sidebar controls
+    const sidebar = document.getElementById('dash-sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    const toggleBtn = document.getElementById('sidebar-toggle');
+    const closeBtn = document.getElementById('sidebar-close');
+
+    function toggleSidebar() {
+      sidebar.classList.toggle('open');
+      overlay.classList.toggle('open');
+    }
+
+    if (toggleBtn) toggleBtn.addEventListener('click', toggleSidebar);
+    if (closeBtn) closeBtn.addEventListener('click', toggleSidebar);
+    if (overlay) overlay.addEventListener('click', toggleSidebar);
+
+    // Render Sidebar Dynamic Menu Lists
+    function renderSidebarMenu(elId, items) {
+      const menuEl = document.getElementById(elId);
+      if (!menuEl) return;
+      menuEl.innerHTML = items.map((m) => `
+        <li>
+          <a href="${m.href}" class="sidebar-menu-item${m.premium ? ' is-premium' : ''}" style="--accent:${m.color}" title="${AKILI.escapeHtml(m.desc)}">
+            <span class="sidebar-menu-icon" style="background:${m.color}15;color:${m.color}">
+              <i data-lucide="${m.icon}"></i>
+            </span>
+            <span class="sidebar-menu-text">${m.name}</span>
+            ${m.premium ? '<span class="sidebar-pro-badge">PRO</span>' : ''}
+          </a>
+        </li>
+      `).join('');
+    }
+
+    renderSidebarMenu('sidebar-scans', SCAN_MODULES);
+    renderSidebarMenu('sidebar-intel', INTEL_MODULES);
+    renderSidebarMenu('sidebar-tools', [...QUICK_MODULES, ...TOOL_MODULES]);
+
+    function planBadgeClass(plan) {
+      if (plan === 'premium') return 'plan-premium';
+      if (plan === 'trial') return 'plan-trial';
+      return 'plan-free';
+    }
+
+    function renderUsageBar(used, cap) {
+      const pct = cap ? Math.min(100, Math.round((used / cap) * 100)) : 0;
+      return `<div class="usage-bar"><span style="width:${pct}%"></span></div>`;
+    }
+
+    function renderKeyUsageCard(k) {
+      const tierLabel = k.is_sandbox ? 'Sandbox' : (k.tier || 'free');
+      const hourPct = k.hourly_limit
+        ? Math.min(100, Math.round(((k.api_calls_today || 0) / k.hourly_limit) * 100))
+        : 0;
+      const last = k.last_used_at
+        ? AKILI.relativeTime(k.last_used_at)
+        : 'Never used';
+      return `<article class="usage-key-card">
+        <div class="usage-key-head">
+          <strong>${AKILI.escapeHtml(k.name || 'Unnamed')}</strong>
+          <span class="usage-key-tier">${tierLabel}</span>
+        </div>
+        <code class="usage-key-preview">${AKILI.escapeHtml(k.key_preview)}</code>
+        <div class="dash-usage-row">
+          <div class="dash-usage-label"><span>API calls today</span><span>${k.api_calls_today || 0} / ${k.hourly_limit} hourly cap</span></div>
+          ${renderUsageBar(k.api_calls_today || 0, k.hourly_limit)}
+        </div>
+        <p class="label-sm">This month: <strong>${k.api_calls_month || 0}</strong> calls · Last used ${last}</p>
+      </article>`;
+    }
+
+    async function load() {
+      const [me, keysData] = await Promise.all([
+        AKILI_AUTH.api('/api/v1/auth/me'),
+        AKILI_AUTH.api('/api/v1/keys/list').catch(() => ({ keys: [], account: {} })),
+      ]);
+      const u = me.user;
+      const usage = me.usage || keysData.account || {};
+      const plan = usage.plan || u.effective_plan || 'free';
+      const planLabel = usage.plan_label || plan.toUpperCase();
+      document.getElementById('welcome').textContent = `Hello, ${u.name || u.email.split('@')[0]}`;
+      document.getElementById('welcome-email').textContent = u.email;
+      document.getElementById('plan-name').textContent = planLabel;
+      const badge = document.getElementById('plan-badge');
+      badge.textContent = plan === 'premium' ? 'Premium' : plan === 'trial' ? '14-day trial' : 'Free tier';
+      badge.className = 'dash-plan-badge ' + planBadgeClass(plan);
+      const mUsed = usage.monthly_scans_used ?? 0;
+      const mCap = usage.monthly_total_limit ?? 50;
+      document.getElementById('monthly-scans').textContent = `${mUsed} / ${mCap}`;
+      document.getElementById('monthly-scans-bar').style.width =
+        Math.min(100, Math.round((mUsed / mCap) * 100)) + '%';
+      document.getElementById('hourly-limit').textContent = String(usage.hourly_limit ?? '—');
+      document.getElementById('api-keys-count').textContent =
+        `${usage.active_api_keys ?? 0} / ${usage.max_api_keys ?? 1}`;
+      document.getElementById('trial-ends').textContent = u.trial_ends_at
+        ? new Date(u.trial_ends_at * 1000).toLocaleDateString(undefined, { dateStyle: 'medium' })
+        : plan === 'premium' ? 'N/A' : '—';
+      document.getElementById('usage-plan-desc').textContent =
+        plan === 'premium'
+          ? 'Premium — higher monthly caps on all modules.'
+          : plan === 'trial'
+            ? 'Trial — all modules unlocked with elevated limits.'
+            : 'Free — core modules after trial ends.';
+      const caps = usage.module_caps || {};
+      const used = usage.usage_this_month || {};
+      const mods = [...new Set([...Object.keys(caps), ...Object.keys(used)])].sort();
+      document.getElementById('usage-bars').innerHTML = mods.length
+        ? mods.map((m) => {
+            const c = caps[m] || 10;
+            const n = used[m] || 0;
+            return `<div class="dash-usage-row"><div class="dash-usage-label"><span>${m}</span><span>${n} / ${c} per month</span></div>${renderUsageBar(n, c)}</div>`;
+          }).join('')
+        : '<p class="label-sm">No scans yet this month — pick a module from the sidebar to start.</p>';
+      const apiKeys = keysData.keys || [];
+      const keysPanel = document.getElementById('dash-keys-panel');
+      const keysMount = document.getElementById('dash-keys-usage');
+      if (apiKeys.length) {
+        keysPanel.style.display = '';
+        keysMount.innerHTML = apiKeys.map(renderKeyUsageCard).join('');
+      } else {
+        keysPanel.style.display = 'none';
+      }
+      const upgradeBtn = document.getElementById('upgrade-btn');
+      const cancelBtn = document.getElementById('cancel-sub-btn');
+      if (upgradeBtn) upgradeBtn.style.display = plan === 'premium' ? 'none' : '';
+      if (cancelBtn) cancelBtn.style.display = plan === 'premium' ? '' : 'none';
+      if (u.premium_until && plan === 'premium') {
+        document.getElementById('trial-ends').textContent =
+          'Renews ' + new Date(u.premium_until * 1000).toLocaleDateString();
+      }
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+
+      if (window.AKILI_BILLING) {
+        AKILI_BILLING.mountPicker('dash-billing-picker', {
+          alertId: 'dash-paystack-alert',
+          returnPage: 'dashboard.html',
+          currentPlan: plan,
+          showModules: true,
+        }).catch(() => {});
+      }
+    }
+
+    document.getElementById('upgrade-btn')?.addEventListener('click', () => {
+      document.getElementById('billing-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    const logoutSidebar = document.getElementById('logout-sidebar-btn');
+    if (logoutSidebar) {
+      logoutSidebar.onclick = () => {
+        AKILI_AUTH.clearSession();
+        location.href = 'index.html';
+      };
+    }
+
+    document.getElementById('cancel-sub-btn').onclick = async () => {
+      if (!confirm('Cancel Premium? You will revert to your previous plan when the period ends.')) return;
+      try {
+        await AKILI_AUTH.api('/api/v1/billing/cancel', { method: 'POST' });
+        AKILI.showToast('Subscription cancelled', 'success');
+        load();
+      } catch (e) { AKILI.showToast(e.message, 'error'); }
+    };
+    
+    load()
+      .then(() => {
+        if (location.hash === '#billing-panel') {
+          document.getElementById('billing-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        return AKILI_BILLING?.handlePageReturn({ returnPage: 'dashboard.html', reload: () => load() });
+      })
+      .catch((e) => AKILI.showToast(e.message, 'error'));
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  </script>
+</body>
+</html>
