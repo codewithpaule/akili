@@ -405,6 +405,18 @@ def ask_llm(system: str, user: str, allow_ensemble: bool = False, expected_schem
     # Strengthen short system prompts automatically to improve output quality
     system = _enhance_system_prompt(system)
 
+    # Detect whether any external LLM provider is configured via API keys
+    configured_providers = any(
+        [
+            bool(GROQ_API_KEY),
+            bool(GEMINI_API_KEY),
+            bool(os.getenv("OPENROUTER_API_KEY", "") or ""),
+            bool(os.getenv("COHERE_API_KEY", "") or ""),
+            bool(os.getenv("HF_API_KEY", "") or ""),
+            bool(os.getenv("MISTRA_API_KEY", "") or ""),
+        ]
+    )
+
     if allow_ensemble:
         candidates = _ask_all_providers(system, user)
         if candidates:
@@ -438,6 +450,10 @@ def ask_llm(system: str, user: str, allow_ensemble: bool = False, expected_schem
                 logger.debug("Failed to write llm audit log")
             logger.info("Ensemble selected provider=%s (score=%s)", provider, best[0])
             return best[2], provider
+        # If ensemble requested but no candidates returned and we have providers configured,
+        # assume providers timed out or hit limits — surface a generic AKILI timeout error.
+        if not candidates and configured_providers:
+            return ({"error": "akili_timed_out", "message": "AKILI timed out while contacting AI providers. Please try again later."}, "akili-timeout")
         # fall back to normal chain
     # Chain fallback: try providers in order until one returns valid structured output
     chain_providers = [
@@ -448,12 +464,29 @@ def ask_llm(system: str, user: str, allow_ensemble: bool = False, expected_schem
         ("huggingface", _ask_hf),
         ("mistra", _ask_mistra),
     ]
+    tried_any = False
     for name, fn in chain_providers:
         try:
             out = fn(system, user)
         except Exception as e:
             logger.info("Provider %s failed during chain: %s", name, str(e)[:120])
             out = None
+        # mark that we attempted a configured provider (so we can distinguish "no keys" from "all providers failed")
+        key_present = False
+        if name == 'groq' and GROQ_API_KEY:
+            key_present = True
+        if name == 'gemini' and GEMINI_API_KEY:
+            key_present = True
+        if name == 'openrouter' and os.getenv('OPENROUTER_API_KEY', '').strip():
+            key_present = True
+        if name == 'cohere' and os.getenv('COHERE_API_KEY', '').strip():
+            key_present = True
+        if name == 'huggingface' and os.getenv('HF_API_KEY', '').strip():
+            key_present = True
+        if name == 'mistra' and os.getenv('MISTRA_API_KEY', '').strip():
+            key_present = True
+        if key_present:
+            tried_any = True
         if not out:
             continue
         if out.get("error"):
@@ -466,5 +499,10 @@ def ask_llm(system: str, user: str, allow_ensemble: bool = False, expected_schem
         if ok:
             return out, name
         logger.info("%s output failed schema: %s", name.capitalize(), reason)
-    # final fallback: rule-based deterministic heuristic
+    # If we attempted at least one configured provider but none returned valid output,
+    # surface a generic AKILI timeout error rather than pretending a rule-based AI summary.
+    if tried_any:
+        return ({"error": "akili_timed_out", "message": "AKILI timed out while contacting AI providers. Please try again later."}, "akili-timeout")
+
+    # final fallback: no external providers configured — return deterministic heuristic
     return _rule_based(system, user), "rule-based"

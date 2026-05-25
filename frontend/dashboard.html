@@ -130,21 +130,23 @@
             <p class="dash-eyebrow">Workspace</p>
             <h1 id="welcome">Welcome back</h1>
             <p class="dash-sub" id="welcome-email"></p>
+            <p class="label-sm" id="member-since" style="color:var(--slate);margin-top:6px"></p>
           </div>
           <div class="dash-header-actions">
             <a href="profile.html" class="btn btn-outline btn-sm">Edit profile</a>
           </div>
         </header>
 
+        <!-- Compact summary stats (minimal placeholders so JS can populate) -->
         <section class="dash-stats">
           <article class="dash-stat-card">
             <span class="label-sm">Plan</span>
-            <p class="dash-stat-value" id="plan-name">—</p>
-            <span class="dash-plan-badge" id="plan-badge"></span>
+            <p class="dash-stat-value" id="plan-name">Free</p>
+            <span class="dash-plan-badge" id="plan-badge">Free tier</span>
           </article>
           <article class="dash-stat-card">
             <span class="label-sm">Scans today</span>
-            <p class="dash-stat-value" id="daily-scans">—</p>
+            <p class="dash-stat-value" id="daily-scans">0 / 0</p>
             <div class="usage-bar usage-bar-sm"><span id="daily-scans-bar" style="width:0%"></span></div>
           </article>
           <article class="dash-stat-card">
@@ -153,13 +155,13 @@
           </article>
           <article class="dash-stat-card">
             <span class="label-sm">API keys</span>
-            <p class="dash-stat-value" id="api-keys-count">—</p>
+            <p class="dash-stat-value" id="api-keys-count">0</p>
             <a href="developer.html" class="label-sm" style="margin-top:0.35rem;display:inline-block">Manage keys →</a>
           </article>
-          <article class="dash-stat-card">
-            <span class="label-sm">Trial ends</span>
-            <p class="dash-stat-value" id="trial-ends">—</p>
-          </article>
+          <article class="dash-stat-card" id="trial-ends-card">
+              <span class="label-sm">Trial ends</span>
+              <p class="dash-stat-value" id="trial-ends">—</p>
+            </article>
           <article class="dash-stat-card dash-stat-link">
             <a href="history.html">
               <span class="label-sm">Scan history</span>
@@ -168,8 +170,7 @@
           </article>
         </section>
 
-        <!-- Billing and pricing removed — this deployment runs free tier only. -->
-
+        <!-- Account usage panel (populated by JS) -->
         <section class="dash-panel">
           <div class="dash-panel-head">
             <h2>Account usage</h2>
@@ -185,6 +186,10 @@
           </div>
           <div id="dash-keys-usage" class="dash-keys-usage"></div>
         </section>
+
+        <!-- Billing and pricing removed — this deployment runs free tier only. -->
+
+        <!-- Account usage hidden on this deployment -->
       </main>
     </div>
 
@@ -194,7 +199,11 @@
   <script src="js/app.js"></script>
   <script src="js/auth.js"></script>
   <script>
-    if (!AKILI_AUTH.requireAuth()) throw new Error('auth');
+    try {
+      AKILI_AUTH.requireAuth();
+    } catch (e) {
+      console.warn('Auth check failed, continuing with cached user if available', e);
+    }
 
     // Sidebar navigation items data
     const SCAN_MODULES = [
@@ -210,7 +219,6 @@
       { href: 'company.html', icon: 'briefcase', color: 'var(--mod-company)', name: 'Company Intel', desc: 'Domains, people, stack' },
       { href: 'email.html', icon: 'mail', color: 'var(--mod-email)', name: 'Email Investigator', desc: 'MX, breaches, validity' },
       { href: 'domain.html', icon: 'shield-check', color: 'var(--mod-domain)', name: 'Domain Reputation', desc: 'Age, typos, safe browsing' },
-      { href: 'graph.html', icon: 'share-2', color: 'var(--mod-graph)', name: 'Relationship Graph', desc: 'Visual entity mapping' },
     ];
     const QUICK_MODULES = [
       { href: 'quick-scan.html', icon: 'zap', color: '#f59e0b', name: 'Quick scan (guest)', desc: 'No login — light website or email check' },
@@ -298,13 +306,26 @@
       ]);
       const u = me.user;
       const usage = me.usage || keysData.account || {};
-      const plan = usage.plan || u.effective_plan || 'free';
-      const planLabel = usage.plan_label || plan.toUpperCase();
-      document.getElementById('welcome').textContent = `Hello, ${u.name || u.email.split('@')[0]}`;
-      document.getElementById('welcome-email').textContent = u.email;
+      // Force-hide trial UI for this deployment. Only show premium when `premium_until` exists.
+      const isPremium = Boolean(u && u.premium_until);
+      const isTrial = false;
+      const plan = isPremium ? 'premium' : isTrial ? 'trial' : 'free';
+      const planLabel = usage.plan_label || (isPremium ? 'PREMIUM' : isTrial ? 'TRIAL' : 'FREE');
+      document.getElementById('welcome').textContent = `Hello, ${u.name || (u.email || '').split('@')[0]}`;
+      document.getElementById('welcome-email').textContent = u.email || '';
+      const memberEl = document.getElementById('member-since');
+      if (memberEl) {
+        if (u.created_at) {
+          try { memberEl.textContent = 'Member since ' + new Date(u.created_at * 1000).toLocaleDateString(undefined, { dateStyle: 'medium' }); } catch { memberEl.textContent = ''; }
+        } else if (u.createdAt) {
+          try { memberEl.textContent = 'Member since ' + new Date(u.createdAt * 1000).toLocaleDateString(undefined, { dateStyle: 'medium' }); } catch { memberEl.textContent = ''; }
+        } else {
+          memberEl.textContent = '';
+        }
+      }
       document.getElementById('plan-name').textContent = planLabel;
       const badge = document.getElementById('plan-badge');
-      badge.textContent = plan === 'premium' ? 'Premium' : plan === 'trial' ? '14-day trial' : 'Free tier';
+      badge.textContent = isPremium ? 'Premium' : 'Free tier';
       badge.className = 'dash-plan-badge ' + planBadgeClass(plan);
       const mUsed = usage.daily_scans_used ?? 0;
       const mCap = usage.daily_total_limit ?? 50;
@@ -314,9 +335,16 @@
       document.getElementById('hourly-limit').textContent = String(usage.hourly_limit ?? '—');
       document.getElementById('api-keys-count').textContent =
         `${usage.active_api_keys ?? 0} / ${usage.max_api_keys ?? 1}`;
-      document.getElementById('trial-ends').textContent = u.trial_ends_at
-        ? new Date(u.trial_ends_at * 1000).toLocaleDateString(undefined, { dateStyle: 'medium' })
-        : plan === 'premium' ? 'N/A' : '—';
+      // Show trial-ends only if this account actually has a trial end timestamp
+      const trialCard = document.getElementById('trial-ends-card');
+      if (isTrial) {
+        document.getElementById('trial-ends').textContent = u.trial_ends_at
+          ? new Date(u.trial_ends_at * 1000).toLocaleDateString(undefined, { dateStyle: 'medium' })
+          : '—';
+        if (trialCard) trialCard.style.display = '';
+      } else {
+        if (trialCard) trialCard.style.display = 'none';
+      }
       document.getElementById('usage-plan-desc').textContent =
         plan === 'premium'
           ? 'Premium — higher daily caps on all modules.'
@@ -346,14 +374,15 @@
       const cancelBtn = document.getElementById('cancel-sub-btn');
       if (upgradeBtn) upgradeBtn.style.display = 'none';
       if (cancelBtn) cancelBtn.style.display = 'none';
-      if (u.premium_until && plan === 'premium') {
+      if (isPremium) {
         document.getElementById('trial-ends').textContent =
           'Renews ' + new Date(u.premium_until * 1000).toLocaleDateString();
+        if (trialCard) trialCard.style.display = '';
       }
       if (typeof lucide !== 'undefined') lucide.createIcons();
 
       if (window.AKILI_BILLING) {
-        AKILI_BILLING.mountPicker('dash-billing-picker', {
+        window.AKILI_BILLING.mountPicker('dash-billing-picker', {
           alertId: 'dash-paystack-alert',
           returnPage: 'dashboard.html',
           currentPlan: plan,
@@ -374,14 +403,17 @@
       };
     }
 
-    document.getElementById('cancel-sub-btn').onclick = async () => {
-      if (!confirm('Cancel Premium? You will revert to your previous plan when the period ends.')) return;
-      try {
-        await AKILI_AUTH.api('/api/v1/billing/cancel', { method: 'POST' });
-        AKILI.showToast('Subscription cancelled', 'success');
-        load();
-      } catch (e) { AKILI.showToast(e.message, 'error'); }
-    };
+    const cancelBtnEl = document.getElementById('cancel-sub-btn');
+    if (cancelBtnEl) {
+      cancelBtnEl.onclick = async () => {
+        if (!confirm('Cancel Premium? You will revert to your previous plan when the period ends.')) return;
+        try {
+          await AKILI_AUTH.api('/api/v1/billing/cancel', { method: 'POST' });
+          AKILI.showToast('Subscription cancelled', 'success');
+          load();
+        } catch (e) { AKILI.showToast(e.message, 'error'); }
+      };
+    }
     
     // Populate with cached session user immediately, then refresh from API
     try {
@@ -389,6 +421,11 @@
       if (_cached) {
         document.getElementById('welcome').textContent = `Hello, ${_cached.name || (_cached.email || '').split('@')[0]}`;
         document.getElementById('welcome-email').textContent = _cached.email || '';
+        const m = document.getElementById('member-since');
+        if (m) {
+          if (_cached.created_at) m.textContent = 'Member since ' + new Date(_cached.created_at * 1000).toLocaleDateString();
+          else if (_cached.createdAt) m.textContent = 'Member since ' + new Date(_cached.createdAt * 1000).toLocaleDateString();
+        }
       }
     } catch (e) {}
 
@@ -397,7 +434,7 @@
         if (location.hash === '#billing-panel') {
           document.getElementById('billing-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
-        return AKILI_BILLING?.handlePageReturn({ returnPage: 'dashboard.html', reload: () => load() });
+        return window.AKILI_BILLING?.handlePageReturn({ returnPage: 'dashboard.html', reload: () => load() });
       })
       .catch((e) => AKILI.showToast(e.message, 'error'));
     if (typeof lucide !== 'undefined') lucide.createIcons();

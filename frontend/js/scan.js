@@ -412,7 +412,31 @@
         // render social profile cards if available
         const scBlock = document.getElementById('social-cards-block');
         const scList = document.getElementById('social-cards-list');
-        const cards = report.social_cards || [];
+        let cards = report.social_cards || [];
+        // Fallback: if no social_cards from backend, infer from discovered URLs
+        if ((!cards || cards.length === 0) && Array.isArray(report.all_urls) && report.all_urls.length) {
+          const inferHandle = (url, platform) => {
+            try {
+              if (platform === 'github') { const m = url.match(/github\.com\/([\w\-]+)/i); if (m) return '@' + m[1]; }
+              if (platform === 'twitter' || platform === 'x') { const m = url.match(/(?:twitter|x)\.com\/(?:#!\/)?([\w_]+)/i); if (m) return '@' + m[1]; }
+              if (platform === 'instagram') { const m = url.match(/instagram\.com\/([\w\.]+)/i); if (m) return '@' + m[1]; }
+              if (platform === 'linkedin') { const m = url.match(/linkedin\.com\/(?:in|pub)\/([\w\-]+)/i); if (m) return m[1]; }
+            } catch (e) {}
+            return '';
+          };
+          const inferred = [];
+          report.all_urls.forEach((u) => {
+            ['github','twitter','instagram','linkedin','x'].forEach((p) => {
+              if (inferred.find(ic => (ic.profile_url || ic.url) === u)) return;
+              const key = p === 'x' ? 'twitter' : p;
+              const re = key === 'github' ? /github\.com\/[\w\-]+/i : key === 'twitter' ? /(?:twitter|x)\.com\/(?:#!\/)?[\w_]+/i : key === 'instagram' ? /instagram\.com\/[\w\.]+/i : key === 'linkedin' ? /linkedin\.com\/(?:in|pub)\/[\w\-]+/i : null;
+              if (re && re.test(u)) {
+                inferred.push({ platform: key, profile_url: u, url: u, handle: inferHandle(u, key) });
+              }
+            });
+          });
+          if (inferred.length) cards = inferred;
+        }
         if (scBlock && scList) {
           if (cards.length) {
             scBlock.classList.remove('hidden');
