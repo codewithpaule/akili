@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://akili.fly.dev/</loc>
+    <priority>1.00</priority>
+  </url>
+  <url>
+    <loc>https://akili.fly.dev/index.html</loc>
+    <priority>0.80</priority>
+  </url>
+  <url>
+    <loc>https://akili.fly.dev/docs.html</loc>
+    <priority>0.80</priority>
+  </url>
+  <url>
+    <loc>https://akili.fly.dev/developer.html</loc>
+    <priority>0.70</priority>
+  </url>
+  <url>
+    <loc>https://akili.fly.dev/about.html</loc>
+    <priority>0.50</priority>
+  </url>
+</urlset>
