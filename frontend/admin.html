@@ -28,6 +28,7 @@
       <button type="button" class="admin-nav-item active" data-tab="overview">Overview</button>
       <button type="button" class="admin-nav-item" data-tab="users">Users</button>
       <button type="button" class="admin-nav-item" data-tab="scans">Scans</button>
+        <button type="button" class="admin-nav-item" data-tab="review">Review</button>
       <button type="button" class="admin-nav-item" data-tab="keys">API keys</button>
       <button type="button" class="admin-nav-item" data-tab="contacts">Contacts</button>
       <button type="button" class="admin-nav-item" data-tab="monitors">Monitors</button>
@@ -113,6 +114,30 @@
         <div class="admin-pagination" id="scans-pager"></div>
       </section>
 
+      <section class="admin-panel" id="tab-review">
+        <div class="admin-panel-head">
+          <h1>Review: Flagged Scans & LLM Calls</h1>
+          <div class="admin-filters">
+            <input type="search" id="review-scan-q" placeholder="Target or scan id…" class="admin-input">
+            <button type="button" class="btn btn-primary btn-sm" id="review-refresh">Refresh</button>
+          </div>
+        </div>
+        <p class="admin-lead">Scans flagged for manual review and recent raw LLM calls.</p>
+        <div class="admin-split" style="gap:1rem;align-items:flex-start;">
+          <div class="admin-card" style="flex:1">
+            <h3>Flagged scans</h3>
+            <div id="flagged-scans-table" class="admin-table-wrap">Loading…</div>
+            <div class="admin-pagination" id="flagged-scans-pager"></div>
+          </div>
+          <div class="admin-card" style="flex:1">
+            <h3>LLM Calls</h3>
+            <div id="llm-calls-table" class="admin-table-wrap">Loading…</div>
+            <div class="admin-pagination" id="llm-calls-pager"></div>
+          </div>
+        </div>
+        <div id="review-detail" class="admin-card" style="margin-top:1rem;display:none"></div>
+      </section>
+
       <section class="admin-panel" id="tab-keys">
         <h1>API keys</h1>
         <div id="keys-table" class="admin-table-wrap"></div>
@@ -192,11 +217,27 @@
     </div>
   </div>
 
+  <div id="admin-modal" class="admin-drawer" hidden>
+    <div class="admin-drawer-inner" style="max-width:900px; width:95%;">
+      <button type="button" class="admin-drawer-close admin-modal-close">&times;</button>
+      <h2 class="admin-modal-title"></h2>
+      <div class="admin-modal-body" style="margin-top:0.5rem; max-height:70vh; overflow:auto;"></div>
+    </div>
+  </div>
+
   <script src="js/config.js"></script>
   <script src="js/app.js"></script>
   <script src="js/admin.js"></script>
   <script>
     if (!AKILI_ADMIN.requireAdmin()) throw new Error('redirect');
+    (async () => {
+      try {
+        await AKILI_ADMIN.api('/api/v1/admin/events?page=1&limit=1');
+      } catch (e) {
+        AKILI_ADMIN.clearSession();
+        location.href = 'admin-login.html';
+      }
+    })();
 
     const esc = AKILI_ADMIN.esc;
     const fmt = AKILI_ADMIN.fmtTime;
@@ -454,7 +495,7 @@
             <td>${esc(r.score)}</td>
             <td>${fmt(r.timestamp)}</td>
             <td>
-              <a class="btn btn-outline btn-sm" href="report.html?id=${encodeURIComponent(r.scan_id)}&admin=1" target="_blank">View</a>
+              <button type="button" class="btn btn-outline btn-sm" data-view-scan="${esc(r.scan_id)}">View</button>
               <button type="button" class="btn btn-outline btn-sm" data-del-scan="${r.scan_id}">Delete</button>
             </td>
           </tr>`
@@ -466,6 +507,28 @@
           await AKILI_ADMIN.api('/api/v1/admin/scans/' + btn.dataset.delScan, { method: 'DELETE' });
           AKILI.showToast('Scan deleted', 'success');
           loadScans(scansPage);
+        };
+      });
+      document.querySelectorAll('[data-view-scan]').forEach((btn) => {
+        btn.onclick = async () => {
+          const id = btn.getAttribute('data-view-scan');
+          try {
+            const rep = await AKILI_ADMIN.api('/api/v1/admin/scans/' + encodeURIComponent(id) + '/report');
+            const html = `
+              <p><strong>Target:</strong> ${esc(rep.target || rep.name || rep.email || id)}</p>
+              <p><strong>Type:</strong> ${esc(rep.scan_type || '—')} &nbsp; <strong>Score:</strong> ${esc(rep.score != null ? rep.score : '—')} &nbsp; <strong>Grade:</strong> ${esc(rep.grade || '—')}</p>
+              <hr>
+              <h3>Summary</h3>
+              <p>${esc(rep.summary || rep.ai_summary || rep.profile_narrative || '—')}</p>
+              <h3>Findings</h3>
+              <pre class="admin-pre">${esc(JSON.stringify(rep.findings || [], null, 2))}</pre>
+              <h3>Full JSON</h3>
+              <pre class="admin-pre">${esc(JSON.stringify(rep, null, 2))}</pre>
+            `;
+            showAdminModal('Report ' + id, html);
+          } catch (err) {
+            AKILI.showToast(err.message || 'Failed to load report', 'error');
+          }
         };
       });
       pager(document.getElementById('scans-pager'), page, data.total, data.limit, loadScans);
@@ -506,11 +569,27 @@
           `<tr>
             <td>${esc(c.name)} &lt;${esc(c.email)}&gt;</td>
             <td>${esc(c.subject)}</td>
-            <td>${esc(c.message)}</td>
+            <td>${esc((c.message || '').slice(0,200))}${(c.message || '').length > 200 ? '…' : ''}</td>
             <td>${fmt(c.timestamp)}</td>
+            <td><button type="button" class="btn btn-outline btn-sm" data-view-contact="${esc(c.id)}">View</button></td>
           </tr>`
         )
       );
+      document.querySelectorAll('[data-view-contact]').forEach((btn) => {
+        btn.onclick = () => {
+          const id = btn.getAttribute('data-view-contact');
+          const item = (data.items || []).find(x => String(x.id) === String(id));
+          if (!item) return;
+          const html = `
+            <p><strong>From:</strong> ${esc(item.name)} &lt;${esc(item.email)}&gt;</p>
+            <p><strong>Subject:</strong> ${esc(item.subject)}</p>
+            <p><strong>When:</strong> ${fmt(item.timestamp)}</p>
+            <hr>
+            <pre class="admin-pre">${esc(item.message || '')}</pre>
+          `;
+          showAdminModal('Message from ' + (item.name || item.email || ''), html);
+        };
+      });
       pager(document.getElementById('contacts-pager'), page, data.total, data.limit, loadContacts);
     }
 
@@ -536,6 +615,24 @@
         };
       });
     }
+
+    // Generic admin modal
+    function showAdminModal(title, html) {
+      const m = document.getElementById('admin-modal');
+      m.querySelector('.admin-modal-title').textContent = title || '';
+      m.querySelector('.admin-modal-body').innerHTML = html || '';
+      m.removeAttribute('hidden');
+      m.style.display = 'flex';
+    }
+    function closeAdminModal() {
+      const m = document.getElementById('admin-modal');
+      m.setAttribute('hidden', '');
+      m.style.display = 'none';
+    }
+
+    document.addEventListener('click', (e) => {
+      if (e.target.matches('#admin-modal') || e.target.matches('.admin-modal-close')) closeAdminModal();
+    });
 
     async function loadBillingConsole() {
       try {
@@ -662,10 +759,66 @@
       }
     }
 
+    async function loadReview(page = 1) {
+      const scansData = await AKILI_ADMIN.api('/api/v1/admin/review/scans?page=' + page + '&limit=20');
+      document.getElementById('flagged-scans-table').innerHTML = tableHtml(
+        ['Type', 'Target', 'Score', 'When', ''],
+        (scansData.items || []).map((r) =>
+          `<tr>
+            <td>${esc(r.scan_type)}</td>
+            <td>${esc(r.target)}</td>
+            <td>${esc(r.score)} ${esc(r.grade || '')}</td>
+            <td>${fmt(r.timestamp)}</td>
+            <td><button type="button" class="btn btn-outline btn-sm" data-view-scan="${esc(r.scan_id)}">View</button></td>
+          </tr>`
+        )
+      );
+      pager(document.getElementById('flagged-scans-pager'), page, scansData.total, scansData.limit, loadReview);
+      document.querySelectorAll('[data-view-scan]').forEach((btn) => {
+        btn.onclick = async () => {
+          const id = btn.dataset.viewScan;
+          const rep = await AKILI_ADMIN.api('/api/v1/admin/scans/' + encodeURIComponent(id) + '/report');
+          document.getElementById('review-detail').style.display = 'block';
+          document.getElementById('review-detail').innerHTML = `<h3>Report ${esc(id)}</h3><pre class="admin-pre">${esc(JSON.stringify(rep, null, 2))}</pre>`;
+        };
+      });
+
+      const callsData = await AKILI_ADMIN.api('/api/v1/admin/review/llm-calls?page=1&limit=30');
+      document.getElementById('llm-calls-table').innerHTML = tableHtml(
+        ['When','Provider','Model','Parsed',''],
+        (callsData.items || []).map((c) =>
+          `<tr>
+            <td>${fmt(c.timestamp)}</td>
+            <td>${esc(c.provider)}</td>
+            <td>${esc(c.model)}</td>
+            <td>${esc(JSON.stringify(c.parsed_json || {}, null, 0)).slice(0,80)}</td>
+            <td><button type="button" class="btn btn-outline btn-sm" data-view-call="${esc(c.call_id)}">View</button></td>
+          </tr>`
+        )
+      );
+      document.querySelectorAll('[data-view-call]').forEach((btn) => {
+        btn.onclick = async () => {
+          const id = btn.dataset.viewCall;
+          const data = await AKILI_ADMIN.api('/api/v1/admin/review/llm-calls?page=1&limit=1');
+          const item = (data.items || []).find(it => it.call_id === id) || (data.items||[])[0];
+          if (!item) return;
+          document.getElementById('review-detail').style.display = 'block';
+          document.getElementById('review-detail').innerHTML = `
+            <h3>LLM Call ${esc(id)}</h3>
+            <p><strong>Provider:</strong> ${esc(item.provider)} <strong>Model:</strong> ${esc(item.model)} <strong>When:</strong> ${fmt(item.timestamp)}</p>
+            <h4>Prompt</h4><pre class="admin-pre">${esc(item.prompt)}</pre>
+            <h4>Raw Response</h4><pre class="admin-pre">${esc(item.response)}</pre>
+            <h4>Parsed JSON</h4><pre class="admin-pre">${esc(JSON.stringify(item.parsed_json || {}, null, 2))}</pre>
+          `;
+        };
+      });
+    }
+
     function loadTab(tab) {
       if (tab === 'overview') loadOverview();
       if (tab === 'users') loadUsers();
       if (tab === 'scans') loadScans();
+      if (tab === 'review') loadReview();
       if (tab === 'keys') loadKeys();
       if (tab === 'contacts') loadContacts();
       if (tab === 'monitors') loadMonitors();
@@ -675,6 +828,7 @@
 
     document.getElementById('users-search').onclick = () => loadUsers(1);
     document.getElementById('scans-search').onclick = () => loadScans(1);
+    document.getElementById('review-refresh').onclick = () => loadReview(1);
     document.getElementById('audit-search').onclick = () => loadAuditLogs(1);
 
     document.getElementById('user-drawer').addEventListener('click', (e) => {

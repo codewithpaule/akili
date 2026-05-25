@@ -98,7 +98,7 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
         if request.method in ("POST", "PUT", "PATCH"):
             cl = request.headers.get("content-length")
             if cl and int(cl) > MAX_BODY_BYTES:
-                return JSONResponse(413, {"detail": "Request body too large (max 1MB)"})
+                return JSONResponse({"detail": "Request body too large (max 1MB)"}, status_code=413)
         return await call_next(request)
 
 
@@ -116,11 +116,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 app = FastAPI(title="AKILI API", version="1.0.0")
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, lambda r, e: JSONResponse(429, {
+app.add_exception_handler(RateLimitExceeded, lambda r, e: JSONResponse({
     "error": "rate_limit_exceeded",
     "message": "You have exceeded your rate limit",
     "upgrade_url": "https://akili.io/developer",
-}))
+}, status_code=429))
 
 app.add_middleware(BodySizeLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
@@ -295,6 +295,10 @@ class AdminPlanBody(BaseModel):
 class AdminManualVerifyBody(BaseModel):
     reference: str = Field(..., min_length=1, max_length=80)
     user_email: str = Field(..., min_length=3, max_length=254)
+
+
+class ReviewMarkBody(BaseModel):
+    note: str = Field(default="", max_length=2000)
 
 
 class AdminLoginBody(BaseModel):
@@ -737,6 +741,31 @@ async def admin_audit_logs(
     return list_audit_logs(page=page, limit=limit, q=q or "", action=action or "")
 
 
+@app.get("/api/v1/admin/review/scans")
+@limiter.limit("120/minute")
+async def admin_review_scans(request: Request, page: int = 1, limit: int = 30, user: dict = Depends(require_admin)):
+    from admin_service import list_flagged_scans
+    return list_flagged_scans(page=page, limit=limit)
+
+
+@app.get("/api/v1/admin/review/llm-calls")
+@limiter.limit("120/minute")
+async def admin_review_llm_calls(request: Request, page: int = 1, limit: int = 50, scan_id: Optional[str] = None, user: dict = Depends(require_admin)):
+    from admin_service import list_llm_calls
+    return list_llm_calls(page=page, limit=limit, scan_id=scan_id or "")
+
+
+@app.post("/api/v1/admin/review/scans/{scan_id}/review")
+@limiter.limit("60/minute")
+async def admin_mark_scan_reviewed(request: Request, scan_id: str, body: ReviewMarkBody, user: dict = Depends(require_admin)):
+    from admin_service import mark_scan_reviewed
+    from audit_log import log_from_request
+    _require_json(request)
+    out = mark_scan_reviewed(scan_id, user.get("user_id", ""), body.note or "")
+    log_from_request(request, "admin.review.marked", admin_user=user, resource_type="scan", resource_id=scan_id, detail=f"note={ (body.note or '')[:200] }")
+    return out
+
+
 @app.get("/api/v1/admin/events")
 @limiter.limit("60/minute")
 async def admin_events_list(request: Request, user: dict = Depends(require_admin)):
@@ -1137,13 +1166,22 @@ async def report_share(request: Request, scan_id: str, user: dict = Depends(requ
 
 @app.get("/api/v1/report/{scan_id}")
 @limiter.limit("120/minute")
-async def report(request: Request, scan_id: str, user: dict = Depends(require_user)):
+async def report(request: Request, scan_id: str):
+    """Return a saved report. If the report has an owning `user_id`, require that
+    the requester is authenticated and matches the owner. If the report has no
+    owner (guest/public scan), allow anonymous access.
+    """
     data = get_report(scan_id)
     if not data:
         raise HTTPException(404, "Report not found")
-    owner = data.get("user_id") or ""
-    if owner and owner != user["user_id"]:
-        raise HTTPException(404, "Report not found")
+    owner = (data.get("user_id") or "").strip()
+    if not owner:
+        return data
+    # Report has an owner — require authenticated user and matching id
+    from auth_service import get_current_user_from_request
+    user = get_current_user_from_request(request)
+    if not user or user.get("user_id") != owner:
+        raise HTTPException(401, "Sign in required")
     return data
 
 
@@ -1394,7 +1432,7 @@ async def agency_create(request: Request, body: AgencyProfileBody):
     key_info = lookup_api_key(request.headers.get("X-API-Key"), increment_usage=False)
     api_key_id = key_info["key_id"] if key_info else "browser"
     if key_info and key_info.get("tier") == "free":
-        return JSONResponse(403, {"detail": "White label reports require Pro tier or above"})
+        return JSONResponse({"detail": "White label reports require Pro tier or above"}, status_code=403)
     pid = str(uuid.uuid4())
     save_agency_profile(pid, api_key_id, body.model_dump())
     return {"profile_id": pid}

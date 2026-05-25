@@ -123,11 +123,29 @@
       { href:'graph.html', color:'var(--mod-graph)', name:'Relationship Graph', desc:'Visual entity mapping', premium: true },
     ];
     document.getElementById('modules-grid').innerHTML = MODULES.map(m => `
-      <a href="${m.href}" class="module-card${m.premium ? ' locked' : ''}" style="--accent:${m.color}">
+      <a href="${m.href}" class="module-card${m.premium ? ' locked' : ''}" data-module="${m.href.replace('.html','')}" style="--accent:${m.color}">
         <div class="module-icon" style="background:${m.color}22;color:${m.color}"><i data-lucide="shield"></i></div>
         <h4>${m.name}${m.premium ? '<span class="badge-premium">PRO</span>' : ''}</h4><p>${m.desc}</p>
         ${m.premium ? '<p class="lock-overlay">Premium · free during trial</p>' : ''}
       </a>`).join('');
+
+    // Intercept clicks on locked module cards and check access before navigating
+    setTimeout(() => {
+      document.querySelectorAll('.module-card.locked').forEach((el) => {
+        if (el.dataset.bound) return; el.dataset.bound = '1';
+        el.addEventListener('click', async (ev) => {
+          ev.preventDefault();
+          const module = el.dataset.module || '';
+          const res = await AKILI.checkAccess(module);
+          if (res && res.allowed) {
+            window.location.href = el.getAttribute('href');
+            return;
+          }
+          const msg = (res && res.message) ? res.message : 'This feature requires a Premium plan. Start a trial or upgrade to continue.';
+          AKILI.openModal(`<p>${AKILI.escapeHtml(msg)}</p><p style="margin-top:1rem"><a class=\"btn btn-primary\" href=\"signup.html\">Start free trial</a> <a class=\"btn btn-outline\" href=\"pricing.html\">Upgrade</a></p>`, { title: 'Upgrade required' });
+        });
+      });
+    }, 300);
 
     const t2 = 'others miss.';
     let j = 0;

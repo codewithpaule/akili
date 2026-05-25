@@ -478,6 +478,19 @@ class MonitorAlert(Base):
     is_read = Column(Boolean, default=False)
 
 
+class LLMCall(Base):
+    __tablename__ = "llm_calls"
+
+    call_id = Column(String, primary_key=True)
+    timestamp = Column(Integer, nullable=False)
+    provider = Column(String, default="")
+    model = Column(String, default="")
+    prompt = Column(Text, default="")
+    response = Column(Text, default="")
+    parsed_json = Column(Text, default="{}")
+    meta_json = Column(Text, default="{}")
+
+
 def save_tech_snapshot(snapshot_id: str, domain: str, scan_id: str, technologies: list):
     with get_db() as db:
         db.add(TechSnapshot(
@@ -660,6 +673,24 @@ def save_monitor_alert(alert_id: str, monitor_id: str, severity: str, alert_type
             message=message[:1000],
             is_read=False,
         ))
+
+
+def save_llm_call(provider: str, model: str, prompt: str, response: str, parsed: dict | None, meta: dict | None = None):
+    from datetime import datetime
+    with get_db() as db:
+        try:
+            db.add(LLMCall(
+                call_id=secrets.token_urlsafe(16),
+                timestamp=int(time.time()),
+                provider=(provider or "")[:80],
+                model=(model or "")[:120],
+                prompt=(prompt or "")[:8000],
+                response=(response or "")[:8000],
+                parsed_json=json.dumps(parsed or {})[:16000],
+                meta_json=json.dumps(meta or {})[:16000],
+            ))
+        except Exception:
+            db.rollback()
 
 
 def list_monitor_alerts(limit: int = 50) -> list[dict]:

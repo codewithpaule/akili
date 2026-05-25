@@ -49,15 +49,43 @@
 
     function renderFindings(findings) {
       if (!findings || !findings.length) return '';
+      function extractCves(text) {
+        if (!text) return [];
+        const re = /CVE-\d{4}-\d{4,7}/ig;
+        const m = text.match(re) || [];
+        return [...new Set(m.map(s => s.toUpperCase()))];
+      }
+      function cveLinks(cves) {
+        if (!cves || !cves.length) return '';
+        return `<div class="cve-links">${cves.map(c => `<a href="https://nvd.nist.gov/vuln/detail/${c}" target="_blank" rel="noopener">${c}</a>`).join(' · ')}</div>`;
+      }
       return `<section class="report-section">
         <h2>Findings</h2>
-        <ul class="report-findings">${findings.map((f) => `
-          <li class="report-finding severity-${(f.severity || 'info').toLowerCase()}">
-            <span class="report-finding-sev">${AKILI.escapeHtml(f.severity || 'info')}</span>
-            <strong>${AKILI.escapeHtml(f.title || f.message || 'Finding')}</strong>
-            ${f.detail || f.description ? `<p>${AKILI.escapeHtml(f.detail || f.description || '')}</p>` : ''}
-          </li>`).join('')}</ul>
+        <ul class="report-findings">${findings.map((f) => {
+          const title = AKILI.escapeHtml(f.title || f.message || 'Finding');
+          const sev = (f.severity || 'info').toLowerCase();
+          const detail = f.detail || f.description || f.explanation || '';
+          const rec = f.recommendation || f.recommendations || '';
+          const cves = extractCves(detail + ' ' + rec + ' ' + (f.cve || ''));
+          return `\
+          <li class="report-finding severity-${sev}">\
+            <div class="report-finding-head">\
+              <span class="report-finding-sev">${AKILI.escapeHtml(f.severity || 'info')}</span>\
+              <strong>${title}</strong>\
+            </div>\
+            ${detail ? `<p>${AKILI.escapeHtml(detail)}</p>` : ''}\
+            ${rec ? `<p class="label-sm"><strong>Recommendation:</strong> ${AKILI.escapeHtml(Array.isArray(rec)? rec.join('; '): rec)}</p>` : ''}\
+            ${cves.length ? `<p class="label-sm">References: ${cveLinks(cves)}</p>` : ''}\
+          </li>`;
+        }).join('')}</ul>
       </section>`;
+    }
+
+    function renderRecommendations(recs) {
+      if (!recs) return '';
+      const arr = Array.isArray(recs) ? recs : [recs];
+      if (!arr.length) return '';
+      return `<section class="report-section"><h2>Recommendations</h2><ul class="report-recs">${arr.map(r => `<li>${AKILI.escapeHtml(r)}</li>`).join('')}</ul></section>`;
     }
 
     function renderReport(report) {
@@ -79,6 +107,7 @@
         </header>
         ${summary ? `<section class="report-section"><h2>Summary</h2><p class="report-summary">${AKILI.escapeHtml(summary)}</p></section>` : ''}
         ${renderFindings(report.findings)}
+        ${renderRecommendations(report.recommendations || report.recommendations_list || report.recommendations || report.recommendation)}
         <details class="report-raw-details no-print">
           <summary>Full report data (JSON)</summary>
           <pre class="code-block report-raw">${AKILI.escapeHtml(JSON.stringify(report, null, 2))}</pre>
@@ -96,7 +125,8 @@
         return res.json();
       }
       if (!scanId) throw new Error('Missing report id or share link');
-      const isAdminView = params.get('admin') === '1' && AKILI_AUTH?.getUser?.()?.is_admin;
+      const _u = (AKILI_AUTH?.getUser?.() || {});
+      const isAdminView = params.get('admin') === '1' && (Boolean(_u.is_admin) || _u.role === 'admin');
       const path = isAdminView
         ? '/api/v1/admin/scans/' + encodeURIComponent(scanId) + '/report'
         : '/api/v1/report/' + encodeURIComponent(scanId);

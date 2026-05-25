@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from groq import Groq
 
 from database import create_session, save_scan
+from audit_log import log_audit
 from tools import (
     domain_rep,
     email_intel,
@@ -150,13 +151,17 @@ def parse_json_response(text: str) -> dict:
         return json.loads(m2.group()) if m2 else {}
 
 
-def ask_groq(system: str, user: str) -> dict:
-    """Groq → Gemini (free) → rule-based fallback."""
+def ask_groq(system: str, user: str, scan_tier: str = "free", expected_schema: str | None = None) -> dict:
+    """Groq → Gemini (free) → rule-based fallback.
+
+    If `scan_tier` == 'premium' then allow ensemble calls to all configured providers.
+    """
     from llm import ask_llm
 
-    data, provider = ask_llm(system, user)
+    allow_ensemble = (scan_tier == "premium")
+    data, provider = ask_llm(system, user, allow_ensemble=allow_ensemble, expected_schema=expected_schema)
     if provider != "groq":
-        logger.info("LLM fallback provider=%s", provider)
+        logger.info("LLM provider=%s (ensemble=%s)", provider, allow_ensemble)
     return data
 
 
@@ -563,7 +568,7 @@ def run_agent(
         yield stream_line("THINK", f"Reviewing {n_findings} finding(s) — deciding what to try next…")
         yield stream_line("THINK", "AKILI is thinking…")
         prompt = NEXT_ACTION_PROMPT.format(available_tools=available, used_tools=context["tools_used"])
-        decision = ask_groq(prompt, json.dumps({"findings": context["findings"][:15]}))
+        decision = ask_groq(prompt, json.dumps({"findings": context["findings"][:15]}), scan_tier, expected_schema="next_action")
         if not decision:
             if available:
                 decision = {"tool": available[0], "reason": "Continuing automated audit."}
@@ -604,7 +609,7 @@ def run_agent(
     yield stream_line("AI", "AKILI writing executive summary…")
     if module == "person":
         osint_data = context.get("osint") or {}
-        ai = ask_groq(PERSON_PROMPT, json.dumps(osint_data, default=str)[:12000])
+        ai = ask_groq(PERSON_PROMPT, json.dumps(osint_data, default=str)[:12000], scan_tier, expected_schema="person")
         if not ai:
             ai = {
                 "name": target.split("|")[0],
@@ -639,7 +644,7 @@ def run_agent(
     elif module == "email":
         raw = _email_intel_from_context(context)
         payload = {"email_intel": raw, "findings": context.get("findings", [])}
-        ai = ask_groq(EMAIL_PROMPT, json.dumps(payload, default=str)[:12000])
+        ai = ask_groq(EMAIL_PROMPT, json.dumps(payload, default=str)[:12000], scan_tier, expected_schema="email")
         if not ai:
             ai = {}
         report = _merge_email_report(context, raw, ai)
@@ -648,19 +653,38 @@ def run_agent(
         for tr in context.get("tool_results", []):
             if tr.get("tool") == "ip_intel":
                 payload["ip_intel"] = tr.get("raw", {})
-        ai = ask_groq(IP_PROMPT, json.dumps(payload, default=str)[:12000])
+        ai = ask_groq(IP_PROMPT, json.dumps(payload, default=str)[:12000], scan_tier, expected_schema="ip")
         report = _merge_ip_report(context, ai if ai else {})
     elif module in ("website", "vulnerability", "subdomains", "organization", "company", "domain"):
         payload = _build_website_ai_payload(context)
-        ai = ask_groq(FINAL_WEBSITE_PROMPT, json.dumps(payload, default=str)[:12000])
+        ai = ask_groq(FINAL_WEBSITE_PROMPT, json.dumps(payload, default=str)[:12000], scan_tier, expected_schema="website")
         report = _merge_website_report(context, ai if ai else _fallback_report(context))
     else:
         payload = _build_website_ai_payload(context)
-        ai = ask_groq(FINAL_WEBSITE_PROMPT, json.dumps(payload, default=str)[:12000])
+        ai = ask_groq(FINAL_WEBSITE_PROMPT, json.dumps(payload, default=str)[:12000], scan_tier, expected_schema="website")
         report = _merge_website_report(context, ai if ai else _fallback_report(context))
 
     duration = int((time.time() - start) * 1000)
     report["scan_id"] = scan_id
+    # Human-review gate: flag reports that are high-risk or very low-scoring
+    try:
+        needs_review = False
+        score = int(report.get("score", 0) or 0)
+        grade = str(report.get("grade", "")).upper()
+        legitimacy = report.get("legitimacy", "")
+        findings = report.get("findings", []) or []
+        crit_count = sum(1 for f in findings if str(f.get("severity", "")).lower() == "critical")
+        if score < 40 or grade == "F" or legitimacy == "suspicious" or crit_count > 0:
+            needs_review = True
+        if needs_review:
+            report["needs_manual_review"] = True
+            try:
+                log_audit(action="llm.flag_for_review", resource_type="scan", resource_id=scan_id, detail=f"score={score} grade={grade} legitimacy={legitimacy}", meta={"scan_id": scan_id, "score": score, "grade": grade, "legitimacy": legitimacy})
+            except Exception:
+                logger.debug("Failed to write review audit log")
+    except Exception:
+        logger.exception("Error evaluating review gate")
+
     save_scan(scan_id, module, target, report, tool_count, duration, user_id=user_id)
     yield stream_line("DONE", "Report ready")
     yield f"COMPLETE:{json.dumps(report)}\n"

@@ -8,7 +8,7 @@ from typing import Any, Optional
 from dotenv import load_dotenv
 from fastapi import HTTPException
 from sqlalchemy import func
-
+import json
 from auth_service import hash_password, user_to_dict
 from database import ApiKey, Contact, Monitor, Scan, UsageCounter, User, get_db, period_key
 
@@ -390,6 +390,79 @@ def list_monitors_admin() -> dict:
             "is_active": m.is_active,
         } for m in rows]
     return {"monitors": items, "total": len(items)}
+
+
+def list_flagged_scans(*, page: int = 1, limit: int = 30) -> dict:
+    """Return scans where the saved report flagged `needs_manual_review`.
+    This does a lightweight text search in `findings_json` for the flag.
+    """
+    limit = min(max(limit, 1), 200)
+    page = max(page, 1)
+    with get_db() as db:
+        query = db.query(Scan).filter(Scan.findings_json.ilike('%"needs_manual_review"%'))
+        total = query.count()
+        rows = query.order_by(Scan.timestamp.desc()).offset((page - 1) * limit).limit(limit).all()
+        items = []
+        for r in rows:
+            try:
+                data = json.loads(r.findings_json or "{}")
+            except Exception:
+                data = {}
+            items.append({
+                "scan_id": r.scan_id,
+                "scan_type": r.scan_type,
+                "target": r.target[:200],
+                "score": r.score,
+                "grade": r.grade,
+                "timestamp": r.timestamp,
+                "report": data,
+            })
+    return {"items": items, "total": total, "page": page, "limit": limit}
+
+
+def list_llm_calls(*, page: int = 1, limit: int = 50, scan_id: str = "") -> dict:
+    limit = min(max(limit, 1), 200)
+    page = max(page, 1)
+    from database import LLMCall
+    with get_db() as db:
+        query = db.query(LLMCall)
+        if scan_id:
+            like = f'%"scan_id": "{scan_id}"%'
+            query = query.filter(LLMCall.meta_json.ilike(like))
+        total = query.count()
+        rows = query.order_by(LLMCall.timestamp.desc()).offset((page - 1) * limit).limit(limit).all()
+        items = [{
+            "call_id": r.call_id,
+            "timestamp": r.timestamp,
+            "provider": r.provider,
+            "model": r.model,
+            "prompt": r.prompt,
+            "response": r.response,
+            "parsed_json": json.loads(r.parsed_json or "{}"),
+            "meta": json.loads(r.meta_json or "{}"),
+        } for r in rows]
+    return {"items": items, "total": total, "page": page, "limit": limit}
+
+
+def mark_scan_reviewed(scan_id: str, reviewer_id: str, note: str = "") -> dict:
+    """Mark a flagged scan as reviewed and attach reviewer note."""
+    from database import get_db, Scan
+    with get_db() as db:
+        row = db.query(Scan).filter(Scan.scan_id == scan_id).first()
+        if not row:
+            raise HTTPException(404, "Scan not found")
+        try:
+            data = json.loads(row.findings_json or "{}")
+        except Exception:
+            data = {}
+        data["needs_manual_review"] = False
+        data["reviewed_by"] = reviewer_id or ""
+        data["reviewed_at"] = int(time.time())
+        if note:
+            data["review_note"] = note[:2000]
+        row.findings_json = json.dumps(data)
+        row.updated_at = int(time.time()) if hasattr(row, 'updated_at') else int(time.time())
+    return {"scan_id": scan_id, "reviewed_by": reviewer_id, "note": note}
 
 
 def admin_upgrade_user(user_id: str, plan_id: str = "premium_monthly") -> dict:
