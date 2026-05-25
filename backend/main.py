@@ -32,6 +32,7 @@ from auth_service import (
 )
 from usage_guard import enforce_scan_access, usage_payload
 from scan_profile import tier_for_user
+from phone_intel import normalize_phone, scan_phone
 from database import (
     create_domain_verification,
     delete_all_scans,
@@ -53,8 +54,9 @@ from database import (
     save_contact,
     save_monitor,
     upsert_finding_status,
+    save_phone_query,
+    log_phone_query,
 )
-from scan_templates import run_template
 from tools.auth_scan import run_auth_scan
 from tools.api_scanner import scan_api
 from tools.verify_domain import check_txt_record, generate_token
@@ -727,15 +729,13 @@ async def admin_contacts_list(
 @limiter.limit("120/minute")
 async def admin_monitors_list(request: Request, user: dict = Depends(require_admin)):
     from admin_service import list_monitors_admin
-    return list_monitors_admin()
+    raise HTTPException(404, "Monitors have been removed from the platform")
 
 
 @app.delete("/api/v1/admin/monitors/{monitor_id}")
 @limiter.limit("30/hour")
 async def admin_monitor_delete(request: Request, monitor_id: str, user: dict = Depends(require_admin)):
-    if not delete_monitor(monitor_id):
-        raise HTTPException(404, "Monitor not found")
-    return {"deleted": True}
+    raise HTTPException(404, "Monitors have been removed from the platform")
 
 
 @app.get("/api/v1/admin/audit-logs")
@@ -949,40 +949,23 @@ async def public_scan_api(request: Request, body: UrlBody):
 @limiter.limit("10/hour")
 async def billing_upgrade(request: Request, user: dict = Depends(require_user)):
     """Dev fallback when Paystack keys are not set."""
-    from billing_service import paystack_configured
-
-    if paystack_configured():
-        raise HTTPException(400, "Use Paystack checkout on the pricing page")
-    return {"user": upgrade_user_premium(user["user_id"]), "message": "Upgraded to Premium (dev — no payment)"}
+    raise HTTPException(410, "Billing and premium upgrades have been disabled on this deployment")
 
 
 @app.get("/api/v1/billing/pricing")
 @limiter.limit("120/minute")
 async def billing_pricing(request: Request):
-    from billing_service import paystack_configured, paystack_status
+    # Billing disabled — return minimal pricing payload for compatibility
     from pricing import pricing_payload
-
-    st = paystack_status()
-    return {
-        **pricing_payload(),
-        "paystack_public_key": os.getenv("PAYSTACK_PUBLIC_KEY", "").strip() if st["ready"] else "",
-        "paystack_enabled": paystack_configured(),
-        "paystack_status": st,
-    }
+    p = pricing_payload()
+    p.update({"paystack_public_key": "", "paystack_enabled": False, "paystack_status": {"ready": False, "message": "Billing disabled"}})
+    return p
 
 
 @app.post("/api/v1/billing/checkout")
 @limiter.limit("20/hour")
 async def billing_checkout(request: Request, body: CheckoutBody, user: dict = Depends(require_user)):
-    from billing_service import initialize_checkout
-
-    _require_json(request)
-    page = (body.return_page or "dashboard.html").strip()
-    if not page.endswith(".html"):
-        page = page + ".html" if "." not in page else page
-    if "/" in page or ".." in page:
-        page = "dashboard.html"
-    return initialize_checkout(user, body.plan_id, return_page=page)
+    raise HTTPException(410, "Billing and checkout have been disabled on this deployment")
 
 
 @app.post("/api/v1/billing/retry-charges")
@@ -998,39 +981,25 @@ async def billing_retry_charges(request: Request):
     import urllib.parse
     q = urllib.parse.parse_qs(request.url.query)
     days = int(q.get("days", ["7"])[0]) if q.get("days") else 7
-    return run_charge_retry_batch(grace_days=days)
+    raise HTTPException(410, "Billing disabled")
 
 
 @app.get("/api/v1/billing/verify")
 @limiter.limit("60/minute")
 async def billing_verify(request: Request, reference: str, user: dict = Depends(require_user)):
-    from billing_service import verify_payment
-
-    if not reference:
-        raise HTTPException(400, "reference required")
-    return verify_payment(reference, user["user_id"])
+    raise HTTPException(410, "Billing disabled")
 
 
 @app.post("/api/v1/billing/webhook")
 async def billing_webhook(request: Request):
-    from billing_service import handle_webhook, verify_paystack_signature
-
-    body = await request.body()
-    sig = request.headers.get("x-paystack-signature", "")
-    if not verify_paystack_signature(body, sig):
-        raise HTTPException(401, "Invalid Paystack signature")
-    import json
-
-    payload = json.loads(body.decode("utf-8"))
-    return handle_webhook(payload)
+    # Webhooks disabled — ignore and return 410
+    raise HTTPException(410, "Billing/webhooks disabled")
 
 
 @app.post("/api/v1/billing/cancel")
 @limiter.limit("10/hour")
 async def billing_cancel(request: Request, user: dict = Depends(require_user)):
-    from billing_service import cancel_subscription
-
-    return cancel_subscription(user["user_id"])
+    raise HTTPException(410, "Billing disabled")
 
 
 @app.get("/api/v1/plans")
@@ -1279,7 +1248,15 @@ async def clear_history(request: Request, user: dict = Depends(require_user)):
 async def keys_generate(request: Request, body: KeyGenBody, user: dict = Depends(require_user)):
     _require_json(request)
     try:
-        return generate_api_key(user["user_id"], user, sandbox=body.sandbox, name=body.name)
+        out = generate_api_key(user["user_id"], user, sandbox=body.sandbox, name=body.name)
+        try:
+            from auth_service import create_token
+
+            token = create_token(user["user_id"])
+            out["jwt"] = token
+        except Exception:
+            out["jwt"] = ""
+        return out
     except ValueError as e:
         raise HTTPException(400, str(e))
 
@@ -1323,26 +1300,14 @@ async def contact(request: Request, body: ContactBody):
 @app.get("/api/v1/monitors")
 @limiter.limit("60/minute")
 async def monitors_list(request: Request):
-    return {"monitors": list_monitors()}
+    raise HTTPException(404, "Monitors have been removed from the platform")
 
 
 @app.post("/api/v1/monitors")
 @limiter.limit("30/hour")
 async def monitors_add(request: Request, body: MonitorBody):
     _require_json(request)
-    user = get_current_user_from_request(request)
-    if user:
-        from usage_guard import enforce_scan_access
-        enforce_scan_access(user, "monitor", sandbox=False)
-    alert_email = (body.alert_email or "").strip()
-    if not alert_email and user:
-        alert_email = user.get("email", "")
-    mid = str(uuid.uuid4())
-    save_monitor(mid, body.target, body.target_type, body.frequency, alert_email)
-    if user:
-        from audit_log import log_from_request
-        log_from_request(request, "monitor.add", user=user, resource_type="monitor", resource_id=mid, detail=body.target[:120])
-    return {"monitor_id": mid}
+    raise HTTPException(404, "Monitors have been removed from the platform")
 
 
 @app.post("/api/v1/monitor/add")
@@ -1360,15 +1325,13 @@ async def monitor_list_alias(request: Request):
 @app.delete("/api/v1/monitor/{monitor_id}")
 @limiter.limit("30/hour")
 async def monitor_delete(request: Request, monitor_id: str):
-    if not delete_monitor(monitor_id):
-        raise HTTPException(404, "Monitor not found")
-    return {"deleted": True}
+    raise HTTPException(404, "Monitors have been removed from the platform")
 
 
 @app.get("/api/v1/monitor/alerts")
 @limiter.limit("60/minute")
 async def monitor_alerts(request: Request):
-    return {"alerts": list_monitor_alerts()}
+    raise HTTPException(404, "Monitors have been removed from the platform")
 
 
 @app.post("/api/v1/verify/domain")
@@ -1379,6 +1342,56 @@ async def verify_domain_start(request: Request, body: VerifyDomainBody):
     token = generate_token()
     create_domain_verification(domain, token)
     return {"domain": domain, "txt_record": token, "instructions": f"Add TXT record: {token}"}
+
+
+@app.post("/api/v1/phone/normalize")
+@limiter.limit("60/minute")
+async def phone_normalize(request: Request):
+    _require_json(request)
+    body = await request.json()
+    phone = (body.get("phone") or "").strip()
+    try:
+        return normalize_phone(phone)
+    except HTTPException as e:
+        raise e
+
+
+@app.post("/api/v1/phone/scan")
+@limiter.limit("30/minute")
+async def phone_scan_route(request: Request):
+    _require_json(request)
+    body = await request.json()
+    phone = (body.get("phone") or "").strip()
+    if not phone:
+        raise HTTPException(400, "phone required")
+    # Authenticate + enforce per-user daily limits
+    user = None
+    try:
+        user = _guard(request, "phone", sandbox=False)
+    except HTTPException as e:
+        raise
+
+    api_key_header = request.headers.get("X-API-Key") or request.headers.get("x-api-key") or ""
+
+    # Run scan
+    data = await scan_phone(phone)
+
+    # Persist results and audit
+    try:
+        qid = uuid.uuid4().hex[:20]
+        normalized = data.get("normalized", {})
+        e164 = normalized.get("e164") if isinstance(normalized, dict) else None
+        save_phone_query(qid, e164 or phone, phone, data, user_id=(user or {}).get("user_id", ""), api_key_id=(api_key_header or ""))
+        # log an audit entry for this query
+        from audit_log import client_ip
+        ip = client_ip(request)
+        log_phone_query(qid, (user or {}).get("user_id", ""), api_key_header or "", action="search", request_ip=ip, note=f"phone={phone}")
+        data["query_id"] = qid
+    except Exception:
+        # Don't fail the scan if persistence/logging fails; return scan result
+        logger.exception("Failed to persist phone query")
+
+    return data
 
 
 @app.get("/api/v1/verify/domain/{domain}")
@@ -1435,15 +1448,7 @@ async def remediation_stats(request: Request, domain: str):
 @limiter.limit("5/hour")
 async def scan_template(request: Request, body: TemplateScanBody):
     _require_json(request)
-    user = _guard(request, "templates")
-    scan_id = str(uuid.uuid4())
-    log_scan(scan_id, "template")
-
-    async def gen():
-        for chunk in run_template(body.template, body.target, scan_id, user_id=user["user_id"]):
-            yield chunk
-
-    return StreamingResponse(gen(), media_type="text/plain")
+    raise HTTPException(404, "Scan templates have been removed from the platform")
 
 
 @app.post("/api/v1/scan/auth")

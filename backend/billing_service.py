@@ -38,12 +38,8 @@ def _is_placeholder_key(key: str) -> bool:
 
 
 def paystack_configured() -> bool:
-    return bool(
-        PAYSTACK_SECRET
-        and PAYSTACK_PUBLIC
-        and not _is_placeholder_key(PAYSTACK_SECRET)
-        and not _is_placeholder_key(PAYSTACK_PUBLIC)
-    )
+    # Payments are disabled; always report not configured
+    return False
 
 
 def paystack_status() -> dict:
@@ -64,8 +60,8 @@ def paystack_status() -> dict:
 
 
 def _paystack(method: str, path: str, payload: Optional[dict] = None) -> dict:
-    if not PAYSTACK_SECRET:
-        raise HTTPException(503, "Paystack is not configured (set PAYSTACK_SECRET_KEY)")
+    # Payments disabled
+    raise HTTPException(410, "Payments have been disabled on this deployment")
     url = f"{PAYSTACK_BASE}{path}"
     resp = requests.request(
         method,
@@ -113,52 +109,7 @@ def subscription_info(row: User) -> dict:
 
 
 def initialize_checkout(user: dict, plan_id: str = "premium_monthly", return_page: str = "dashboard.html") -> dict:
-    plan = PLANS.get(plan_id)
-    if not plan or not plan.get("price_kobo"):
-        raise HTTPException(400, "Unknown plan")
-    status = paystack_status()
-    if not status["ready"]:
-        raise HTTPException(
-            503,
-            status["message"],
-        )
-
-    reference = f"akili_{uuid.uuid4().hex[:20]}"
-    email = user.get("email") or ""
-    amount = plan["price_kobo"]
-
-    data = _paystack(
-        "POST",
-        "/transaction/initialize",
-        {
-            "email": email,
-            "amount": amount,
-            "currency": "NGN",
-            "reference": reference,
-            "callback_url": f"{FRONTEND_URL}/{return_page.lstrip('/')}?reference={reference}",
-            "metadata": {
-                "user_id": str(user["user_id"]),
-                "plan_id": str(plan_id),
-            },
-            "channels": ["card", "bank", "ussd", "bank_transfer"],
-        },
-    )
-
-    with get_db() as db:
-        row = db.query(User).filter(User.user_id == user["user_id"]).first()
-        if row:
-            row.pending_payment_ref = reference
-            row.pending_plan_id = plan_id
-            row.updated_at = int(time.time())
-
-    return {
-        "authorization_url": data.get("authorization_url"),
-        "access_code": data.get("access_code"),
-        "reference": reference,
-        "amount_ngn": plan["price_ngn"],
-        "amount_kobo": amount,
-        "public_key": PAYSTACK_PUBLIC,
-    }
+    raise HTTPException(410, "Payments have been disabled on this deployment")
 
 
 def _activate_premium(row: User, *, authorization_code: str = "", customer_code: str = "", subscription_code: str = "") -> None:

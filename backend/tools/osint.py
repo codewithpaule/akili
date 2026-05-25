@@ -90,7 +90,7 @@ def _confidence_breakdown(platforms: dict, breaches: list, social_cards: list) -
 
     if breaches:
         score -= 10
-        red_flags.append("Email or name associated with breach data (-10)")
+        red_flags.append("Verified breach signal for discovered email (-10)")
 
     return {
         "score": max(0, min(100, score)),
@@ -136,43 +136,90 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
         all_urls.append(link)
         for platform, pattern in PLATFORM_PATTERNS.items():
             if re.search(pattern, link, re.I):
-                platforms[platform] = {"found": True, "url": _abs_url(link)}
+                entry = {"found": True, "url": _abs_url(link)}
+                # try to extract a canonical handle/username from the URL
+                try:
+                    if platform == 'github':
+                        m = re.search(r'github\.com/([\w\-]+)', link, re.I)
+                        if m: entry['handle'] = '@' + m.group(1)
+                    elif platform == 'twitter':
+                        m = re.search(r'(?:twitter|x)\.com/(?:#!\/)?([\w_]+)', link, re.I)
+                        if m: entry['handle'] = '@' + m.group(1)
+                    elif platform == 'instagram':
+                        m = re.search(r'instagram\.com/([\w\.]+)', link, re.I)
+                        if m: entry['handle'] = '@' + m.group(1)
+                    elif platform == 'linkedin':
+                        m = re.search(r'linkedin\.com\/(?:in|pub)\/([\w\-]+)', link, re.I)
+                        if m: entry['handle'] = m.group(1)
+                except Exception:
+                    pass
+                platforms[platform] = entry
 
     web_images = await serpapi_image_search(query, 12)
     img_source = "serpapi" if web_images else "none"
     if not web_images:
         _, img_source = await search_with_fallback(f"{name} images", 5)
 
-    gh_user = _extract_username(name)
-    gh_profile = _github_user(gh_user)
-    if gh_profile:
-        platforms["github"] = {"found": True, "url": _abs_url(gh_profile.get("html_url"))}
-        social_cards.append({
-            "platform": "github",
-            "profile_url": gh_profile.get("html_url"),
-            "bio": gh_profile.get("bio") or "",
-            "join_date": gh_profile.get("created_at", "")[:10],
-            "activity_level": "active" if gh_profile.get("public_repos", 0) > 0 else "low",
-            "repo_count": gh_profile.get("public_repos", 0),
-            "languages": {},
-            "followers": gh_profile.get("followers", 0),
-        })
+    # Detect developer-like signals in the scraped text and keywords. Only then treat GitHub as a strong identity signal.
+    dev_terms = [
+        "developer",
+        "software",
+        "engineer",
+        "programmer",
+        "devops",
+        "frontend",
+        "backend",
+        "fullstack",
+        "tech lead",
+    ]
+    text_blob = " ".join([r.get("title", "") + " " + r.get("snippet", "") for r in raw_results]).lower() + " " + (keywords or "").lower()
+    is_dev = any(t in text_blob for t in dev_terms)
+
+    # Only query the GitHub API for usernames if GitHub-like URLs were found or content looks developer-related.
+    if platforms.get("github", {}).get("found") or is_dev:
+        gh_user = _extract_username(name)
+        gh_profile = _github_user(gh_user)
+        if gh_profile:
+            username = gh_profile.get("login") or _extract_username(name)
+            platforms["github"] = {"found": True, "url": _abs_url(gh_profile.get("html_url")), "handle": '@' + username}
+            social_cards.append({
+                "platform": "github",
+                "profile_url": gh_profile.get("html_url"),
+                "handle": '@' + username,
+                "bio": gh_profile.get("bio") or "",
+                "join_date": gh_profile.get("created_at", "")[:10],
+                "activity_level": "active" if gh_profile.get("public_repos", 0) > 0 else "low",
+                "repo_count": gh_profile.get("public_repos", 0),
+                "languages": {},
+                "followers": gh_profile.get("followers", 0),
+            })
 
     verified_images = await _fetch_verified_profile_images(platforms)
 
+    # Find explicit emails in search snippets and check breaches only for those exact emails.
+    found_emails = []
+    for item in web_results:
+        emails = re.findall(r"[\w.\-]+@[\w.\-]+\.\w+", item.get("snippet", ""))
+        for em in emails:
+            if em not in found_emails:
+                found_emails.append(em)
+
     breaches = []
-    breach_data = await check_email_breach_async(name.replace(" ", "").lower() + "@gmail.com")
-    if not breach_data.get("found"):
-        for item in web_results:
-            emails = re.findall(r"[\w.\-]+@[\w.\-]+\.\w+", item.get("snippet", ""))
-            for em in emails[:1]:
-                breach_data = await check_email_breach_async(em)
-                break
+    breach_sources = []
+    if found_emails:
+        for em in found_emails[:3]:
+            res = await check_email_breach_async(em)
+            if res.get("breaches"):
+                breaches.extend(res.get("breaches", []))
+                src = res.get("source") or "unknown"
+                if src not in breach_sources:
+                    breach_sources.append(src)
 
-    if breach_data.get("breaches"):
-        breaches = breach_data["breaches"]
+    # We only expose a breach signal (no email or name PII). The exact list of breach entries is not returned.
+    breach_signal = bool(breaches)
+    breach_count = len(breaches)
 
-    confidence = _confidence_breakdown(platforms, breaches, social_cards)
+    confidence = _confidence_breakdown(platforms, breach_signal and [True] or [], social_cards)
 
     return {
         "name": name,
@@ -185,8 +232,12 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
         "image_source": img_source,
         "platforms": platforms,
         "social_cards": social_cards,
-        "breaches": breaches,
-        "breach_source": breach_data.get("source", "xposedornot.com"),
+        # Do not return email or name-linked breach entries. Only expose a privacy-safe signal.
+        "breach_signal": breach_signal,
+        "breach_count": breach_count,
+        "breach_sources": breach_sources,
+        # Backwards compatibility: do not include email/name-linked breach entries.
+        "breaches": [],
         "serpapi_configured": bool(os.getenv("SERPAPI_KEY")),
         "confidence_breakdown": confidence,
         "all_urls": all_urls[:20],

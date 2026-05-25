@@ -137,6 +137,35 @@ class Contact(Base):
     timestamp = Column(Integer, nullable=False)
 
 
+class PhoneQuery(Base):
+    __tablename__ = "phone_queries"
+
+    query_id = Column(String, primary_key=True)
+    normalized = Column(String, nullable=False)
+    raw_input = Column(String, nullable=False)
+    user_id = Column(String, default="")
+    api_key_id = Column(String, default="")
+    summary_json = Column(Text, default="{}")
+    social_matches = Column(Text, default="[]")
+    sources = Column(Text, default="[]")
+    risk_score = Column(Integer, default=0)
+    created_at = Column(Integer, nullable=False)
+
+
+class PhoneQueryLog(Base):
+    __tablename__ = "phone_query_logs"
+
+    log_id = Column(String, primary_key=True)
+    query_id = Column(String, default="")
+    actor_user_id = Column(String, default="")
+    actor_api_key = Column(String, default="")
+    action = Column(String, default="search")
+    request_ip = Column(String, default="")
+    note = Column(Text, default="")
+    redacted = Column(Boolean, default=False)
+    created_at = Column(Integer, nullable=False)
+
+
 def _table_columns(conn, table: str) -> set[str]:
     from sqlalchemy import inspect
 
@@ -709,7 +738,8 @@ def list_monitor_alerts(limit: int = 50) -> list[dict]:
 
 def period_key() -> str:
     import datetime
-    return datetime.datetime.utcnow().strftime("%Y-%m")
+    # Use a daily period key so usage limits are enforced per-day
+    return datetime.datetime.utcnow().strftime("%Y-%m-%d")
 
 
 def increment_usage(user_id: str, module: str) -> int:
@@ -751,3 +781,37 @@ def delete_monitor(monitor_id: str) -> bool:
 
 
 init_db()
+
+
+def save_phone_query(query_id: str, normalized: str, raw_input: str, result: dict, user_id: str = "", api_key_id: str = ""):
+    with get_db() as db:
+        db.merge(PhoneQuery(
+            query_id=query_id,
+            normalized=(normalized or "")[:120],
+            raw_input=(raw_input or "")[:200],
+            user_id=(user_id or "")[:36],
+            api_key_id=(api_key_id or "")[:80],
+            summary_json=json.dumps({
+                "social_matches": result.get("social_matches", []),
+                "search_source": result.get("search_source", ""),
+            })[:16000],
+            social_matches=json.dumps(result.get("social_matches", []) )[:16000],
+            sources=json.dumps(result.get("evidence", []) )[:16000],
+            risk_score=int(result.get("risk_score", 0) or 0),
+            created_at=int(time.time()),
+        ))
+
+
+def log_phone_query(query_id: str, actor_user_id: str, actor_api_key: str, action: str = "search", request_ip: str = "", note: str = "", redacted: bool = False):
+    with get_db() as db:
+        db.add(PhoneQueryLog(
+            log_id=secrets.token_urlsafe(12),
+            query_id=query_id,
+            actor_user_id=(actor_user_id or "")[:36],
+            actor_api_key=(actor_api_key or "")[:80],
+            action=action[:40],
+            request_ip=(request_ip or "")[:80],
+            note=(note or "")[:1000],
+            redacted=bool(redacted),
+            created_at=int(time.time()),
+        ))

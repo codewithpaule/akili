@@ -381,14 +381,8 @@ def patch_user_profile(user_id: str, **fields) -> dict:
 
 
 def upgrade_user_premium(user_id: str) -> dict:
-    from billing_service import _activate_premium
-
-    with get_db() as db:
-        row = db.query(User).filter(User.user_id == user_id).first()
-        if not row:
-            raise HTTPException(404, "User not found")
-        _activate_premium(row)
-    return get_user_by_id(user_id)
+    # Billing disabled on this deployment: premium activation is not supported.
+    raise HTTPException(410, "Billing and premium activation are disabled on this deployment.")
 
 
 def delete_user_account(user_id: str, password: str = "") -> None:

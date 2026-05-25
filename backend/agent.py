@@ -158,8 +158,8 @@ def ask_groq(system: str, user: str, scan_tier: str = "trial", expected_schema: 
     If `scan_tier` == 'premium' then allow ensemble calls to all configured providers.
     """
     from llm import ask_llm
-
-    allow_ensemble = (scan_tier == "premium")
+    # Always prefer ensemble across providers to improve reliability; providers without keys are skipped.
+    allow_ensemble = True
     data, provider = ask_llm(system, user, allow_ensemble=allow_ensemble, expected_schema=expected_schema)
     if provider != "groq":
         logger.info("LLM provider=%s (ensemble=%s)", provider, allow_ensemble)

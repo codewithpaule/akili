@@ -88,7 +88,7 @@ def welcome_email(name: str, frontend_url: str) -> tuple[str, str]:
           <li>Shareable reports</li>
         </ul>
         {_btn(f"{frontend_url}/dashboard.html", "Open dashboard")}
-        <p style="font-size:13px;color:#64748b;">After trial, upgrade to Premium for unlimited modules — pricing is always shown from our live catalog at checkout.</p>""",
+        <p style="font-size:13px;color:#64748b;">After trial, contact the administrator for extended usage. Billing and paid plans are disabled on this deployment.</p>""",
         preheader="Your AKILI trial has started — 14 days of full access.",
     )
     return f"Welcome to AKILI — your trial has started", body.replace("{{frontend_url}}", frontend_url.rstrip("/"))
@@ -100,30 +100,24 @@ def payment_success_email(name: str, frontend_url: str, plan_id: str, amount_ngn
     if amount_ngn != expected and expected > 0:
         amount_ngn = expected
     formatted = f"₦{amount_ngn:,}"
+    # Billing disabled — return a generic confirmation stub for compatibility.
     body = _layout(
-        f"""<h1 style="margin:0 0 12px;font-size:22px;color:#0f172a;">Payment confirmed</h1>
-        <p>Hi {name or "there"}, thank you — your <strong>{plan.get("name", "Premium")}</strong> subscription is active.</p>
-        <p style="font-size:14px;">Amount charged: <strong style="color:#2563EB;">{formatted}</strong> (monthly via Paystack)</p>
-        {_price_block(plan_id)}
-        <p>Your card is on file for automatic monthly renewal. You can cancel anytime from your dashboard.</p>
-        {_btn(f"{frontend_url}/dashboard.html#billing-panel", "Manage subscription")}
-        """,
-        preheader=f"Premium active — {formatted}/month",
+      f"""<h1 style=\"margin:0 0 12px;font-size:22px;color:#0f172a;\">Payment processed</h1>
+      <p>Hi {name or "there"}, billing is disabled on this deployment; this message is informational only.</p>
+      """,
+      preheader="Payment processed",
     )
-    return "AKILI Premium — payment received", body.replace("{{frontend_url}}", frontend_url.rstrip("/"))
+    return "AKILI — payment processed (disabled)", body.replace("{{frontend_url}}", frontend_url.rstrip("/"))
 
 
 def renewal_reminder_email(name: str, frontend_url: str, days_left: int, renew_date: str) -> tuple[str, str]:
     body = _layout(
-        f"""<h1 style="margin:0 0 12px;font-size:22px;color:#0f172a;">Premium renews soon</h1>
-        <p>Hi {name or "there"}, your AKILI Premium renews in <strong>{days_left} day(s)</strong> ({renew_date}).</p>
-        {_price_block("premium_monthly")}
-        <p>No action needed if your card is valid — Paystack will debit automatically. Update your card in Paystack if needed, or cancel from the dashboard before renewal.</p>
-        {_btn(f"{frontend_url}/dashboard.html#billing-panel", "View billing")}
-        """,
-        preheader=f"Premium renews in {days_left} days",
+      f"""<h1 style=\"margin:0 0 12px;font-size:22px;color:#0f172a;\">Subscription reminder</h1>
+      <p>Hi {name or "there"}, billing and subscriptions are disabled on this deployment.</p>
+      """,
+      preheader=f"Subscription notice",
     )
-    return "AKILI — Premium renewal reminder", body.replace("{{frontend_url}}", frontend_url.rstrip("/"))
+    return "AKILI — subscription notice", body.replace("{{frontend_url}}", frontend_url.rstrip("/"))
 
 
 def email_verify_email(name: str, frontend_url: str, verify_link: str) -> tuple[str, str]:

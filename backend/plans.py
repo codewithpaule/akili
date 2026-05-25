@@ -5,35 +5,22 @@ from typing import Optional
 
 TRIAL_DAYS = 14
 
-# Previously there was a 'free' tier after trial — remove it.
-# Only 'trial' and 'premium' are considered active plans. After trial ends
-# users are treated as 'expired' and blocked from running modules until they upgrade.
+# Make the platform free for all users by default: non-premium users are treated
+# as the baseline 'trial' tier with daily limits. Premium remains available.
 FREE_MODULES = set()
 
-PREMIUM_MODULES = {
-    "organization",
-    "company",
-    "auth",
-    "monitor",
-    "templates",
-    "graph",
-    "vulnerability",
-    "subdomains",
-    "ip",
-    "person",
-    "domain",
-    "api",
-}
+PREMIUM_MODULES = set()
 
+# Limits are enforced per-day while we run the service free. Adjust numbers as needed.
 PLAN_LIMITS = {
-    "trial": {"hourly": 120, "monthly": 200, "max_keys": 2},
-    "premium": {"hourly": 500, "monthly": 2000, "max_keys": 10},
-    "sandbox": {"hourly": 9999, "monthly": 99999, "max_keys": 3},
+    "trial": {"hourly": 120, "daily": 20, "max_keys": 2},
+    "premium": {"hourly": 500, "daily": 200, "max_keys": 10},
+    "sandbox": {"hourly": 9999, "daily": 99999, "max_keys": 3},
 }
 
-MODULE_MONTHLY_CAPS = {
-    "trial": {m: 50 for m in list(PREMIUM_MODULES | {"sandbox"})},
-    "premium": {m: 500 for m in list(PREMIUM_MODULES | {"sandbox"})},
+MODULE_DAILY_CAPS = {
+    "trial": {m: 5 for m in list(PREMIUM_MODULES | {"sandbox"})},
+    "premium": {m: 50 for m in list(PREMIUM_MODULES | {"sandbox"})},
 }
 
 
@@ -44,10 +31,8 @@ def effective_plan(user: dict) -> str:
         until = int(user.get("premium_until") or 0)
         if status not in ("past_due", "expired", "cancelled") and (until == 0 or until > now):
             return "premium"
-    # If trial still active, return 'trial'. After trial ends, return 'expired'
-    if (user.get("trial_ends_at") or 0) > now:
-        return "trial"
-    return "expired"
+    # Treat all non-premium users as the free/trial tier so the platform remains usable
+    return "trial"
 
 
 def can_access_module(user: Optional[dict], module: str) -> tuple[bool, str]:
@@ -58,7 +43,7 @@ def can_access_module(user: Optional[dict], module: str) -> tuple[bool, str]:
     plan = effective_plan(user)
     if plan in ("trial", "premium"):
         return True, ""
-    return False, "Your trial has ended — upgrade to Premium to run scans"
+    return False, "Your trial has ended — contact the administrator for higher limits or access"
 
 
 def get_limits(plan: str) -> dict:
@@ -66,5 +51,5 @@ def get_limits(plan: str) -> dict:
 
 
 def module_cap(plan: str, module: str) -> int:
-    caps = MODULE_MONTHLY_CAPS.get(plan, MODULE_MONTHLY_CAPS["trial"])
-    return caps.get(module, caps.get("website", 10))
+    caps = MODULE_DAILY_CAPS.get(plan, MODULE_DAILY_CAPS["trial"])
+    return caps.get(module, caps.get("website", 5))
