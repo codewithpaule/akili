@@ -382,26 +382,32 @@ def ask_llm(system: str, user: str, allow_ensemble: bool = False, expected_schem
             logger.info("Ensemble selected provider=%s (score=%s)", provider, best[0])
             return best[2], provider
         # fall back to normal chain
-    # Chain fallback: Groq then Gemini. Validate against expected_schema if provided.
-    out = _ask_groq(system, user)
-    if out and not out.get("error"):
+    # Chain fallback: try providers in order until one returns valid structured output
+    chain_providers = [
+        ("groq", _ask_groq),
+        ("gemini", _ask_gemini),
+        ("openrouter", _ask_openrouter),
+        ("cohere", _ask_cohere),
+        ("huggingface", _ask_hf),
+        ("mistra", _ask_mistra),
+    ]
+    for name, fn in chain_providers:
+        try:
+            out = fn(system, user)
+        except Exception as e:
+            logger.info("Provider %s failed during chain: %s", name, str(e)[:120])
+            out = None
+        if not out:
+            continue
+        if out.get("error"):
+            continue
         ok, reason = (True, "no-schema") if not expected_schema else validate_schema(out, expected_schema)
         try:
-            log_audit(action="llm.call", resource_type="llm", detail="provider=groq", meta={"provider": "groq", "valid": ok, "schema": expected_schema, "reason": reason})
+            log_audit(action="llm.call", resource_type="llm", detail=f"provider={name}", meta={"provider": name, "valid": ok, "schema": expected_schema, "reason": reason})
         except Exception:
             logger.debug("Failed to write llm audit log")
         if ok:
-            return out, "groq"
-        logger.info("Groq output failed schema: %s", reason)
-    out = _ask_gemini(system, user)
-    if out and not out.get("error"):
-        ok, reason = (True, "no-schema") if not expected_schema else validate_schema(out, expected_schema)
-        try:
-            log_audit(action="llm.call", resource_type="llm", detail="provider=gemini", meta={"provider": "gemini", "valid": ok, "schema": expected_schema, "reason": reason})
-        except Exception:
-            logger.debug("Failed to write llm audit log")
-        if ok:
-            return out, "gemini"
-        logger.info("Gemini output failed schema: %s", reason)
+            return out, name
+        logger.info("%s output failed schema: %s", name.capitalize(), reason)
     # final fallback: rule-based deterministic heuristic
     return _rule_based(system, user), "rule-based"
