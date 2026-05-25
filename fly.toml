@@ -2,10 +2,7 @@ app = "akili-backend"
 primary_region = "jnb"
 
 [build]
-  dockerfile = "backend/Dockerfile"
-
-[env]
-  PORT = "8080"
+  dockerfile = "Dockerfile"
 
 [http_service]
   internal_port = 8080
