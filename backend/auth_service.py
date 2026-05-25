@@ -13,11 +13,14 @@ from dotenv import load_dotenv
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
+import logging
 
 from database import ApiKey, Scan, UsageCounter, User, get_db, update_user_profile
 from plans import TRIAL_DAYS, effective_plan, get_limits
 
 load_dotenv()
+
+logger = logging.getLogger("akili.auth")
 
 JWT_SECRET = os.getenv("JWT_SECRET", "akili-dev-secret-change-in-production")
 JWT_ALG = "HS256"
@@ -64,15 +67,38 @@ def _hash_reset_token(token: str) -> str:
 
 
 def create_token(user_id: str) -> str:
-    exp = int(time.time()) + JWT_EXPIRE_DAYS * 86400
-    return jwt.encode({"sub": user_id, "exp": exp}, JWT_SECRET, algorithm=JWT_ALG)
+    now = int(time.time())
+    exp = now + JWT_EXPIRE_DAYS * 86400
+    payload = {"sub": user_id, "iat": now, "exp": exp}
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
 
 
 def decode_token(token: str) -> Optional[str]:
+    if not token:
+        return None
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+        # Some jose.jwt versions do not accept a `leeway` kwarg. Decode without
+        # verifying expiration, then check `exp` manually with a small leeway.
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG], options={"verify_aud": False, "verify_exp": False})
+        exp = payload.get("exp")
+        now = int(time.time())
+        if exp is not None:
+            try:
+                exp_i = int(exp)
+            except Exception:
+                exp_i = 0
+            # allow 120s clock skew
+            if now > exp_i + 120:
+                preview = (token or "")[:64]
+                logger.info("JWT expired (exp=%s now=%s) token_preview=%s", exp_i, now, preview)
+                return None
         return payload.get("sub")
-    except JWTError:
+    except JWTError as e:
+        try:
+            preview = (token or "")[:64]
+        except Exception:
+            preview = "<token-preview-failed>"
+        logger.warning("JWT decode failed: %s; token_preview=%s", str(e), preview)
         return None
 
 
@@ -416,9 +442,11 @@ def _extract_token(request: Request, creds: Optional[HTTPAuthorizationCredential
 def get_current_user_from_request(request: Request) -> Optional[dict]:
     token = _extract_token(request)
     if not token:
+        logger.debug("No session token found in request from %s", request.client.host if getattr(request, 'client', None) else 'unknown')
         return None
     uid = decode_token(token)
     if not uid:
+        logger.info("Invalid or expired token supplied from %s", request.client.host if getattr(request, 'client', None) else 'unknown')
         return None
     return get_user_by_id(uid)
 

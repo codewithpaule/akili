@@ -1,0 +1,12 @@
+# robots.txt for AKILI
+# Update the Sitemap URL below to your public domain before deploying (e.g. https://akili.example/sitemap.xml)
+
+User-agent: *
+Disallow: /api/
+Disallow: /admin
+Disallow: /admin.html
+Disallow: /dashboard.html
+Allow: /
+
+# Sitemap (replace with your public domain URL if different)
+Sitemap: https://akili.com.ng//sitemap.xml

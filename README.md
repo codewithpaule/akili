@@ -81,6 +81,10 @@ Base: `{API_BASE}/api/v1`
 - `POST /keys/generate` — API key (shown once, SHA-256 stored)
 - `POST /sandbox/scan/website?scenario=critical_vulns` — mock data
 
+## Developer docs
+
+- API scanner documentation: [backend/docs/api_scan.md](backend/docs/api_scan.md)
+
 **Auth:** `X-API-Key: ak_live_...` or browser (10 scans/hour/IP).
 
 ## Rate limits

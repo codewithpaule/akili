@@ -56,6 +56,7 @@ from database import (
 )
 from scan_templates import run_template
 from tools.auth_scan import run_auth_scan
+from tools.api_scanner import scan_api
 from tools.verify_domain import check_txt_record, generate_token
 from rate_limit import get_tier_from_request, limiter, rate_limit_headers
 from sandbox import get_mock_report, stream_sandbox
@@ -204,6 +205,16 @@ async def track_api_key_usage(request: Request, call_next):
 
 class UrlBody(BaseModel):
     url: str = Field(..., max_length=500)
+
+
+class ApiScanBody(BaseModel):
+    url: str = Field(..., max_length=500)
+    methods: Optional[list[str]] = None
+    headers: Optional[dict] = None
+    form_payload: Optional[dict] = None
+    auth: Optional[dict] = None
+    timeout: Optional[int] = Field(default=8)
+    diff: Optional[bool] = Field(default=True)
 
 
 class DomainBody(BaseModel):
@@ -1465,6 +1476,28 @@ async def scan_auth(request: Request, body: AuthScanBody):
         yield f"COMPLETE:{__import__('json').dumps(report)}\n"
 
     return StreamingResponse(gen(), media_type="text/plain")
+
+
+@app.post("/api/v1/scan/api")
+@limiter.limit("20/hour")
+async def scan_api_endpoint(request: Request, body: ApiScanBody):
+    _require_json(request)
+    user = _guard(request, "vuln")
+    url = validate_url(body.url)
+    try:
+        # Run the enhanced API scanner with provided options
+        result = scan_api(
+            url,
+            methods=body.methods,
+            headers=body.headers,
+            form_payload=body.form_payload,
+            auth=body.auth,
+            timeout=int(body.timeout or 8),
+            diff=bool(body.diff),
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(500, f"API scan failed: {str(e)}")
 
 
 @app.post("/api/v1/agency/profile")

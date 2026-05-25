@@ -250,6 +250,23 @@ def _is_valid_output(d: object) -> bool:
     return bool(keys.intersection({"score", "grade", "summary", "findings", "risk_level", "recommendations"}))
 
 
+def _enhance_system_prompt(system: str) -> str:
+    base = (system or "").strip()
+    if len(base) >= 160:
+        return base
+    # Wrap short prompts with a richer, security-focused instruction set
+    wrapper = (
+        "You are an expert security auditor and threat analyst. Provide concise, factual, and actionable findings. "
+        "Always respond with valid JSON only (no extra commentary). Use the following top-level fields when applicable: "
+        "`grade` (A-F), `score` (0-100), `summary`, `findings` (array of {title,severity,description,evidence}), `risk_level` (low|medium|high), "
+        "`recommendations` (array of strings), and `next_actions` (suggested follow-up steps). Prioritize accuracy and include brief evidence for each finding. "
+        "If asked to provide remediation steps, include prioritized, short instructions and recommended references. Obey context and do not assume access beyond provided data.\n\n"
+    )
+    if base:
+        return wrapper + "Context: " + base
+    return wrapper + "Context: Perform a thorough security assessment based on available tool outputs."
+
+
 # Minimal JSON Schemas for validation of common prompts
 SCHEMAS = {
     "website": {
@@ -328,6 +345,9 @@ def ask_llm(system: str, user: str, allow_ensemble: bool = False, expected_schem
     call all configured providers in parallel and pick/merge the best valid response.
     Returns (parsed_json, provider_name).
     """
+    # Strengthen short system prompts automatically to improve output quality
+    system = _enhance_system_prompt(system)
+
     if allow_ensemble:
         candidates = _ask_all_providers(system, user)
         if candidates:

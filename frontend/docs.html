@@ -36,6 +36,7 @@
           <a href="#scan-domain">Domain</a>
           <a href="#scan-org">Organization</a>
           <a href="#scan-company">Company</a>
+          <a href="#scan-api">API</a>
         </div>
         <div class="docs-nav-group">
           <span class="docs-nav-label">Data</span>
@@ -220,6 +221,24 @@ COMPLETE:{"scan_id":"…","score":72,"grade":"B",…}</pre></div>
           <div class="docs-endpoint-head"><span class="docs-method post">POST</span><span class="docs-endpoint-path">/api/v1/scan/company</span></div>
           <div class="docs-endpoint-body">
             <div class="docs-code-wrap"><button type="button" class="docs-copy-btn" data-copy>Copy</button><pre>{"name":"Acme Corp","domain":"acme.com"}</pre></div>
+          </div>
+        </div>
+        <div class="docs-endpoint" id="scan-api">
+          <div class="docs-endpoint-head"><span class="docs-method post">POST</span><span class="docs-endpoint-path">/api/v1/scan/api</span></div>
+          <div class="docs-endpoint-body">
+            <p>Generic API scanner: exercises common HTTP methods and returns per-method responses and optional diffs vs GET.</p>
+            <p>Body (JSON):</p>
+            <div class="docs-code-wrap"><button type="button" class="docs-copy-btn" data-copy>Copy</button>
+              <pre>{
+  "url": "https://example.com",
+  "methods": ["GET", "POST"],
+  "headers": {"X-Test": "1"},
+  "form_payload": {"q":"test"},
+  "auth": {"type":"basic","username":"u","password":"p"},
+  "timeout": 8,
+  "diff": true
+}</pre></div>
+            <p>Notes: POST/PUT/PATCH will send a small non-destructive payload by default. Use `form_payload` to send `application/x-www-form-urlencoded` data.</p>
           </div>
         </div>
         <div class="docs-endpoint">

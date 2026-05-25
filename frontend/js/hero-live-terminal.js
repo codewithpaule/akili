@@ -6,12 +6,12 @@
   if (!el) return;
 
   const TARGETS = {
-    url: ['https://edouniversity.edu.ng', 'https://example.com', 'https://api.stripe.com', 'https://wordpress.org'],
+    url: ['https://example-university.edu', 'https://example.com', 'https://api.stripe.com', 'https://wordpress.org'],
     ip: ['8.8.8.8', '1.1.1.1', '203.0.113.50', '102.89.12.4'],
-    email: ['admin@university.edu.ng', 'security@example.com', 'dev@startup.io'],
+    email: ['admin@example-university.edu', 'security@example.com', 'dev@startup.io'],
     name: ['Ada Okonkwo', 'John Smith', 'Jane Doe | Lagos developer'],
-    domain: ['edouniversity.edu.ng', 'example.com', 'safe-site.org'],
-    org: ['Edo University', 'Acme Corp', 'Ministry of Health NG'],
+    domain: ['example-university.edu', 'example.com', 'safe-site.org'],
+    org: ['Example University', 'Acme Corp', 'Ministry of Health NG'],
   };
 
   function pick(arr) {
@@ -42,7 +42,7 @@
         '[OK] SSL certificate complete',
         '[FOUND] Valid HTTPS — cert expires in 142 days',
         '[PROGRESS] Step 2/5 — HTTP security headers…',
-        '[FOUND] Missing CSP header (info on .edu sites)',
+        '[FOUND] Missing CSP header (common on older sites)',
         '[PROGRESS] Step 3/5 — technology fingerprint…',
         '[FOUND] Detected 6 technologies (4 versioned)',
         '[PROGRESS] Step 4/5 — WHOIS & DNS…',
