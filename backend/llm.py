@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from groq import Groq
 from audit_log import log_audit
 from database import save_llm_call
+import time
 
 load_dotenv()
 logger = logging.getLogger("akili.llm")
@@ -37,27 +38,35 @@ def parse_json_response(text: str) -> dict:
 def _ask_groq(system: str, user: str) -> dict | None:
     if not GROQ_API_KEY:
         return None
-    try:
-        client = Groq(api_key=GROQ_API_KEY)
-        r = client.chat.completions.create(
-            model=GROQ_MODEL,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user[:14000]},
-            ],
-            temperature=0.0,
-            max_tokens=4096,
-        )
-        raw_text = r.choices[0].message.content or ""
-        out = parse_json_response(raw_text)
+    attempts = 3
+    backoff = 1.0
+    for attempt in range(1, attempts + 1):
         try:
-            save_llm_call("groq", GROQ_MODEL, system + "\n\n---\n\n" + user[:14000], raw_text, out)
-        except Exception:
-            logger.debug("Failed to persist groq call")
-        return out if out else None
-    except Exception as e:
-        logger.warning("Groq failed: %s", str(e)[:120])
-        return None
+            client = Groq(api_key=GROQ_API_KEY)
+            r = client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user[:14000]},
+                ],
+                temperature=0.0,
+                max_tokens=4096,
+            )
+            raw_text = r.choices[0].message.content or ""
+            out = parse_json_response(raw_text)
+            try:
+                save_llm_call("groq", GROQ_MODEL, system + "\n\n---\n\n" + user[:14000], raw_text, out)
+            except Exception:
+                logger.debug("Failed to persist groq call")
+            return out if out else None
+        except Exception as e:
+            msg = str(e)
+            logger.warning("Groq attempt %s failed: %s", attempt, msg[:200])
+            if attempt < attempts and ("rate limit" in msg.lower() or "429" in msg or "timed out" in msg.lower() or "connection" in msg.lower()):
+                time.sleep(backoff)
+                backoff *= 2
+                continue
+            return None
 
 
 def _ask_gemini(system: str, user: str) -> dict | None:
@@ -68,32 +77,44 @@ def _ask_gemini(system: str, user: str) -> dict | None:
         f"{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
     )
     prompt = f"{system}\n\n---\n\n{user[:12000]}\n\nRespond with valid JSON only."
-    try:
-        with httpx.Client(timeout=45) as client:
-            r = client.post(
-                url,
-                json={
-                    "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {"temperature": 0.0, "maxOutputTokens": 4096},
-                },
-            )
-        if r.status_code != 200:
-            logger.warning("Gemini HTTP %s", r.status_code)
-            return None
-        data = r.json()
-        text = ""
-        for cand in data.get("candidates", []):
-            for part in cand.get("content", {}).get("parts", []):
-                text += part.get("text", "")
-        out = parse_json_response(text)
+    attempts = 3
+    backoff = 1.0
+    for attempt in range(1, attempts + 1):
         try:
-            save_llm_call("gemini", GEMINI_MODEL, prompt, text, out)
-        except Exception:
-            logger.debug("Failed to persist gemini call")
-        return out if out else None
-    except Exception as e:
-        logger.warning("Gemini failed: %s", str(e)[:120])
-        return None
+            with httpx.Client(timeout=45) as client:
+                r = client.post(
+                    url,
+                    json={
+                        "contents": [{"parts": [{"text": prompt}]}],
+                        "generationConfig": {"temperature": 0.0, "maxOutputTokens": 4096},
+                    },
+                )
+            if r.status_code != 200:
+                logger.warning("Gemini HTTP %s (attempt %s)", r.status_code, attempt)
+                if attempt < attempts and r.status_code in (429, 502, 503, 504):
+                    time.sleep(backoff)
+                    backoff *= 2
+                    continue
+                return None
+            data = r.json()
+            text = ""
+            for cand in data.get("candidates", []):
+                for part in cand.get("content", {}).get("parts", []):
+                    text += part.get("text", "")
+            out = parse_json_response(text)
+            try:
+                save_llm_call("gemini", GEMINI_MODEL, prompt, text, out)
+            except Exception:
+                logger.debug("Failed to persist gemini call")
+            return out if out else None
+        except Exception as e:
+            msg = str(e)
+            logger.warning("Gemini attempt %s failed: %s", attempt, msg[:200])
+            if attempt < attempts and ("timed out" in msg.lower() or "connection" in msg.lower() or "name or service not known" in msg.lower()):
+                time.sleep(backoff)
+                backoff *= 2
+                continue
+            return None
 
 
 def _rule_based(system: str, user: str) -> dict:
@@ -144,27 +165,39 @@ def _ask_cohere(system: str, user: str) -> dict | None:
     if not key:
         return None
     prompt = f"{system}\n\n---\n\n{user[:12000]}\n\nRespond with valid JSON only."
-    try:
-        with httpx.Client(timeout=45) as client:
-            r = client.post(
-                "https://api.cohere.ai/generate",
-                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-                json={"model": model, "prompt": prompt, "temperature": 0.0, "max_tokens": 1024},
-            )
-        if r.status_code != 200:
-            logger.warning("Cohere HTTP %s", r.status_code)
-            return None
-        data = r.json()
-        text = "\n".join([c.get("text", "") for c in data.get("generations", [])])
-        out = parse_json_response(text)
+    attempts = 2
+    backoff = 1.0
+    for attempt in range(1, attempts + 1):
         try:
-            save_llm_call("cohere", model, prompt, text, out)
-        except Exception:
-            logger.debug("Failed to persist cohere call")
-        return out if out else None
-    except Exception as e:
-        logger.warning("Cohere failed: %s", str(e)[:120])
-        return None
+            with httpx.Client(timeout=45) as client:
+                r = client.post(
+                    "https://api.cohere.ai/generate",
+                    headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                    json={"model": model, "prompt": prompt, "temperature": 0.0, "max_tokens": 1024},
+                )
+            if r.status_code != 200:
+                logger.warning("Cohere HTTP %s (attempt %s)", r.status_code, attempt)
+                if attempt < attempts and r.status_code in (429, 502, 503, 504):
+                    time.sleep(backoff)
+                    backoff *= 2
+                    continue
+                return None
+            data = r.json()
+            text = "\n".join([c.get("text", "") for c in data.get("generations", [])])
+            out = parse_json_response(text)
+            try:
+                save_llm_call("cohere", model, prompt, text, out)
+            except Exception:
+                logger.debug("Failed to persist cohere call")
+            return out if out else None
+        except Exception as e:
+            msg = str(e)
+            logger.warning("Cohere attempt %s failed: %s", attempt, msg[:200])
+            if attempt < attempts and ("timed out" in msg.lower() or "connection" in msg.lower()):
+                time.sleep(backoff)
+                backoff *= 2
+                continue
+            return None
 
 
 def _ask_hf(system: str, user: str) -> dict | None:
@@ -173,33 +206,45 @@ def _ask_hf(system: str, user: str) -> dict | None:
     if not key:
         return None
     prompt = f"{system}\n\n---\n\n{user[:8000]}\n\nRespond with valid JSON only."
-    try:
-        with httpx.Client(timeout=45) as client:
-            r = client.post(
-                f"https://api-inference.huggingface.co/models/{model}",
-                headers={"Authorization": f"Bearer {key}"},
-                json={"inputs": prompt, "parameters": {"max_new_tokens": 1024, "temperature": 0.0}},
-            )
-        if r.status_code != 200:
-            logger.warning("HuggingFace HTTP %s", r.status_code)
-            return None
-        data = r.json()
-        # HF inference may return list of dicts or text
-        text = ""
-        if isinstance(data, list):
-            for item in data:
-                text += item.get("generated_text", "")
-        else:
-            text = data.get("generated_text", "") if isinstance(data, dict) else str(data)
-        out = parse_json_response(text)
+    attempts = 2
+    backoff = 1.0
+    for attempt in range(1, attempts + 1):
         try:
-            save_llm_call("huggingface", model, prompt, text, out)
-        except Exception:
-            logger.debug("Failed to persist huggingface call")
-        return out if out else None
-    except Exception as e:
-        logger.warning("HuggingFace failed: %s", str(e)[:120])
-        return None
+            with httpx.Client(timeout=45) as client:
+                r = client.post(
+                    f"https://api-inference.huggingface.co/models/{model}",
+                    headers={"Authorization": f"Bearer {key}"},
+                    json={"inputs": prompt, "parameters": {"max_new_tokens": 1024, "temperature": 0.0}},
+                )
+            if r.status_code != 200:
+                logger.warning("HuggingFace HTTP %s (attempt %s)", r.status_code, attempt)
+                if attempt < attempts and r.status_code in (429, 502, 503, 504):
+                    time.sleep(backoff)
+                    backoff *= 2
+                    continue
+                return None
+            data = r.json()
+            # HF inference may return list of dicts or text
+            text = ""
+            if isinstance(data, list):
+                for item in data:
+                    text += item.get("generated_text", "")
+            else:
+                text = data.get("generated_text", "") if isinstance(data, dict) else str(data)
+            out = parse_json_response(text)
+            try:
+                save_llm_call("huggingface", model, prompt, text, out)
+            except Exception:
+                logger.debug("Failed to persist huggingface call")
+            return out if out else None
+        except Exception as e:
+            msg = str(e)
+            logger.warning("HuggingFace attempt %s failed: %s", attempt, msg[:200])
+            if attempt < attempts and ("timed out" in msg.lower() or "connection" in msg.lower()):
+                time.sleep(backoff)
+                backoff *= 2
+                continue
+            return None
 
 
 def _ask_openrouter(system: str, user: str) -> dict | None:
@@ -208,29 +253,41 @@ def _ask_openrouter(system: str, user: str) -> dict | None:
     if not key:
         return None
     prompt = f"{system}\n\n---\n\n{user[:12000]}\n\nRespond with valid JSON only."
-    try:
-        with httpx.Client(timeout=45) as client:
-            r = client.post(
-                "https://api.openrouter.ai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-                json={"model": model, "messages": [{"role": "user", "content": prompt}], "temperature": 0.0, "max_tokens": 1024},
-            )
-        if r.status_code != 200:
-            logger.warning("OpenRouter HTTP %s", r.status_code)
-            return None
-        data = r.json()
-        text = ""
-        for c in data.get("choices", []):
-            text += c.get("message", {}).get("content", "")
-        out = parse_json_response(text)
+    attempts = 2
+    backoff = 1.0
+    for attempt in range(1, attempts + 1):
         try:
-            save_llm_call("openrouter", model, prompt, text, out)
-        except Exception:
-            logger.debug("Failed to persist openrouter call")
-        return out if out else None
-    except Exception as e:
-        logger.warning("OpenRouter failed: %s", str(e)[:120])
-        return None
+            with httpx.Client(timeout=45) as client:
+                r = client.post(
+                    "https://api.openrouter.ai/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                    json={"model": model, "messages": [{"role": "user", "content": prompt}], "temperature": 0.0, "max_tokens": 1024},
+                )
+            if r.status_code != 200:
+                logger.warning("OpenRouter HTTP %s (attempt %s)", r.status_code, attempt)
+                if attempt < attempts and r.status_code in (429, 502, 503, 504):
+                    time.sleep(backoff)
+                    backoff *= 2
+                    continue
+                return None
+            data = r.json()
+            text = ""
+            for c in data.get("choices", []):
+                text += c.get("message", {}).get("content", "")
+            out = parse_json_response(text)
+            try:
+                save_llm_call("openrouter", model, prompt, text, out)
+            except Exception:
+                logger.debug("Failed to persist openrouter call")
+            return out if out else None
+        except Exception as e:
+            msg = str(e)
+            logger.warning("OpenRouter attempt %s failed: %s", attempt, msg[:200])
+            if attempt < attempts and ("timed out" in msg.lower() or "connection" in msg.lower()):
+                time.sleep(backoff)
+                backoff *= 2
+                continue
+            return None
 
 
 def _ask_mistra(system: str, user: str) -> dict | None:
