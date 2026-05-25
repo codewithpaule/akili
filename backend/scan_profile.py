@@ -14,16 +14,7 @@ SCAN_PROFILES = {
         "ai_depth": "summary_only",
         "description": "Surface check only — 1–2 checks, no deep AI follow-up. Sign up for full scans.",
     },
-    "free": {
-        "label": "Free",
-        "max_iterations": 0,
-        "lite": False,
-        "website_baseline": ["ssl_check", "headers", "whois_check"],
-        "email_baseline": ["email_intel"],
-        "vulnerability_baseline": ["vulnerability", "headers"],
-        "ai_depth": "standard",
-        "description": "Core baseline tools per module. No multi-step AI discovery.",
-    },
+    # 'free' tier removed — use 'trial' as the baseline for signed-in users during trial.
     "trial": {
         "label": "Trial",
         "max_iterations": 3,
@@ -54,7 +45,7 @@ def tier_for_user(user: dict | None, *, guest: bool = False) -> str:
 
 
 def profile_for_tier(tier: str) -> dict:
-    return dict(SCAN_PROFILES.get(tier, SCAN_PROFILES["free"]))
+    return dict(SCAN_PROFILES.get(tier, SCAN_PROFILES["trial"]))
 
 
 def baseline_tools(module: str, tier: str) -> list[str]:
@@ -66,14 +57,14 @@ def baseline_tools(module: str, tier: str) -> list[str]:
     base = list(BASELINE_TOOLS.get(module, ["headers"]))
     if tier == "guest":
         return base[:1]
-    if tier == "free":
+    if tier == "trial":
         return base[:3] if module == "website" else base[:2]
     return base
 
 
 def plan_comparison_rows() -> list[dict]:
     rows = []
-    for tid in ("guest", "free", "trial", "premium"):
+    for tid in ("guest", "trial", "premium"):
         p = SCAN_PROFILES[tid]
         rows.append({
             "tier": tid,

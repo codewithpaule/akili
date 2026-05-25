@@ -44,6 +44,7 @@ BASELINE_TOOLS = {
     "company": ["org_scan", "fingerprint"],
     "email": ["email_intel"],
     "domain": ["domain_rep", "whois_check"],
+    "api": ["headers", "fingerprint", "ssl_check", "ports"],
 }
 
 TOOL_MAP = {
@@ -151,7 +152,7 @@ def parse_json_response(text: str) -> dict:
         return json.loads(m2.group()) if m2 else {}
 
 
-def ask_groq(system: str, user: str, scan_tier: str = "free", expected_schema: str | None = None) -> dict:
+def ask_groq(system: str, user: str, scan_tier: str = "trial", expected_schema: str | None = None) -> dict:
     """Groq → Gemini (free) → rule-based fallback.
 
     If `scan_tier` == 'premium' then allow ensemble calls to all configured providers.
@@ -219,7 +220,7 @@ def _build_website_ai_payload(context: dict) -> dict:
         if tool == "ports":
             payload["open_ports"] = raw.get("ports", [])[:15]
     if host and (host.endswith(".edu.ng") or ".edu." in host or host.endswith(".edu")):
-        payload["domain_profile"] = "education"
+        payload["domain_profile"] = "academic"
     return payload
 
 
@@ -465,11 +466,11 @@ def _merge_website_report(context: dict, ai: dict) -> dict:
             report.get("page_description"),
         ]
         report["site_purpose"] = " — ".join(p for p in parts if p)[:500] or ""
-    if report.get("domain_profile") == "education" and report.get("legitimacy") == "suspicious":
+    if report.get("domain_profile") == "academic" and report.get("legitimacy") == "suspicious":
         report["legitimacy"] = "likely_legit"
         report["legitimacy_notes"] = (
             (report.get("legitimacy_notes") or "")
-            + " Educational institution domain — flagged as likely legitimate unless you have specific threat intel."
+            + " Academic institution domain — flagged as likely legitimate unless you have specific threat intel."
         ).strip()
 
     if not report.get("tech_stack") and context.get("tech_stack"):
@@ -511,7 +512,7 @@ def run_agent(
     *,
     lite: bool = False,
     user_id: str = "",
-    scan_tier: str = "free",
+    scan_tier: str = "trial",
 ) -> Generator[str, None, None]:
     start = time.time()
     create_session(scan_id, module, target)

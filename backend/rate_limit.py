@@ -16,7 +16,7 @@ def get_tier_from_request(request) -> tuple[str, int, bool]:
     if resolved:
         if resolved.get("is_sandbox"):
             return "sandbox", TIER_LIMITS["sandbox"], True
-        tier = resolved.get("tier", "free")
+        tier = resolved.get("tier", "trial")
         return tier, TIER_LIMITS.get(tier, 50), False
     return "browser", TIER_LIMITS["browser"], False
 

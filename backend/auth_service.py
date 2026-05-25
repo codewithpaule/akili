@@ -137,7 +137,7 @@ def register_user(
             password_hash=hash_password(password),
             name=(name or email_l.split("@")[0])[:120],
             phone=(phone or "")[:40],
-            plan="free",
+                plan="trial",
             trial_ends_at=trial_end,
             google_id="",
             created_at=now,
@@ -209,7 +209,7 @@ def google_login(id_token: str) -> dict:
                 email=email,
                 password_hash="",
                 name=name,
-                plan="free",
+                plan="trial",
                 trial_ends_at=now + TRIAL_DAYS * 86400,
                 google_id=google_sub,
                 created_at=now,
@@ -392,7 +392,7 @@ def delete_user_account(user_id: str, password: str = "") -> None:
         row.password_hash = ""
         row.name = "Deleted user"
         row.google_id = ""
-        row.plan = "free"
+        row.plan = "expired"
         row.subscription_status = "cancelled"
         row.paystack_authorization = ""
         row.paystack_customer_code = ""

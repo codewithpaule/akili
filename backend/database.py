@@ -11,7 +11,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./akili.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://neondb_owner:npg_oaTemFVS0dJ2@ep-solitary-silence-aqnbwktz-pooler.c-8.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require")
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 engine = create_engine(DATABASE_URL, connect_args=connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -44,7 +44,7 @@ class User(Base):
     email = Column(String, nullable=False, unique=True)
     password_hash = Column(String, default="")
     name = Column(String, default="")
-    plan = Column(String, default="free")
+    plan = Column(String, default="trial")
     trial_ends_at = Column(Integer, default=0)
     google_id = Column(String, default="")
     phone = Column(String, default="")
@@ -104,7 +104,7 @@ class ApiKey(Base):
     key_name = Column(String, default="")
     key_hash = Column(String, nullable=False, unique=True)
     key_preview = Column(String, nullable=False)
-    tier = Column(String, default="free")
+    tier = Column(String, default="trial")
     created_at = Column(Integer, nullable=False)
     last_used = Column(Integer, default=0)
     requests_today = Column(Integer, default=0)

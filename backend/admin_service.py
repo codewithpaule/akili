@@ -227,7 +227,7 @@ def update_user_admin(user_id: str, fields: dict) -> dict:
             elif key == "role":
                 setattr(row, key, "admin" if val == "admin" else "user")
             elif key == "plan":
-                setattr(row, key, str(val or "free")[:30])
+                setattr(row, key, str(val or "trial")[:30])
             else:
                 setattr(row, key, str(val or "")[:200])
         if fields.get("plan") == "premium" and not getattr(row, "subscription_status", ""):
@@ -474,11 +474,12 @@ def admin_upgrade_user(user_id: str, plan_id: str = "premium_monthly") -> dict:
             from billing_service import _activate_premium
             _activate_premium(row)
         elif plan_id == "free":
-            row.plan = "free"
+            # Map legacy 'free' action to expired state (no active trial/premium)
+            row.plan = "expired"
             row.subscription_status = "cancelled"
             row.premium_until = 0
         elif plan_id == "trial":
-            row.plan = "free"
+            row.plan = "trial"
             row.trial_ends_at = int(time.time()) + 14 * 86400
         else:
             row.plan = plan_id[:30]
@@ -527,7 +528,7 @@ def admin_charts_data() -> dict:
             .group_by(User.plan)
             .all()
         )
-        plans = {str(p or "free"): int(c) for p, c in plan_rows}
+        plans = {str(p or "trial"): int(c) for p, c in plan_rows}
         premium_n = plans.get("premium", 0)
         from pricing import PLANS
         mrr_ngn = premium_n * int(PLANS["premium_monthly"]["price_ngn"])

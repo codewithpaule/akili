@@ -362,7 +362,7 @@ class AuthScanBody(BaseModel):
     authorized: bool = Field(default=False)
 
 
-def _stream_agent(module: str, target: str, scan_id: str, user_id: str = "", scan_tier: str = "free"):
+def _stream_agent(module: str, target: str, scan_id: str, user_id: str = "", scan_tier: str = "trial"):
     async def gen():
         for chunk in run_agent(module, target, scan_id, user_id=user_id, scan_tier=scan_tier):
             yield chunk
@@ -914,6 +914,26 @@ async def public_scan_email(request: Request, body: EmailBody):
     return _stream_agent("email", email, scan_id, user_id="", scan_tier="guest")
 
 
+@app.post("/api/v1/public/scan/link")
+@limiter.limit("8/hour")
+async def public_scan_link(request: Request, body: UrlBody):
+    _require_json(request)
+    url = validate_url(body.url)
+    scan_id = str(uuid.uuid4())
+    log_scan(scan_id, "website")
+    return _stream_agent("website", url, scan_id, user_id="", scan_tier="guest")
+
+
+@app.post("/api/v1/public/scan/api")
+@limiter.limit("8/hour")
+async def public_scan_api(request: Request, body: UrlBody):
+    _require_json(request)
+    url = validate_url(body.url)
+    scan_id = str(uuid.uuid4())
+    log_scan(scan_id, "api")
+    return _stream_agent("api", url, scan_id, user_id="", scan_tier="guest")
+
+
 @app.post("/api/v1/billing/upgrade")
 @limiter.limit("10/hour")
 async def billing_upgrade(request: Request, user: dict = Depends(require_user)):
@@ -1119,8 +1139,30 @@ async def scan_domain(request: Request, body: DomainBody):
     return _stream_agent("domain", domain, scan_id, user["user_id"], scan_tier=tier_for_user(user))
 
 
+@app.post("/api/v1/scan/link")
+@limiter.limit("10/hour")
+async def scan_link(request: Request, body: UrlBody):
+    _require_json(request)
+    user = _guard(request, "website")
+    url = validate_url(body.url)
+    scan_id = str(uuid.uuid4())
+    log_scan(scan_id, "website")
+    return _stream_agent("website", url, scan_id, user["user_id"], scan_tier=tier_for_user(user))
+
+
+@app.post("/api/v1/scan/api")
+@limiter.limit("10/hour")
+async def scan_api(request: Request, body: UrlBody):
+    _require_json(request)
+    user = _guard(request, "api")
+    url = validate_url(body.url)
+    scan_id = str(uuid.uuid4())
+    log_scan(scan_id, "api")
+    return _stream_agent("api", url, scan_id, user["user_id"], scan_tier=tier_for_user(user))
+
+
 # Sandbox routes
-SANDBOX_MODULES = ["website", "vulnerability", "subdomains", "ip", "organization", "person", "company", "email", "domain"]
+SANDBOX_MODULES = ["website", "vulnerability", "subdomains", "ip", "organization", "person", "company", "email", "domain", "api", "link"]
 
 
 def _make_sandbox_route(module: str):

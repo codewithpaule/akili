@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from database import count_user_keys, get_usage_summary, increment_usage
 from plans import can_access_module, effective_plan, get_limits, module_cap
 
-PLAN_LABELS = {"free": "Free", "trial": "Trial", "premium": "Premium"}
+PLAN_LABELS = {"trial": "Trial", "premium": "Premium", "expired": "Expired"}
 
 
 def enforce_scan_access(user: dict | None, module: str, *, sandbox: bool = False) -> None:

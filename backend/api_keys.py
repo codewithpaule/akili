@@ -9,12 +9,11 @@ from plans import PLAN_LIMITS, effective_plan, get_limits
 
 TIER_LIMITS = {
     "browser": 10,
-    "free": PLAN_LIMITS["free"]["hourly"],
-    "trial": PLAN_LIMITS["trial"]["hourly"],
-    "premium": PLAN_LIMITS["premium"]["hourly"],
+    "trial": PLAN_LIMITS.get("trial", {}).get("hourly", 120),
+    "premium": PLAN_LIMITS.get("premium", {}).get("hourly", 500),
     "pro": 500,
     "business": 2000,
-    "sandbox": PLAN_LIMITS["sandbox"]["hourly"],
+    "sandbox": PLAN_LIMITS.get("sandbox", {}).get("hourly", 9999),
 }
 
 
@@ -85,7 +84,7 @@ def lookup_api_key(header_value: Optional[str], increment_usage: bool = False) -
             row.last_used = int(time.time())
             row.requests_today = (row.requests_today or 0) + 1
             row.requests_month = (row.requests_month or 0) + 1
-        tier = row.tier or "free"
+        tier = row.tier or "trial"
         return {
             "key_id": row.key_id,
             "user_id": row.user_id or "",
@@ -102,9 +101,9 @@ def resolve_api_key(header_value: Optional[str]) -> Optional[dict]:
 
 
 def _key_usage_fields(row: ApiKey) -> dict:
-    tier = row.tier or "free"
+    tier = row.tier or "trial"
     sandbox = bool(row.is_sandbox)
-    hourly_limit = TIER_LIMITS["sandbox"] if sandbox else TIER_LIMITS.get(tier, TIER_LIMITS["free"])
+    hourly_limit = TIER_LIMITS["sandbox"] if sandbox else TIER_LIMITS.get(tier, TIER_LIMITS.get("trial", 120))
     calls_today = row.requests_today or 0
     calls_month = row.requests_month or 0
     return {

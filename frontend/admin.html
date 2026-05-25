@@ -91,7 +91,7 @@
             <input type="search" id="users-q" placeholder="Search email, name…" class="admin-input">
             <select id="users-plan" class="admin-input">
               <option value="">All plans</option>
-              <option value="free">free</option>
+              <option value="trial">trial</option>
               <option value="premium">premium</option>
               <option value="trial">trial</option>
             </select>
@@ -400,7 +400,7 @@
         </dl>
         <div class="admin-drawer-actions">
           <button type="button" class="btn btn-primary btn-sm" id="act-premium">Grant Premium</button>
-          <button type="button" class="btn btn-outline btn-sm" id="act-free">Set Free</button>
+          <button type="button" class="btn btn-outline btn-sm" id="act-free">Set Expired</button>
           <button type="button" class="btn btn-outline btn-sm" id="act-trial">Extend trial</button>
           <select id="act-role" class="admin-input">
             <option value="user" ${u.role === 'user' ? 'selected' : ''}>user</option>
@@ -424,7 +424,7 @@
       };
       document.getElementById('act-free').onclick = async () => {
         await AKILI_ADMIN.api('/api/v1/admin/users/' + userId + '/plan', { method: 'POST', body: JSON.stringify({ plan_id: 'free' }) });
-        AKILI.showToast('Set to free', 'success');
+        AKILI.showToast('Set expired', 'success');
         openUser(userId);
       };
       document.getElementById('act-trial').onclick = async () => {

@@ -93,9 +93,9 @@ def reconcile_user_plan(row: User) -> None:
         return
     if status in ("active", "non-renewing") and until > now:
         return
-    fallback = (getattr(row, "plan_before_premium", None) or "free").strip() or "free"
-    if fallback not in ("free", "trial"):
-        fallback = "free"
+        fallback = (getattr(row, "plan_before_premium", None) or "trial").strip() or "trial"
+        if fallback not in ("trial",):
+            fallback = "trial"
     if (row.trial_ends_at or 0) > now:
         fallback = "trial"
     row.plan = fallback
@@ -164,7 +164,7 @@ def initialize_checkout(user: dict, plan_id: str = "premium_monthly", return_pag
 def _activate_premium(row: User, *, authorization_code: str = "", customer_code: str = "", subscription_code: str = "") -> None:
     now = int(time.time())
     if row.plan != "premium":
-        row.plan_before_premium = row.plan if row.plan in ("free", "trial") else "free"
+           row.plan_before_premium = row.plan if row.plan in ("trial",) else "trial"
     row.plan = "premium"
     row.subscription_status = "active"
     row.premium_until = now + 32 * 86400  # grace window until webhook renews
