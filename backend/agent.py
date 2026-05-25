@@ -125,12 +125,25 @@ def _osint_person(target: str, context: dict) -> dict:
     name, kw = parts[0].strip(), parts[1].strip() if len(parts) > 1 else ""
     data = osint.run_person_collect(name, kw)
     context["osint"] = data
+    # Build a short platforms summary for streaming output (easier verification)
+    try:
+        plats = []
+        for p, info in (data.get("platforms") or {}).items():
+            if info and info.get("found"):
+                h = info.get("handle") or info.get("url") or ""
+                if h:
+                    plats.append(f"{p}({h})")
+                else:
+                    plats.append(p)
+        plat_summary = ", ".join(plats)
+    except Exception:
+        plat_summary = ""
     return {
         "tool": "osint_person",
         "severity": "INFO",
         "title": "Person OSINT",
         "detail": f"{len(data.get('raw_results', []))} results",
-        "summary": f"Collected public data for {name}",
+        "summary": f"Collected public data for {name}" + (f" — {plat_summary}" if plat_summary else ""),
         "raw": data,
         "findings": [],
     }

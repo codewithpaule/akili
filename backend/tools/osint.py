@@ -194,6 +194,26 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
                 "followers": gh_profile.get("followers", 0),
             })
 
+    # Ensure we include any discovered platform URLs as simple social cards
+    for p, info in platforms.items():
+        try:
+            if not info or not info.get("found") or not info.get("url"):
+                continue
+            profile_url = info.get("url")
+            handle = info.get("handle") or None
+            # avoid duplicate entries (e.g. GitHub added above)
+            if any((c.get("profile_url") or c.get("url")) == profile_url for c in social_cards):
+                continue
+            social_cards.append({
+                "platform": p,
+                "profile_url": profile_url,
+                "url": profile_url,
+                "handle": handle,
+                "bio": "",
+            })
+        except Exception:
+            continue
+
     verified_images = await _fetch_verified_profile_images(platforms)
 
     # Find explicit emails in search snippets and check breaches only for those exact emails.
