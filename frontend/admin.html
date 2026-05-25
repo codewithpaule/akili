@@ -162,41 +162,11 @@
       </section>
 
       <section class="admin-panel" id="tab-billing">
-        <h1>Billing &amp; Paystack Console</h1>
-        <p class="admin-lead">Track active premium subscriptions, pending checkouts, and verify transaction references manually.</p>
-        
-        <div class="admin-split" style="margin-top:1.5rem;">
-          <div class="admin-card">
-            <h3>Verify Paystack Reference Manually</h3>
-            <p class="label-sm" style="margin-bottom:1rem;">Force verification of a Paystack reference for a user if automatic webhook failed.</p>
-            <div style="display:grid; gap:0.75rem;">
-              <input type="text" id="manual-verify-email" placeholder="User email (e.g. user@example.com)" class="admin-input" style="width:100%;">
-              <input type="text" id="manual-verify-ref" placeholder="Paystack reference (e.g. akili_xxxx)" class="admin-input" style="width:100%;">
-              <button type="button" class="btn btn-primary btn-sm" id="btn-manual-verify" style="justify-content:center;">Verify &amp; Activate Premium</button>
-            </div>
-          </div>
-          <div class="admin-card" id="billing-status-card">
-            <h3>Paystack Gateway Status</h3>
-            <div id="billing-status" style="font-size:0.9rem;">Loading gateway state...</div>
-          </div>
-        </div>
-
+        <h1>Billing</h1>
+        <p class="admin-lead">Billing and paid plans are disabled on this deployment. There is no active Paystack integration.</p>
         <div class="admin-card" style="margin-top:1.5rem;">
-          <h3>Active Premium Subscriptions</h3>
-          <p class="label-sm" style="margin-bottom:0.75rem;">Users currently on the Premium tier sorted by renewal due date.</p>
-          <div id="active-subs-table" class="admin-table-wrap">Loading active renewals...</div>
-        </div>
-
-        <div class="admin-card" style="margin-top:1.5rem;">
-          <h3>Pending Checkout References</h3>
-          <p class="label-sm" style="margin-bottom:0.75rem;">Users who clicked checkout but haven't completed verification.</p>
-          <div id="pending-subs-table" class="admin-table-wrap">Loading pending...</div>
-        </div>
-
-        <div class="admin-card" style="margin-top:1.5rem;">
-          <h3>Cancelled &amp; Inactive Subscriptions</h3>
-          <p class="label-sm" style="margin-bottom:0.75rem;">Users who previously held premium access but are now inactive/lapsed.</p>
-          <div id="inactive-subs-table" class="admin-table-wrap">Loading historical...</div>
+          <h3>Billing disabled</h3>
+          <p class="label-sm">All payment-related actions are disabled. To enable billing later, configure Paystack keys in the backend environment and re-enable the billing module.</p>
         </div>
       </section>
 
@@ -399,7 +369,6 @@
           <dt>Joined</dt><dd>${fmt(u.created_at)}</dd>
         </dl>
         <div class="admin-drawer-actions">
-          <button type="button" class="btn btn-primary btn-sm" id="act-premium">Grant Premium</button>
           <button type="button" class="btn btn-outline btn-sm" id="act-free">Set Expired</button>
           <button type="button" class="btn btn-outline btn-sm" id="act-trial">Extend trial</button>
           <select id="act-role" class="admin-input">
@@ -416,12 +385,7 @@
       const drawer = document.getElementById('user-drawer');
       drawer.removeAttribute('hidden');
       drawer.style.display = 'flex';
-      document.getElementById('act-premium').onclick = async () => {
-        await AKILI_ADMIN.api('/api/v1/admin/users/' + userId + '/plan', { method: 'POST', body: JSON.stringify({ plan_id: 'premium_monthly' }) });
-        AKILI.showToast('Premium granted', 'success');
-        openUser(userId);
-        loadUsers(usersPage);
-      };
+      // Premium grant removed: billing is disabled in this deployment.
       document.getElementById('act-free').onclick = async () => {
         await AKILI_ADMIN.api('/api/v1/admin/users/' + userId + '/plan', { method: 'POST', body: JSON.stringify({ plan_id: 'free' }) });
         AKILI.showToast('Set expired', 'success');

@@ -126,7 +126,7 @@
         </div>
         <div class="docs-endpoint">
           <div class="docs-endpoint-head"><span class="docs-method get">GET</span><span class="docs-endpoint-path">/api/v1/auth/me</span></div>
-          <div class="docs-endpoint-body"><p>Returns <code class="docs-inline-code">user</code> and <code class="docs-inline-code">usage</code> (plan, monthly module counts, caps).</p></div>
+          <div class="docs-endpoint-body"><p>Returns <code class="docs-inline-code">user</code> and <code class="docs-inline-code">usage</code> (plan, daily module counts, caps).</p></div>
         </div>
       </section>
 
@@ -158,7 +158,7 @@ COMPLETE:{"scan_id":"…","score":72,"grade":"B",…}</pre></div>
             </tbody>
           </table>
         </div>
-        <p>HTTP <code class="docs-inline-code">429</code> when monthly module quota or hourly cap is exceeded. HTTP <code class="docs-inline-code">403</code> for premium-only modules on free plan.</p>
+        <p>HTTP <code class="docs-inline-code">429</code> when daily module quota or hourly cap is exceeded. HTTP <code class="docs-inline-code">403</code> for premium-only modules on free plan.</p>
       </section>
 
       <section class="docs-section" id="scan-website">
@@ -311,7 +311,7 @@ COMPLETE:{"scan_id":"…","score":72,"grade":"B",…}</pre></div>
               <tr><td><code>401</code></td><td>Missing or invalid session / API key</td></tr>
               <tr><td><code>403</code></td><td>Module not on your plan</td></tr>
               <tr><td><code>404</code></td><td>Unknown scan_id or report not yours</td></tr>
-              <tr><td><code>429</code></td><td>Rate or monthly quota exceeded</td></tr>
+              <tr><td><code>429</code></td><td>Rate or daily quota exceeded</td></tr>
               <tr><td><code>400</code></td><td>Validation (URL, email, IP, key name missing)</td></tr>
             </tbody>
           </table>

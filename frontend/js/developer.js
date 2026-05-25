@@ -20,9 +20,9 @@ function renderAccountUsage(account) {
   if (!el || !account) return;
   const plan = account.plan || 'free';
   const planLabel = account.plan_label || plan;
-  const mUsed = account.monthly_scans_used ?? 0;
-  const mCap = account.monthly_total_limit ?? 50;
-  const mRem = account.monthly_scans_remaining ?? Math.max(0, mCap - mUsed);
+  const mUsed = account.daily_scans_used ?? 0;
+  const mCap = account.daily_total_limit ?? 50;
+  const mRem = account.daily_scans_remaining ?? Math.max(0, mCap - mUsed);
   el.innerHTML = `
     <div class="usage-account-head">
       <h3>Account usage</h3>
@@ -30,7 +30,7 @@ function renderAccountUsage(account) {
     </div>
     <div class="usage-account-grid">
       <div class="usage-account-stat">
-        <span class="label-sm">Scans this month</span>
+        <span class="label-sm">Scans today</span>
         <p class="usage-account-value">${mUsed} <span class="usage-muted">/ ${mCap}</span></p>
         ${usageBar(mUsed, mCap)}
         <p class="label-sm">${mRem} remaining on account</p>
@@ -46,12 +46,12 @@ function renderAccountUsage(account) {
         <p class="label-sm">Active named keys</p>
       </div>
     </div>
-    <details class="usage-module-details" ${Object.keys(account.usage_this_month || {}).length ? 'open' : ''}>
+    <details class="usage-module-details" ${Object.keys(account.usage_today || {}).length ? 'open' : ''}>
       <summary>Module usage breakdown</summary>
       <div class="usage-module-list">
         ${Object.keys(account.module_caps || {}).sort().map((m) => {
           const cap = account.module_caps[m] || 10;
-          const n = (account.usage_this_month || {})[m] || 0;
+          const n = (account.usage_today || {})[m] || 0;
           return `<div class="dash-usage-row">
             <div class="dash-usage-label"><span>${m}</span><span>${n} / ${cap}</span></div>
             ${usageBar(n, cap)}

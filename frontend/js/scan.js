@@ -356,6 +356,12 @@
   }
 
   function renderPerson(report) {
+    const PLATFORM_SVGS = {
+      github: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.22 2.2.82A7.6 7.6 0 018 4.6c.68.003 1.36.092 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.19 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>',
+      twitter: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M22.46 6c-.77.35-1.6.58-2.46.69a4.3 4.3 0 001.88-2.37 8.59 8.59 0 01-2.72 1.04 4.28 4.28 0 00-7.29 3.9A12.14 12.14 0 013 4.79a4.28 4.28 0 001.32 5.72 4.25 4.25 0 01-1.94-.54v.05a4.28 4.28 0 003.43 4.2 4.3 4.3 0 01-1.93.07 4.29 4.29 0 004 2.97A8.6 8.6 0 012 19.54a12.13 12.13 0 006.56 1.92c7.88 0 12.2-6.53 12.2-12.2 0-.19-.01-.39-.02-.58A8.7 8.7 0 0022.46 6z"/></svg>',
+      instagram: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M7 2C4.24 2 2 4.24 2 7v10c0 2.76 2.24 5 5 5h10c2.76 0 5-2.24 5-5V7c0-2.76-2.24-5-5-5H7zm5 5.5A3.5 3.5 0 0115.5 11 3.5 3.5 0 0112 14.5 3.5 3.5 0 018.5 11 3.5 3.5 0 0112 7.5zM18 6.5a.9.9 0 11-1.8 0 .9.9 0 011.8 0zM12 9.2a1.8 1.8 0 100 3.6 1.8 1.8 0 000-3.6z"/></svg>',
+      linkedin: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4.98 3.5C4.98 4.88 3.88 6 2.5 6S0 4.88 0 3.5 1.12 1 2.5 1 4.98 2.12 4.98 3.5zM0 8h5v14H0V8zm7.5 0H12v2.2h.1c.5-1 1.8-2.2 3.7-2.2 4 0 4.7 2.6 4.7 6V22h-5v-6.5c0-1.6 0-3.8-2.4-3.8-2.4 0-2.8 1.9-2.8 3.7V22h-5V8z"/></svg>',
+    };
     const pn = document.getElementById('person-name');
     if (pn) pn.textContent = report.name || 'Subject';
     const conf = report.confidence ?? report.score ?? 0;
@@ -378,9 +384,56 @@
       const entries = Object.entries(platforms).filter(([, v]) => v && v.found);
       if (entries.length) {
         pb.classList.remove('hidden');
-        pl.innerHTML = entries.map(([k, v]) =>
-          AKILI.externalLink(v.url, k, 'platform-pill')
-        ).join('');
+        const extractHandle = (url, platform) => {
+          if (!url) return '';
+          try {
+            if (platform === 'github') {
+              const m = url.match(/github\.com\/([\w\-]+)/i); if (m) return '@' + m[1];
+            } else if (platform === 'twitter' || platform === 'x') {
+              const m = url.match(/(?:twitter|x)\.com\/(?:#!\/)?([\w_]+)/i); if (m) return '@' + m[1];
+            } else if (platform === 'instagram') {
+              const m = url.match(/instagram\.com\/([\w\.]+)/i); if (m) return '@' + m[1];
+            } else if (platform === 'linkedin') {
+              const m = url.match(/linkedin\.com\/(?:in|pub)\/([\w\-]+)/i); if (m) return m[1];
+            }
+          } catch (e) {}
+          return '';
+        };
+        pl.innerHTML = entries.map(([k, v]) => {
+          const handle = extractHandle(v.url, k);
+          const label = handle ? `${k} · ${handle}` : k;
+          const href = AKILI.externalUrl(v.url || '');
+          const svg = PLATFORM_SVGS[k] || '';
+          const linkHtml = href
+            ? `<a href="${AKILI.escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="platform-pill">${svg}<span style="margin-left:6px">${AKILI.escapeHtml(label)}</span></a>`
+            : AKILI.escapeHtml(label);
+          return linkHtml;
+        }).join('');
+        // render social profile cards if available
+        const scBlock = document.getElementById('social-cards-block');
+        const scList = document.getElementById('social-cards-list');
+        const cards = report.social_cards || [];
+        if (scBlock && scList) {
+          if (cards.length) {
+            scBlock.classList.remove('hidden');
+            scList.innerHTML = cards.map((c) => {
+              const p = (c.platform || 'profile').toLowerCase();
+              const svg = PLATFORM_SVGS[p] || '';
+              const h = c.handle ? `${AKILI.escapeHtml(c.handle)}` : '';
+              const title = h ? `${p} · ${h}` : p;
+              const bio = c.bio ? `<div class="label-sm" style="color:var(--slate);margin-top:0.25rem">${AKILI.escapeHtml(c.bio)}</div>` : '';
+              const meta = (c.repo_count || c.followers) ? `<div class="label-sm" style="margin-top:0.25rem;color:var(--slate)">${c.repo_count ? c.repo_count + ' repos' : ''}${c.repo_count && c.followers ? ' · ' : ''}${c.followers ? c.followers + ' followers' : ''}</div>` : '';
+              const href = AKILI.externalUrl(c.profile_url || c.url || '');
+              const linkHtml = href
+                ? `<a href="${AKILI.escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="platform-pill">${svg}<span style="margin-left:6px">${AKILI.escapeHtml(title)}</span></a>`
+                : AKILI.escapeHtml(title);
+              return `<div class="social-card">${linkHtml}${bio}${meta}</div>`;
+            }).join('');
+          } else {
+            scBlock.classList.add('hidden');
+            scList.innerHTML = '';
+          }
+        }
       } else pb.classList.add('hidden');
     }
     const breaches = report.breaches || [];

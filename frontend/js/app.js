@@ -535,7 +535,7 @@
 
   function initSidebarLayout() {
     const path = location.pathname.split('/').pop() || 'index.html';
-    const PUBLIC_PAGES = ['index.html', 'about.html', 'login.html', 'signup.html', 'pricing.html', 'privacy.html', 'contact.html', 'admin-login.html'];
+    const PUBLIC_PAGES = ['index.html', 'about.html', 'login.html', 'signup.html', 'privacy.html', 'contact.html', 'admin-login.html'];
     if (PUBLIC_PAGES.includes(path)) return;
     if (document.querySelector('.dashboard-layout') || document.querySelector('.admin-layout') || document.querySelector('.admin-topbar')) return;
     if (!localStorage.getItem('akili_token')) return;
@@ -567,20 +567,19 @@
       { href: 'scan-vulnerability.html', icon: 'bug', color: 'var(--mod-vuln)', name: 'Vulnerability', desc: 'CORS, CSRF, misconfigs' },
       { href: 'scan-subdomains.html', icon: 'git-branch', color: 'var(--mod-subdomain)', name: 'Subdomains', desc: 'CT logs, hidden hosts' },
       { href: 'scan-ip.html', icon: 'network', color: 'var(--mod-ip)', name: 'IP Intelligence', desc: 'Geo, ports, reputation' },
-      { href: 'scan-organization.html', icon: 'building-2', color: 'var(--mod-org)', name: 'Organization', desc: 'ASN and footprint', premium: true },
-      { href: 'scan-auth.html', icon: 'lock', color: '#6366F1', name: 'Authenticated Scan', desc: 'Authorized login testing', premium: true },
+      { href: 'scan-organization.html', icon: 'building-2', color: 'var(--mod-org)', name: 'Organization', desc: 'ASN and footprint' },
+      { href: 'scan-auth.html', icon: 'lock', color: '#6366F1', name: 'Authenticated Scan', desc: 'Authorized login testing' },
     ];
     const INTEL_MODULES = [
-      { href: 'person.html', icon: 'user-search', color: 'var(--mod-person)', name: 'Person Search', desc: 'Public OSINT due diligence' },
-      { href: 'company.html', icon: 'briefcase', color: 'var(--mod-company)', name: 'Company Intel', desc: 'Domains, people, stack', premium: true },
+        { href: 'person.html', icon: 'user-search', color: 'var(--mod-person)', name: 'Person Search', desc: 'Public OSINT due diligence' },
+        { href: 'phone.html', icon: 'phone', color: 'var(--mod-person)', name: 'Phone Investigator', desc: 'Phone number OSINT and social matches' },
+      { href: 'company.html', icon: 'briefcase', color: 'var(--mod-company)', name: 'Company Intel', desc: 'Domains, people, stack' },
       { href: 'email.html', icon: 'mail', color: 'var(--mod-email)', name: 'Email Investigator', desc: 'MX, breaches, validity' },
       { href: 'domain.html', icon: 'shield-check', color: 'var(--mod-domain)', name: 'Domain Reputation', desc: 'Age, typos, safe browsing' },
-      { href: 'graph.html', icon: 'share-2', color: 'var(--mod-graph)', name: 'Relationship Graph', desc: 'Visual entity mapping', premium: true },
+      { href: 'graph.html', icon: 'share-2', color: 'var(--mod-graph)', name: 'Relationship Graph', desc: 'Visual entity mapping' },
     ];
     const TOOL_MODULES = [
       { href: 'quick-scan.html', icon: 'zap', color: '#f59e0b', name: 'Quick Scan', desc: 'No login — light website or email check' },
-      { href: 'templates.html', icon: 'layers', color: 'var(--amber)', name: 'Scan Templates', desc: 'Multi-module one-click runs', premium: true },
-      { href: 'monitor.html', icon: 'activity', color: 'var(--blue)', name: 'Monitor', desc: 'Scheduled re-checks', premium: true },
       { href: 'sandbox.html', icon: 'flask-conical', color: 'var(--slate)', name: 'Sandbox Demo', desc: 'Mock data, no live targets' },
       { href: 'developer.html', icon: 'terminal', color: 'var(--navy)', name: 'Developers', desc: 'Named API keys & limits' },
     ];
@@ -733,6 +732,9 @@
     }
 
     if (toggleBtn) toggleBtn.addEventListener('click', toggleSidebar);
+    // Support legacy pages that use id="sidebar-toggle"
+    const legacyToggle = document.getElementById('sidebar-toggle');
+    if (legacyToggle && legacyToggle !== toggleBtn) legacyToggle.addEventListener('click', toggleSidebar);
     if (closeBtn) closeBtn.addEventListener('click', toggleSidebar);
     if (overlayEl) overlayEl.addEventListener('click', toggleSidebar);
 

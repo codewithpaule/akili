@@ -133,8 +133,6 @@
           </div>
           <div class="dash-header-actions">
             <a href="profile.html" class="btn btn-outline btn-sm">Edit profile</a>
-            <button type="button" class="btn btn-primary btn-sm" id="upgrade-btn">Upgrade plan</button>
-            <button type="button" class="btn btn-outline btn-sm" id="cancel-sub-btn" style="display:none">Cancel subscription</button>
           </div>
         </header>
 
@@ -145,9 +143,9 @@
             <span class="dash-plan-badge" id="plan-badge"></span>
           </article>
           <article class="dash-stat-card">
-            <span class="label-sm">Scans this month</span>
-            <p class="dash-stat-value" id="monthly-scans">—</p>
-            <div class="usage-bar usage-bar-sm"><span id="monthly-scans-bar" style="width:0%"></span></div>
+            <span class="label-sm">Scans today</span>
+            <p class="dash-stat-value" id="daily-scans">—</p>
+            <div class="usage-bar usage-bar-sm"><span id="daily-scans-bar" style="width:0%"></span></div>
           </article>
           <article class="dash-stat-card">
             <span class="label-sm">Hourly API limit</span>
@@ -170,14 +168,7 @@
           </article>
         </section>
 
-        <section class="dash-panel" id="billing-panel">
-          <div class="dash-panel-head">
-            <h2>Plans &amp; payment</h2>
-            <p class="label-sm">Choose a plan and pay with Paystack — you stay on the dashboard until checkout opens.</p>
-          </div>
-          <div id="dash-paystack-alert" class="billing-alert" style="display:none"></div>
-          <div id="dash-billing-picker" class="billing-picker-grid">Loading plans…</div>
-        </section>
+        <!-- Billing and pricing removed — this deployment runs free tier only. -->
 
         <section class="dash-panel">
           <div class="dash-panel-head">
@@ -202,7 +193,6 @@
   <script src="js/config.js"></script>
   <script src="js/app.js"></script>
   <script src="js/auth.js"></script>
-  <script src="js/billing.js"></script>
   <script>
     if (!AKILI_AUTH.requireAuth()) throw new Error('auth');
 
@@ -212,15 +202,15 @@
       { href: 'scan-vulnerability.html', icon: 'bug', color: 'var(--mod-vuln)', name: 'Vulnerability', desc: 'CORS, CSRF, misconfigs' },
       { href: 'scan-subdomains.html', icon: 'git-branch', color: 'var(--mod-subdomain)', name: 'Subdomains', desc: 'CT logs, hidden hosts' },
       { href: 'scan-ip.html', icon: 'network', color: 'var(--mod-ip)', name: 'IP Intelligence', desc: 'Geo, ports, reputation' },
-      { href: 'scan-organization.html', icon: 'building-2', color: 'var(--mod-org)', name: 'Organization', desc: 'ASN and footprint', premium: true },
-      { href: 'scan-auth.html', icon: 'lock', color: '#6366F1', name: 'Authenticated Scan', desc: 'Authorized login testing', premium: true },
+      { href: 'scan-organization.html', icon: 'building-2', color: 'var(--mod-org)', name: 'Organization', desc: 'ASN and footprint' },
+      { href: 'scan-auth.html', icon: 'lock', color: '#6366F1', name: 'Authenticated Scan', desc: 'Authorized login testing' },
     ];
     const INTEL_MODULES = [
       { href: 'person.html', icon: 'user-search', color: 'var(--mod-person)', name: 'Person Search', desc: 'Public OSINT due diligence' },
-      { href: 'company.html', icon: 'briefcase', color: 'var(--mod-company)', name: 'Company Intel', desc: 'Domains, people, stack', premium: true },
+      { href: 'company.html', icon: 'briefcase', color: 'var(--mod-company)', name: 'Company Intel', desc: 'Domains, people, stack' },
       { href: 'email.html', icon: 'mail', color: 'var(--mod-email)', name: 'Email Investigator', desc: 'MX, breaches, validity' },
       { href: 'domain.html', icon: 'shield-check', color: 'var(--mod-domain)', name: 'Domain Reputation', desc: 'Age, typos, safe browsing' },
-      { href: 'graph.html', icon: 'share-2', color: 'var(--mod-graph)', name: 'Relationship Graph', desc: 'Visual entity mapping', premium: true },
+      { href: 'graph.html', icon: 'share-2', color: 'var(--mod-graph)', name: 'Relationship Graph', desc: 'Visual entity mapping' },
     ];
     const QUICK_MODULES = [
       { href: 'quick-scan.html', icon: 'zap', color: '#f59e0b', name: 'Quick scan (guest)', desc: 'No login — light website or email check' },
@@ -228,8 +218,6 @@
       { href: 'email.html', icon: 'mail', color: 'var(--mod-email)', name: 'Full email scan', desc: 'Depth depends on your plan' },
     ];
     const TOOL_MODULES = [
-      { href: 'templates.html', icon: 'layers', color: 'var(--amber)', name: 'Scan Templates', desc: 'Multi-module one-click runs', premium: true },
-      { href: 'monitor.html', icon: 'activity', color: 'var(--blue)', name: 'Monitor', desc: 'Scheduled re-checks', premium: true },
       { href: 'sandbox.html', icon: 'flask-conical', color: 'var(--slate)', name: 'Sandbox Demo', desc: 'Mock data, no live targets' },
       { href: 'developer.html', icon: 'terminal', color: 'var(--navy)', name: 'Developers', desc: 'Named API keys & limits' },
     ];
@@ -318,10 +306,10 @@
       const badge = document.getElementById('plan-badge');
       badge.textContent = plan === 'premium' ? 'Premium' : plan === 'trial' ? '14-day trial' : 'Free tier';
       badge.className = 'dash-plan-badge ' + planBadgeClass(plan);
-      const mUsed = usage.monthly_scans_used ?? 0;
-      const mCap = usage.monthly_total_limit ?? 50;
-      document.getElementById('monthly-scans').textContent = `${mUsed} / ${mCap}`;
-      document.getElementById('monthly-scans-bar').style.width =
+      const mUsed = usage.daily_scans_used ?? 0;
+      const mCap = usage.daily_total_limit ?? 50;
+      document.getElementById('daily-scans').textContent = `${mUsed} / ${mCap}`;
+      document.getElementById('daily-scans-bar').style.width =
         Math.min(100, Math.round((mUsed / mCap) * 100)) + '%';
       document.getElementById('hourly-limit').textContent = String(usage.hourly_limit ?? '—');
       document.getElementById('api-keys-count').textContent =
@@ -331,20 +319,20 @@
         : plan === 'premium' ? 'N/A' : '—';
       document.getElementById('usage-plan-desc').textContent =
         plan === 'premium'
-          ? 'Premium — higher monthly caps on all modules.'
+          ? 'Premium — higher daily caps on all modules.'
           : plan === 'trial'
-            ? 'Trial — all modules unlocked with elevated limits.'
-            : 'Free — core modules after trial ends.';
+            ? 'Trial — all modules unlocked with elevated daily limits.'
+            : 'Free — core modules with daily limits.';
       const caps = usage.module_caps || {};
-      const used = usage.usage_this_month || {};
+      const used = usage.usage_today || {};
       const mods = [...new Set([...Object.keys(caps), ...Object.keys(used)])].sort();
       document.getElementById('usage-bars').innerHTML = mods.length
         ? mods.map((m) => {
             const c = caps[m] || 10;
             const n = used[m] || 0;
-            return `<div class="dash-usage-row"><div class="dash-usage-label"><span>${m}</span><span>${n} / ${c} per month</span></div>${renderUsageBar(n, c)}</div>`;
+            return `<div class="dash-usage-row"><div class="dash-usage-label"><span>${m}</span><span>${n} / ${c} per day</span></div>${renderUsageBar(n, c)}</div>`;
           }).join('')
-        : '<p class="label-sm">No scans yet this month — pick a module from the sidebar to start.</p>';
+        : '<p class="label-sm">No scans yet today — pick a module from the sidebar to start.</p>';
       const apiKeys = keysData.keys || [];
       const keysPanel = document.getElementById('dash-keys-panel');
       const keysMount = document.getElementById('dash-keys-usage');
@@ -356,8 +344,8 @@
       }
       const upgradeBtn = document.getElementById('upgrade-btn');
       const cancelBtn = document.getElementById('cancel-sub-btn');
-      if (upgradeBtn) upgradeBtn.style.display = plan === 'premium' ? 'none' : '';
-      if (cancelBtn) cancelBtn.style.display = plan === 'premium' ? '' : 'none';
+      if (upgradeBtn) upgradeBtn.style.display = 'none';
+      if (cancelBtn) cancelBtn.style.display = 'none';
       if (u.premium_until && plan === 'premium') {
         document.getElementById('trial-ends').textContent =
           'Renews ' + new Date(u.premium_until * 1000).toLocaleDateString();
@@ -395,6 +383,15 @@
       } catch (e) { AKILI.showToast(e.message, 'error'); }
     };
     
+    // Populate with cached session user immediately, then refresh from API
+    try {
+      const _cached = AKILI_AUTH.getUser();
+      if (_cached) {
+        document.getElementById('welcome').textContent = `Hello, ${_cached.name || (_cached.email || '').split('@')[0]}`;
+        document.getElementById('welcome-email').textContent = _cached.email || '';
+      }
+    } catch (e) {}
+
     load()
       .then(() => {
         if (location.hash === '#billing-panel') {

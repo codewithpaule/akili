@@ -1,6 +1,6 @@
 # AKILI — Production Deployment Plan
 
-This guide covers everything needed to deploy AKILI (FastAPI backend + static frontend + SQLite/PostgreSQL + Paystack) from local dev to production.
+This guide covers everything needed to deploy AKILI (FastAPI backend + static frontend + SQLite/PostgreSQL) from local dev to production. Billing has been disabled for this deployment.
 
 ---
 
@@ -29,7 +29,7 @@ This guide covers everything needed to deploy AKILI (FastAPI backend + static fr
 | API | `uvicorn :8001` | Gunicorn+Uvicorn workers behind Nginx |
 | Database | `sqlite:///./akili.db` | `postgresql://...` |
 | Auth | JWT in localStorage | HTTPS only, strong `JWT_SECRET` |
-| Payments | Paystack test keys | Paystack live keys + webhook URL |
+| Payments | Disabled in this deployment | N/A |
 | Admin | `admin-login.html` | Same host, restrict by IP optional |
 
 ---
@@ -47,7 +47,7 @@ Copy `backend/.env.example` → `backend/.env` and set **real** values:
 | `ALLOWED_ORIGINS` | **Yes** | `https://yourdomain.com` only (no `*`) |
 | `FRONTEND_URL` | **Yes** | `https://yourdomain.com` for Paystack callbacks |
 | `GROQ_API_KEY` | **Yes** | Scans need LLM |
-| `PAYSTACK_*` | If billing | Live keys + `PAYSTACK_PREMIUM_PLAN_CODE` |
+| `PAYSTACK_*` | Not required | Billing disabled; ignore Paystack keys |
 | `GOOGLE_CLIENT_ID` | If Google login | Add prod origin in Google Console |
 | `ADMIN_EMAIL` | **Yes** | Bootstrap admin account |
 | `ADMIN_PASSWORD` | **Yes** | Strong password; rotate after first login |
@@ -73,12 +73,9 @@ window.AKILI_CONFIG = {
 - [ ] Database backups scheduled (daily minimum)
 - [ ] `.env` never in git (confirm `.gitignore`)
 
-### 2.4 Paystack (NGN Premium ₦12,000/month)
+### 2.4 Billing
 
-1. Paystack Dashboard → **Settings → API Keys** → Live keys into `.env`
-2. **Plans** → Create monthly ₦12,000 plan → copy **Plan Code** → `PAYSTACK_PREMIUM_PLAN_CODE`
-3. **Settings → Webhooks** → URL: `https://api.yourdomain.com/api/v1/billing/webhook`
-4. Test: checkout from dashboard → verify → confirm `subscription_status` in admin panel
+Billing and premium plans are disabled in this deployment. You may ignore Paystack configuration and related webhook setup.
 
 ### 2.5 Google OAuth
 

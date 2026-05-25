@@ -122,12 +122,12 @@
       { href:'scan-vulnerability.html', color:'var(--mod-vuln)', name:'Vulnerability', desc:'CORS, CSRF, misconfigs' },
       { href:'scan-subdomains.html', color:'var(--mod-subdomain)', name:'Subdomains', desc:'CT logs, hidden links' },
       { href:'scan-ip.html', color:'var(--mod-ip)', name:'IP Intelligence', desc:'Geo, ports, reputation' },
-      { href:'scan-organization.html', color:'var(--mod-org)', name:'Organization', desc:'ASN and footprint', premium: true },
+      { href:'scan-organization.html', color:'var(--mod-org)', name:'Organization', desc:'ASN and footprint' },
       { href:'person.html', color:'var(--mod-person)', name:'Person Search', desc:'Public OSINT due diligence' },
-      { href:'company.html', color:'var(--mod-company)', name:'Company Intel', desc:'Domains, people, stack', premium: true },
+      { href:'company.html', color:'var(--mod-company)', name:'Company Intel', desc:'Domains, people, stack' },
       { href:'email.html', color:'var(--mod-email)', name:'Email Investigator', desc:'MX, breaches, validity' },
       { href:'domain.html', color:'var(--mod-domain)', name:'Domain Reputation', desc:'Safe browsing, age, typos' },
-      { href:'graph.html', color:'var(--mod-graph)', name:'Relationship Graph', desc:'Visual entity mapping', premium: true },
+      { href:'graph.html', color:'var(--mod-graph)', name:'Relationship Graph', desc:'Visual entity mapping' },
     ];
     document.getElementById('modules-grid').innerHTML = MODULES.map(m => `
       <a href="${m.href}" class="module-card${m.premium ? ' locked' : ''}" data-module="${m.href.replace('.html','')}" style="--accent:${m.color}">
@@ -148,8 +148,8 @@
             window.location.href = el.getAttribute('href');
             return;
           }
-          const msg = (res && res.message) ? res.message : 'This feature requires a Premium plan. Start a trial or upgrade to continue.';
-          AKILI.openModal(`<p>${AKILI.escapeHtml(msg)}</p><p style="margin-top:1rem"><a class=\"btn btn-primary\" href=\"signup.html\">Start free trial</a> <a class=\"btn btn-outline\" href=\"pricing.html\">Upgrade</a></p>`, { title: 'Upgrade required' });
+          const msg = (res && res.message) ? res.message : 'This feature requires an account. Start a trial to continue.';
+          AKILI.openModal(`<p>${AKILI.escapeHtml(msg)}</p><p style="margin-top:1rem"><a class=\"btn btn-primary\" href=\"signup.html\">Start free trial</a></p>`, { title: 'Sign up required' });
         });
       });
     }, 300);

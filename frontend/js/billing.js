@@ -87,7 +87,7 @@
           <ul class="billing-plan-features">${(p.highlights || []).slice(0, 4).map((h) => `<li>${AKILI.escapeHtml(h)}</li>`).join('')}</ul>
           ${canPay
             ? `<button type="button" class="btn btn-primary btn-block" data-pay-plan="${id}">Pay ${formatNgn(p.price_ngn)} with Paystack</button>
-               <p class="label-sm" style="margin-top:0.4rem">Card saved · monthly auto-debit</p>`
+               <p class="label-sm" style="margin-top:0.4rem">Card saved</p>`
             : isCurrent && isPremium
               ? '<p class="label-sm" style="color:var(--blue)">You are on Premium</p>'
               : isPremium && !paystackReady

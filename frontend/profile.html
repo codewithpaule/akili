@@ -82,15 +82,15 @@
       const u = data.user;
       const usage = me.usage || {};
       const plan = usage.plan_label || usage.plan || 'free';
-      const mUsed = usage.monthly_scans_used ?? 0;
-      const mCap = usage.monthly_total_limit ?? 50;
+      const mUsed = usage.daily_scans_used ?? 0;
+      const mCap = usage.daily_total_limit ?? 50;
       document.getElementById('profile-usage').innerHTML = `
         <div class="usage-account-head" style="margin-bottom:0.75rem">
           <strong>Account usage</strong>
           <span class="dash-plan-badge plan-${usage.plan || 'free'}">${AKILI.escapeHtml(plan)}</span>
         </div>
         <p style="margin:0;font-size:0.9rem;color:var(--slate)">
-          Scans this month: <strong>${mUsed} / ${mCap}</strong> ·
+          Scans today: <strong>${mUsed} / ${mCap}</strong> ·
           API keys: <strong>${usage.active_api_keys ?? 0} / ${usage.max_api_keys ?? 1}</strong> ·
           Hourly limit: <strong>${usage.hourly_limit ?? '—'}</strong>
         </p>
