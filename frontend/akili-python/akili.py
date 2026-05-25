@@ -6,7 +6,8 @@ import requests
 class Client:
     def __init__(self, api_key: str, sandbox: bool = False, base_url: str = None):
         self.api_key = api_key
-        self.base_url = base_url or ("https://api.akili.io/v1/sandbox" if sandbox else "https://api.akili.io/v1")
+        # Default to deployed Fly backend API
+        self.base_url = base_url or ("https://akili.fly.dev/api/v1/sandbox" if sandbox else "https://akili.fly.dev/api/v1")
         self.headers = {
             "X-API-Key": api_key,
             "Content-Type": "application/json",

@@ -1,7 +1,8 @@
 class AkiliClient {
   constructor(apiKey, sandbox = false, baseUrl = null) {
     this.apiKey = apiKey;
-    this.baseUrl = baseUrl || (sandbox ? 'https://api.akili.io/v1/sandbox' : 'https://api.akili.io/v1');
+    // Use the correct production API host and path
+    this.baseUrl = baseUrl || (sandbox ? 'https://akili.fly.dev/api/v1/sandbox' : 'https://akili.fly.dev/api/v1');
   }
 
   async scanWebsite(url) {

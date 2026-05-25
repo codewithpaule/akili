@@ -167,7 +167,7 @@
               sandboxBtn?.addEventListener('click', () => {
                 setSession('sandbox_mock_token', {
                   name: 'Sandbox Investigator',
-                  email: 'sandbox@akili.io'
+                  email: 'sandbox@akili.com.ng'
                 });
                 if (typeof AKILI !== 'undefined') {
                   AKILI.showToast('Signed in as Sandbox Investigator', 'success');
@@ -182,7 +182,7 @@
             } else {
               setSession('sandbox_mock_token', {
                 name: 'Sandbox Investigator',
-                email: 'sandbox@akili.io'
+                email: 'sandbox@akili.com.ng'
               });
               if (onSuccess) onSuccess();
             }

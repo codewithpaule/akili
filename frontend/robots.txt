@@ -9,4 +9,4 @@ Disallow: /dashboard.html
 Allow: /
 
 # Sitemap (replace with your public domain URL if different)
-Sitemap: https://akili.com.ng//sitemap.xml
+Sitemap: https://akili.com.ng/sitemap.xml
