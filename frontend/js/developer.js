@@ -90,8 +90,7 @@ async function initDeveloper() {
   const banner = document.getElementById('dev-auth-banner');
   const user = AKILI_AUTH.getUser();
   if (banner && user) {
-    const plan = user.effective_plan || user.plan || 'free';
-    banner.textContent = `Signed in as ${user.email} · Plan: ${plan}. Keys inherit your account limits.`;
+    banner.textContent = `Signed in as ${user.email}. Keys inherit your account limits.`;
     banner.classList.remove('disclaimer');
     banner.classList.add('label-sm');
     banner.style.background = 'var(--blue-light)';
@@ -104,20 +103,7 @@ async function initDeveloper() {
   document.getElementById('gen-live')?.addEventListener('click', () => generate(false));
   document.getElementById('gen-test')?.addEventListener('click', () => generate(true));
 
-  document.getElementById('save-agency')?.addEventListener('click', async () => {
-    try {
-      await AKILI.apiFetch('/api/v1/agency/profile', {
-        method: 'POST',
-        body: JSON.stringify({
-          company_name: document.getElementById('agency-name').value,
-          primary_color: document.getElementById('agency-color').value,
-        }),
-      });
-      AKILI.showToast('Agency profile saved', 'success');
-    } catch (e) {
-      AKILI.showToast(e.message, e.message.includes('Pro') || e.message.includes('Premium') ? 'warning' : 'error');
-    }
-  });
+  // Agency profile removed in this deployment — no save handler.
 }
 
 async function loadKeys() {
