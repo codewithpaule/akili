@@ -3,7 +3,7 @@
   const USER_KEY = 'akili_user';
 
   function API() {
-    return (window.AKILI_CONFIG && AKILI_CONFIG.API_BASE) || 'http://localhost:8001';
+    return ((window.AKILI_CONFIG && AKILI_CONFIG.API_BASE) || 'http://localhost:8001').replace(/\/+$/, '');
   }
 
   function isRealSession() {

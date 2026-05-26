@@ -1,5 +1,5 @@
 (function () {
-  const API = () => (window.AKILI_CONFIG && AKILI_CONFIG.API_BASE) || 'http://localhost:8000';
+  const API = () => ((window.AKILI_CONFIG && AKILI_CONFIG.API_BASE) || 'http://localhost:8000').replace(/\/+$/, '');
   const ICONS = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
 
   window.AKILI = {
