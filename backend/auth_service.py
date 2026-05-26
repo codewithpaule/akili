@@ -66,10 +66,16 @@ def _hash_reset_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def create_token(user_id: str) -> str:
+def create_token(user_id: str, admin_session: bool = False, expire_days: Optional[int] = None) -> str:
     now = int(time.time())
-    exp = now + JWT_EXPIRE_DAYS * 86400
+    days = expire_days if expire_days is not None else JWT_EXPIRE_DAYS
+    # Admin sessions should be shorter by default
+    if admin_session and expire_days is None:
+        days = 1
+    exp = now + days * 86400
     payload = {"sub": user_id, "iat": now, "exp": exp}
+    if admin_session:
+        payload["admin_verified"] = True
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
 
 
@@ -99,6 +105,17 @@ def decode_token(token: str) -> Optional[str]:
         except Exception:
             preview = "<token-preview-failed>"
         logger.warning("JWT decode failed: %s; token_preview=%s", str(e), preview)
+        return None
+
+
+def decode_token_payload(token: str) -> Optional[dict]:
+    """Return the decoded JWT payload (without strict exp enforcement)."""
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG], options={"verify_aud": False, "verify_exp": False})
+        return payload
+    except JWTError:
         return None
 
 
@@ -491,9 +508,17 @@ def require_user(request: Request, user: Optional[dict] = Depends(get_current_us
     return user
 
 
-def require_admin(user: dict = Depends(require_user)) -> dict:
+from fastapi import Request
+
+
+def require_admin(request: Request, user: dict = Depends(require_user)) -> dict:
     if not user.get("is_admin"):
         raise HTTPException(403, "Admin access required")
+    # Require admin-verified session token (issued by admin_login)
+    token = _extract_token(request)
+    payload = decode_token_payload(token) if token else None
+    if not payload or not payload.get("admin_verified"):
+        raise HTTPException(403, "Admin re-authentication required")
     return user
 
 
@@ -515,4 +540,4 @@ def admin_login(email: str, password: str, admin_pin: str = "") -> dict:
             raise HTTPException(401, "Invalid email or password")
         if not is_admin_user(row):
             raise HTTPException(403, "This account is not an administrator")
-        return {"token": create_token(row.user_id), "user": user_to_dict(row)}
+        return {"token": create_token(row.user_id, admin_session=True), "user": user_to_dict(row)}
