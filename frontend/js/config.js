@@ -1,24 +1,5 @@
-// Determine API base at runtime so the repo doesn't contain production URLs.
-// - In production the site will use its origin (e.g. https://akili.fly.dev).
-// - In local development we default to the local API at http://localhost:8001.
-function detectApiBase() {
-  try {
-    // Allow an explicit runtime override (generated at deploy time, not committed):
-    // window.AKILI_RUNTIME = { API_BASE: 'https://akili.fly.dev' }
-    if (window && window.AKILI_RUNTIME && window.AKILI_RUNTIME.API_BASE) {
-      return window.AKILI_RUNTIME.API_BASE.replace(/\/$/, '');
-    }
-    const host = (window && window.location && window.location.hostname) || '';
-    if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:8001';
-    // Use the page origin for deployment (same origin API)
-    return (window.location && window.location.origin) || '';
-  } catch (e) {
-    return 'http://localhost:8001';
-  }
-}
-
 window.AKILI_CONFIG = {
-  API_BASE: detectApiBase(),
+  API_BASE: 'https://akili.fly.dev/',
   // Public client ID is loaded from the server to avoid committing it in source
   GOOGLE_CLIENT_ID: null,
 };
