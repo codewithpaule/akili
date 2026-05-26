@@ -605,6 +605,25 @@ async def admin_charts(request: Request, user: dict = Depends(require_admin)):
     return admin_charts_data()
 
 
+# Alias endpoints on a less-common path to reduce discovery surface.
+@app.get("/api/v1/secure-admin/dashboard")
+@limiter.limit("120/minute")
+async def secure_admin_dashboard(request: Request, user: dict = Depends(require_admin)):
+    from admin_service import admin_charts_data, admin_dashboard_stats, paystack_admin_status
+    return {
+        "stats": admin_dashboard_stats(),
+        "billing": paystack_admin_status(),
+        "charts": admin_charts_data(),
+    }
+
+
+@app.get("/api/v1/secure-admin/charts")
+@limiter.limit("120/minute")
+async def secure_admin_charts(request: Request, user: dict = Depends(require_admin)):
+    from admin_service import admin_charts_data
+    return admin_charts_data()
+
+
 @app.get("/api/v1/admin/users")
 @limiter.limit("120/minute")
 async def admin_users_list(

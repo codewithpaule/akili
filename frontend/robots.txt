@@ -4,7 +4,7 @@
 User-agent: *
 Disallow: /api/
 Disallow: /admin
-Disallow: /admin.html
+Disallow: /admin-panel.html
 Disallow: /dashboard.html
 Allow: /
 

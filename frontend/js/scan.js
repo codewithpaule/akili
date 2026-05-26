@@ -1,16 +1,19 @@
 (function () {
-  const cfg = window.AKILI_SCAN || {};
-  const sandbox = cfg.sandbox || false;
-  if (!cfg.public && !sandbox) {
+  // Read initial config to decide whether to allow public access.
+  const _initial_cfg = window.AKILI_SCAN || {};
+  const sandbox = _initial_cfg.sandbox || false;
+  if (!_initial_cfg.public && !sandbox) {
     const token = localStorage.getItem('akili_token');
     if (!token) {
       location.href = 'signup.html';
       return;
     }
   }
-  const SCAN_MODULE = cfg.module || 'scan';
-  const endpoint = cfg.endpoint || '/api/v1/scan/website';
-  const buildBody = cfg.buildBody || (() => ({}));
+
+  function currentCfg() { return window.AKILI_SCAN || {}; }
+  function currentModule() { return currentCfg().module || 'scan'; }
+  function currentEndpoint() { return currentCfg().endpoint || '/api/v1/scan/website'; }
+  function currentBuildBody() { return currentCfg().buildBody || (() => ({})); }
 
   let terminal = document.getElementById('terminal');
   let results = document.getElementById('results');
@@ -141,7 +144,8 @@
     if (!terminal || terminal.querySelector('.terminal-module-label')) return;
     const label = document.createElement('div');
     label.className = 'terminal-module-label';
-    label.textContent = `${SCAN_MODULE} scan session`;
+    const mod = terminal.dataset.scanModule || currentModule();
+    label.textContent = `${mod} scan session`;
     terminal.prepend(label);
   }
 
@@ -525,9 +529,10 @@
       renderSessionList();
     }
     showResultsLoading(false);
-    if (cfg.module === 'person') renderPerson(report);
-    else if (cfg.module === 'email') renderEmail(report);
-    else if (cfg.module === 'ip') renderIp(report);
+    const mod_now = currentCfg().module || 'website';
+    if (mod_now === 'person') renderPerson(report);
+    else if (mod_now === 'email') renderEmail(report);
+    else if (mod_now === 'ip') renderIp(report);
     else renderWebsite(report);
     AKILI.showToast('Scan complete', 'success');
     if (report.scan_id && !sandbox) {
@@ -546,8 +551,9 @@
   }
 
   async function runScan() {
-    const body = buildBody();
-    if (cfg.validate && cfg.validate(body)) return;
+    const body = currentBuildBody()();
+    const cfg_now = currentCfg();
+    if (cfg_now.validate && cfg_now.validate(body)) return;
 
     if (scanAbort) scanAbort.abort();
     scanAbort = new AbortController();
@@ -572,22 +578,24 @@
     if (terminal) {
       terminal.innerHTML = '';
       ensureTerminalHeader();
-      terminal.dataset.scanModule = SCAN_MODULE;
+      terminal.dataset.scanModule = currentModule();
       terminal.dataset.scanId = thisScanId;
       terminal.classList.remove('hidden');
     }
     if (statusBar) {
       statusBar.classList.add('active');
       const t = statusBar.querySelector('.scan-status-text');
-      if (t) t.textContent = `Starting ${SCAN_MODULE} scan…`;
+      if (t) t.textContent = `Starting ${currentModule()} scan…`;
     }
     showResultsLoading(true);
-    AKILI.showToast(`${SCAN_MODULE} scan started`, 'info');
+    AKILI.showToast(`${currentModule()} scan started`, 'info');
     document.body.classList.add('akili-scan-active');
 
+    const ep = currentEndpoint();
+    const cfg = currentCfg();
     const url = sandbox
-      ? `${AKILI.API()}${endpoint.replace('/api/v1/', '/api/v1/sandbox/')}?scenario=${cfg.scenario || 'clean_scan'}`
-      : `${AKILI.API()}${endpoint}`;
+      ? `${AKILI.API()}${ep.replace('/api/v1/', '/api/v1/sandbox/')}?scenario=${cfg.scenario || 'clean_scan'}`
+      : `${AKILI.API()}${ep}`;
 
     try {
       const res = await fetch(url, {
@@ -635,12 +643,13 @@
       document.body.classList.remove('akili-scan-active');
     } finally {
       if (thisScanId === activeScanId) {
-        btn.disabled = false;
-        btn.textContent = cfg.buttonLabel || 'SCAN';
-        if (statusBar) statusBar.classList.remove('active');
-        document.body.classList.remove('akili-scan-active');
-        if (typeof AKILI.refreshHealth === 'function') AKILI.refreshHealth();
-      }
+          btn.disabled = false;
+          const cfg_end = currentCfg();
+          btn.textContent = cfg_end.buttonLabel || 'SCAN';
+          if (statusBar) statusBar.classList.remove('active');
+          document.body.classList.remove('akili-scan-active');
+          if (typeof AKILI.refreshHealth === 'function') AKILI.refreshHealth();
+        }
     }
   }
 

@@ -529,8 +529,13 @@ def admin_charts_data() -> dict:
         )
         plans = {str(p or "trial"): int(c) for p, c in plan_rows}
         premium_n = plans.get("premium", 0)
-        from pricing import PLANS
-        mrr_ngn = premium_n * int(PLANS["premium_monthly"]["price_ngn"])
+        # Pricing may be disabled in this deployment; handle missing keys safely.
+        try:
+            from pricing import PLANS
+            price_ngn = int((PLANS.get("premium_monthly") or {}).get("price_ngn") or 0)
+        except Exception:
+            price_ngn = 0
+        mrr_ngn = premium_n * price_ngn
 
     return {
         "labels": day_buckets,

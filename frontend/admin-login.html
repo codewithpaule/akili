@@ -40,7 +40,7 @@
   <script src="js/admin.js"></script>
   <script>
     if (AKILI_ADMIN.getToken() && AKILI_ADMIN.getUser()?.is_admin) {
-      location.href = 'admin.html';
+      location.href = 'admin-panel.html';
     }
     (function() {
       const form = document.getElementById('admin-login-form');
@@ -91,7 +91,7 @@
           if (!out.user?.is_admin) throw new Error('Not an administrator');
           AKILI_ADMIN.setSession(out.token, out.user);
           AKILI.showToast('Admin signed in', 'success');
-          location.href = 'admin.html';
+          location.href = 'admin-panel.html';
         } catch (err) {
           AKILI.showToast(err.message, 'error');
           // on error, if during PIN step, go back to credentials so user can re-try password
