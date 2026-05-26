@@ -1,5 +1,5 @@
 window.AKILI_CONFIG = {
-  API_BASE: 'https://akili.fly.dev/',
+  API_BASE: 'https://akili.fly.dev',
   // Public client ID is loaded from the server to avoid committing it in source
   GOOGLE_CLIENT_ID: null,
 };
