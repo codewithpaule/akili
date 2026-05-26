@@ -84,7 +84,25 @@
         </div>
       </section>
 
-      <!-- rest of admin panels identical to previous admin.html -->
+      <div id="admin-dynamic"></div>
+
+      <!-- User detail drawer (slides in from right) -->
+      <div id="user-drawer" class="admin-drawer" hidden>
+        <div class="admin-drawer-inner">
+          <button type="button" class="admin-drawer-close" id="drawer-close">&times;</button>
+          <h2 id="drawer-title">User</h2>
+          <div id="drawer-body"></div>
+        </div>
+      </div>
+
+      <!-- Scan detail drawer -->
+      <div id="scan-drawer" class="admin-drawer" hidden>
+        <div class="admin-drawer-inner" style="max-width:900px; width:95%;">
+          <button type="button" class="admin-drawer-close" id="scan-drawer-close">&times;</button>
+          <h2 id="scan-drawer-title">Scan</h2>
+          <div id="scan-drawer-body" style="margin-top:0.5rem; max-height:70vh; overflow:auto;"></div>
+        </div>
+      </div>
     </main>
   </div>
 
@@ -122,15 +140,107 @@
         document.querySelectorAll('.admin-nav-item').forEach((b) => b.classList.remove('active'));
         document.querySelectorAll('.admin-panel').forEach((p) => p.classList.remove('active'));
         btn.classList.add('active');
-        const pane = document.getElementById('tab-' + btn.dataset.tab);
-        if (pane) {
-          pane.classList.add('active');
-          if (typeof loadTab === 'function') loadTab(btn.dataset.tab);
-        } else {
-          AKILI.showToast('Section not available in this build', 'info');
-        }
+        // load the requested tab into the dynamic container
+        if (typeof loadTab === 'function') loadTab(btn.dataset.tab);
       };
     });
+
+    async function loadTab(tab) {
+      const out = document.getElementById('admin-dynamic');
+      if (!out) return;
+      out.innerHTML = '<p class="label-sm">Loading…</p>';
+      try {
+        if (tab === 'overview') return loadOverview();
+        if (tab === 'users') return loadUsers();
+        if (tab === 'scans') return loadScans();
+        if (tab === 'keys') return loadKeys();
+        if (tab === 'contacts') return loadContacts();
+        if (tab === 'events') return loadEvents();
+        if (tab === 'billing') return loadBilling();
+        if (tab === 'review') return loadReview();
+        if (tab === 'monitors') {
+          out.innerHTML = '<p class="label-sm">Monitors have been removed from this deployment.</p>';
+          return;
+        }
+        out.innerHTML = '<p class="label-sm">Section not implemented.</p>';
+      } catch (e) {
+        out.innerHTML = `<p class="label-sm">Error: ${e.message || e}</p>`;
+      }
+    }
+
+    async function loadUsers(page = 1) {
+      const out = document.getElementById('admin-dynamic');
+      out.innerHTML = '<p class="label-sm">Loading users…</p>';
+      const data = await AKILI_ADMIN.api('/api/v1/admin/users?page=' + page + '&limit=25');
+      const rows = data.items.map((r) => `
+        <tr>
+          <td>${esc(r.email)}</td>
+          <td>${esc(r.name)}</td>
+          <td>${esc(r.plan)}</td>
+          <td>${esc(r.role)}</td>
+          <td><button type="button" class="btn btn-outline btn-sm admin-manage-btn" data-uid="${r.user_id}">Manage</button></td>
+        </tr>`);
+      out.innerHTML = `<h2>Users</h2>${tableHtml(['Email','Name','Plan','Role',''], rows)}<div id="users-pager"></div>`;
+      pager(document.getElementById('users-pager'), page, data.total, data.limit, loadUsers);
+      bindUserLinks();
+    }
+
+    async function loadScans(page = 1) {
+      const out = document.getElementById('admin-dynamic');
+      out.innerHTML = '<p class="label-sm">Loading scans…</p>';
+      const data = await AKILI_ADMIN.api('/api/v1/admin/scans?page=' + page + '&limit=30');
+      const rows = data.items.map((r) => `
+        <tr>
+          <td>${esc(r.scan_type)}</td>
+          <td>${esc(r.target)}</td>
+          <td>${esc(r.user_email || r.user_id || '—')}</td>
+          <td>${esc(r.score)}</td>
+          <td><button type="button" class="btn btn-outline btn-sm scan-view-btn" data-scan="${r.scan_id}">View</button></td>
+        </tr>`);
+      out.innerHTML = `<h2>Scans</h2>${tableHtml(['Type','Target','User','Score',''], rows)}<div id="scans-pager"></div>`;
+      pager(document.getElementById('scans-pager'), page, data.total, data.limit, loadScans);
+      bindScanButtons();
+    }
+
+    async function loadKeys(page = 1) {
+      const out = document.getElementById('admin-dynamic');
+      out.innerHTML = '<p class="label-sm">Loading API keys…</p>';
+      const data = await AKILI_ADMIN.api('/api/v1/admin/keys?page=' + page + '&limit=30');
+      const rows = data.items.map((k) => `<tr><td>${esc(k.user_email)}</td><td>${esc(k.key_name)}</td><td>${esc(k.key_preview)}</td><td>${esc(k.is_active)}</td></tr>`);
+      out.innerHTML = `<h2>API Keys</h2>${tableHtml(['User','Name','Key preview','Active'], rows)}<div id="keys-pager"></div>`;
+      pager(document.getElementById('keys-pager'), page, data.total, data.limit, loadKeys);
+    }
+
+    async function loadContacts(page = 1) {
+      const out = document.getElementById('admin-dynamic');
+      out.innerHTML = '<p class="label-sm">Loading contacts…</p>';
+      const data = await AKILI_ADMIN.api('/api/v1/admin/contacts?page=' + page + '&limit=30');
+      const rows = data.items.map((c) => `<tr><td>${esc(c.email)}</td><td>${esc(c.name)}</td><td>${esc(c.subject)}</td><td>${esc(c.timestamp)}</td></tr>`);
+      out.innerHTML = `<h2>Contacts</h2>${tableHtml(['Email','Name','Subject','When'], rows)}<div id="contacts-pager"></div>`;
+      pager(document.getElementById('contacts-pager'), page, data.total, data.limit, loadContacts);
+    }
+
+    async function loadEvents(page = 1) {
+      const out = document.getElementById('admin-dynamic');
+      out.innerHTML = '<p class="label-sm">Loading audit events…</p>';
+      const data = await AKILI_ADMIN.api('/api/v1/admin/audit-logs?page=' + page + '&limit=50');
+      const rows = data.items.map((e) => `<tr><td>${esc(e.timestamp)}</td><td>${esc(e.user_email)}</td><td>${esc(e.action)}</td><td>${esc(e.detail)}</td></tr>`);
+      out.innerHTML = `<h2>Audit log</h2>${tableHtml(['When','User','Action','Detail'], rows)}<div id="audit-pager"></div>`;
+      pager(document.getElementById('audit-pager'), page, data.total, data.limit, loadEvents);
+    }
+
+    async function loadBilling() {
+      const out = document.getElementById('admin-dynamic');
+      out.innerHTML = '<p class="label-sm">Billing is disabled on this deployment.</p>';
+    }
+
+    async function loadReview() {
+      const out = document.getElementById('admin-dynamic');
+      out.innerHTML = '<p class="label-sm">Loading review items…</p>';
+      const data = await AKILI_ADMIN.api('/api/v1/admin/review/scans?page=1&limit=30');
+      const rows = data.items.map((r) => `<tr><td>${esc(r.scan_type)}</td><td>${esc(r.target)}</td><td>${esc(r.timestamp)}</td></tr>`);
+      out.innerHTML = `<h2>Review</h2>${tableHtml(['Type','Target','When'], rows)}`;
+    }
 
     function tableHtml(headers, rows) {
       if (!rows.length) return '<p class="label-sm">No records.</p>';
@@ -183,13 +293,87 @@
       renderCharts(data.charts || {});
     }
 
-    // Minimal openUser + binder so recent users can be inspected in this lightweight admin page.
+    // Full openUser drawer + binder
     async function openUser(userId) {
       if (!userId) return;
       try {
         const u = await AKILI_ADMIN.api('/api/v1/admin/users/' + encodeURIComponent(userId));
-        // simple modal replacement: show JSON in alert for now
-        alert(JSON.stringify(u, null, 2));
+        document.getElementById('drawer-title').textContent = u.email || 'User';
+        document.getElementById('drawer-body').innerHTML = `
+          <dl class="admin-dl">
+            <dt>Name</dt><dd>${esc(u.name)}</dd>
+            <dt>Plan</dt><dd>${esc(u.plan)} / effective: ${esc(u.effective_plan || '')}</dd>
+            <dt>Role</dt><dd>${esc(u.role)}</dd>
+            <dt>Subscription</dt><dd>${esc(u.subscription_status || '—')}</dd>
+            <dt>Scans</dt><dd>${u.scan_count}</dd>
+            <dt>API keys</dt><dd>${u.api_key_count}</dd>
+            <dt>Joined</dt><dd>${fmt(u.created_at)}</dd>
+          </dl>
+          <div class="admin-drawer-actions" style="margin-top:1rem">
+            <button type="button" class="btn btn-outline btn-sm" id="act-free">Set Expired</button>
+            <button type="button" class="btn btn-outline btn-sm" id="act-trial">Extend trial</button>
+            <select id="act-role" class="admin-input" style="margin-left:0.5rem">
+              <option value="user" ${u.role === 'user' ? 'selected' : ''}>user</option>
+              <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>admin</option>
+            </select>
+            <button type="button" class="btn btn-outline btn-sm" id="act-save-role">Save role</button>
+            <button type="button" class="btn btn-outline btn-sm" id="act-deactivate">Deactivate</button>
+          </div>
+          <details style="margin-top:1rem"><summary class="label-sm">Usage this month</summary><pre class="admin-pre">${esc(JSON.stringify(u.usage_this_month || {}, null, 2))}</pre></details>
+        `;
+
+        const drawer = document.getElementById('user-drawer');
+        drawer.removeAttribute('hidden');
+        drawer.style.display = 'flex';
+
+        document.getElementById('act-free').onclick = async () => {
+          await AKILI_ADMIN.api('/api/v1/admin/users/' + userId + '/plan', { method: 'POST', body: JSON.stringify({ plan_id: 'free' }) });
+          AKILI.showToast('Set expired', 'success');
+          openUser(userId);
+        };
+        document.getElementById('act-trial').onclick = async () => {
+          await AKILI_ADMIN.api('/api/v1/admin/users/' + userId + '/plan', { method: 'POST', body: JSON.stringify({ plan_id: 'trial' }) });
+          AKILI.showToast('Trial extended', 'success');
+          openUser(userId);
+        };
+        document.getElementById('act-save-role').onclick = async () => {
+          const role = document.getElementById('act-role').value;
+          await AKILI_ADMIN.api('/api/v1/admin/users/' + userId, { method: 'PATCH', body: JSON.stringify({ role }) });
+          AKILI.showToast('Role updated', 'success');
+          openUser(userId);
+        };
+        const deactBtn = document.getElementById('act-deactivate');
+        if (u.is_active) {
+          deactBtn.textContent = 'Deactivate';
+          deactBtn.className = 'btn btn-outline btn-sm';
+          deactBtn.style.color = '#ef4444';
+          deactBtn.style.borderColor = '#fca5a5';
+          deactBtn.onclick = async () => {
+            if (!confirm('Deactivate this user?')) return;
+            await AKILI_ADMIN.api('/api/v1/admin/users/' + userId, { method: 'DELETE' });
+            AKILI.showToast('User deactivated', 'success');
+            openUser(userId);
+            loadUsers(usersPage);
+          };
+        } else {
+          deactBtn.textContent = 'Activate';
+          deactBtn.className = 'btn btn-primary btn-sm';
+          deactBtn.style.removeProperty('color');
+          deactBtn.style.removeProperty('border-color');
+          deactBtn.onclick = async () => {
+            await AKILI_ADMIN.api('/api/v1/admin/users/' + userId, { method: 'PATCH', body: JSON.stringify({ is_active: true }) });
+            AKILI.showToast('User activated', 'success');
+            openUser(userId);
+            loadUsers(usersPage);
+          };
+        }
+
+        // close handler
+        document.getElementById('drawer-close').onclick = () => {
+          drawer.setAttribute('hidden', '');
+          drawer.style.display = 'none';
+        };
+
       } catch (err) {
         AKILI.showToast(err.message || 'Could not load user', 'error');
       }
@@ -202,6 +386,47 @@
           openUser(btn.getAttribute('data-uid'));
         };
       });
+    }
+
+    function bindScanButtons() {
+      document.querySelectorAll('.scan-view-btn[data-scan]').forEach((btn) => {
+        btn.onclick = (e) => {
+          e.preventDefault();
+          openScan(btn.getAttribute('data-scan'));
+        };
+      });
+    }
+
+    async function openScan(scanId) {
+      if (!scanId) return;
+      try {
+        const rep = await AKILI_ADMIN.api('/api/v1/admin/scans/' + encodeURIComponent(scanId) + '/report');
+        document.getElementById('scan-drawer-title').textContent = 'Report ' + scanId;
+        document.getElementById('scan-drawer-body').innerHTML = `
+          <p><strong>Target:</strong> ${esc(rep.target || rep.name || rep.email || scanId)}</p>
+          <p><strong>Type:</strong> ${esc(rep.scan_type || '—')} &nbsp; <strong>Score:</strong> ${esc(rep.score != null ? rep.score : '—')} &nbsp; <strong>Grade:</strong> ${esc(rep.grade || '—')}</p>
+          <hr>
+          <h3>Summary</h3>
+          <p>${esc(rep.summary || rep.ai_summary || rep.profile_narrative || '—')}</p>
+          <h3>Findings</h3>
+          <pre class="admin-pre">${esc(JSON.stringify(rep.findings || [], null, 2))}</pre>
+          <h3>Full JSON</h3>
+          <pre class="admin-pre">${esc(JSON.stringify(rep, null, 2))}</pre>
+          <div style="margin-top:1rem"><button id="del-scan-btn" class="btn btn-outline btn-sm">Delete scan</button></div>
+        `;
+        const sd = document.getElementById('scan-drawer');
+        sd.removeAttribute('hidden'); sd.style.display = 'flex';
+        document.getElementById('scan-drawer-close').onclick = () => { sd.setAttribute('hidden',''); sd.style.display='none'; };
+        document.getElementById('del-scan-btn').onclick = async () => {
+          if (!confirm('Delete this scan?')) return;
+          await AKILI_ADMIN.api('/api/v1/admin/scans/' + scanId, { method: 'DELETE' });
+          AKILI.showToast('Scan deleted', 'success');
+          sd.setAttribute('hidden',''); sd.style.display='none';
+          loadScans(scansPage);
+        };
+      } catch (e) {
+        AKILI.showToast(e.message || 'Failed to load report', 'error');
+      }
     }
 
     function renderCharts(ch) {
