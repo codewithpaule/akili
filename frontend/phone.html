@@ -40,31 +40,10 @@
   <script src="js/config.js"></script>
   <script src="js/app.js"></script>
   <script>
-    document.getElementById('phone-normalize-btn').addEventListener('click', async () => {
-      const v = document.getElementById('phone-input').value.trim();
-      if (!v) return AKILI.showToast('Enter phone', 'error');
-      try {
-        const res = await AKILI.apiFetch('/api/v1/phone/normalize', { method: 'POST', body: JSON.stringify({ phone: v }) });
-        const d = await res.json();
-        document.getElementById('phone-normalized').textContent = JSON.stringify(d);
-        document.getElementById('phone-results').classList.remove('hidden');
-      } catch (e) { AKILI.showToast(e.message || 'Normalize failed', 'error'); }
-    });
-    document.getElementById('phone-scan-btn').addEventListener('click', async () => {
-      const v = document.getElementById('phone-input').value.trim();
-      if (!v) return AKILI.showToast('Enter phone', 'error');
-      try {
-        const res = await AKILI.apiFetch('/api/v1/phone/scan', { method: 'POST', body: JSON.stringify({ phone: v }) });
-        const d = await res.json();
-        document.getElementById('phone-normalized').textContent = JSON.stringify(d.normalized || {});
-        const matches = d.social_matches || [];
-        const mount = document.getElementById('phone-matches');
-        mount.innerHTML = matches.length ? matches.map(m=>`<div class="platform-row"><strong>${AKILI.escapeHtml(m.platform)}</strong>: ${AKILI.externalLink(m.url||'', m.handle||m.url||'view')}</div>`).join('') : '<p class="label-sm">No matches</p>';
-        const ev = document.getElementById('phone-evidence');
-        ev.innerHTML = (d.evidence||[]).slice(0,12).map(it=>`<div style="margin-bottom:0.5rem">${AKILI.externalLink(it.link||'', it.link||it.title||'source')}<div class="label-sm" style="color:var(--slate)">${AKILI.escapeHtml(it.snippet||'')}</div></div>`).join('');
-        document.getElementById('phone-results').classList.remove('hidden');
-      } catch (e) { AKILI.showToast(e.message || 'Scan failed', 'error'); }
-    });
+    // Phone Investigator temporarily disabled in this deployment.
+    document.getElementById('phone-scan-btn').disabled = true;
+    document.getElementById('phone-normalize-btn').disabled = true;
+    document.getElementById('phone-input').placeholder = 'Phone Investigator disabled in this deployment';
   </script>
 </body>
 </html>

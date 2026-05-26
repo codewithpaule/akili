@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>API Search — AKILI</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+  <div class="container" style="padding:2rem">
+    <h1>API Search</h1>
+    <p class="label-sm">Inspect and try API endpoints (useful for debugging and integration).</p>
+
+    <div class="card" style="margin-top:1rem">
+      <label for="endpoint">Endpoint (full URL)</label>
+      <input id="endpoint" placeholder="https://example.com/api/v1/get-aa" style="width:100%;padding:0.5rem;margin-top:0.5rem;border:1px solid var(--border);border-radius:var(--radius)">
+      <div style="display:flex;gap:0.5rem;margin-top:0.5rem;align-items:center">
+        <select id="method" style="padding:0.4rem">
+          <option>GET</option>
+          <option>POST</option>
+          <option>PUT</option>
+          <option>PATCH</option>
+          <option>DELETE</option>
+          <option>OPTIONS</option>
+        </select>
+        <button class="btn btn-primary" id="try-btn">Send Request</button>
+        <button class="btn btn-outline" id="examples-btn">Insert Example</button>
+      </div>
+
+      <label for="payload" style="margin-top:0.75rem">Payload (JSON)</label>
+      <textarea id="payload" rows="6" style="width:100%;padding:0.5rem;border:1px solid var(--border);border-radius:var(--radius);"></textarea>
+
+      <div style="margin-top:0.75rem">
+        <label class="label-sm">Response</label>
+        <pre id="response" class="code-block" style="max-height:320px;overflow:auto"></pre>
+      </div>
+    </div>
+
+    <div style="margin-top:1rem"><a href="developer.html">Back to Developers</a></div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/api-search.js"></script>
+</body>
+</html>

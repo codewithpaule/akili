@@ -1,6 +1,8 @@
 import logging
 import os
 import time
+import httpx
+from llm import ask_llm, API_SCAN_PROMPT
 import uuid
 from typing import Optional
 
@@ -239,6 +241,15 @@ class OrgBody(BaseModel):
 
 class EmailBody(BaseModel):
     email: str = Field(..., max_length=254)
+
+
+class ProxyBody(BaseModel):
+    url: str = Field(..., max_length=500)
+    method: Optional[str] = Field(default='GET')
+    headers: Optional[dict] = None
+    body: Optional[dict] = None
+    timeout: Optional[int] = Field(default=8)
+    analyze: Optional[bool] = Field(default=False)
 
 
 class ContactBody(BaseModel):
@@ -943,6 +954,49 @@ async def public_scan_api(request: Request, body: UrlBody):
     scan_id = str(uuid.uuid4())
     log_scan(scan_id, "api")
     return _stream_agent("api", url, scan_id, user_id="", scan_tier="guest")
+
+
+@app.post("/api/v1/proxy/fetch")
+@limiter.limit("30/minute")
+async def proxy_fetch(request: Request, body: ProxyBody, user: dict = Depends(require_user)):
+    """Proxy an external API endpoint server-side (avoids CORS). Requires authenticated user.
+
+    Enforces host validation (no private/internal hosts) via `validate_url` and rate limits.
+    If `analyze` is true and LLM providers are configured, the response will be summarized by the LLM.
+    """
+    _require_json(request)
+    url = validate_url(body.url)
+    method = (body.method or 'GET').upper()
+    allowed_methods = {"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"}
+    if method not in allowed_methods:
+        raise HTTPException(400, "Unsupported HTTP method")
+    timeout = max(1, min(int(body.timeout or 8), 30))
+    headers = body.headers or {}
+    payload = body.body
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.request(method, url, headers=headers, json=payload)
+    except Exception as e:
+        raise HTTPException(502, f"Upstream request failed: {str(e)}")
+    ct = resp.headers.get('content-type', '')
+    try:
+        data = resp.json() if 'application/json' in ct else resp.text
+    except Exception:
+        data = resp.text
+    out = {
+        "status": resp.status_code,
+        "headers": dict(resp.headers),
+        "body": data,
+    }
+    if body.analyze:
+        try:
+            # ask LLM to summarize the response
+            user_ctx = json.dumps({"url": url, "method": method, "status": resp.status_code, "headers": dict(resp.headers), "body": data}, default=str)
+            analysis, provider = ask_llm(API_SCAN_PROMPT, user_ctx, allow_ensemble=True)
+            out["analysis"] = {"provider": provider, "result": analysis}
+        except Exception:
+            out["analysis_error"] = "LLM analysis failed"
+    return out
 
 
 @app.post("/api/v1/billing/upgrade")

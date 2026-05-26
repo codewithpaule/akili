@@ -572,13 +572,13 @@
     ];
     const INTEL_MODULES = [
         { href: 'person.html', icon: 'user-search', color: 'var(--mod-person)', name: 'Person Search', desc: 'Public OSINT due diligence' },
-        { href: 'phone.html', icon: 'phone', color: 'var(--mod-person)', name: 'Phone Investigator', desc: 'Phone number OSINT and social matches' },
       { href: 'company.html', icon: 'briefcase', color: 'var(--mod-company)', name: 'Company Intel', desc: 'Domains, people, stack' },
       { href: 'email.html', icon: 'mail', color: 'var(--mod-email)', name: 'Email Investigator', desc: 'MX, breaches, validity' },
       { href: 'domain.html', icon: 'shield-check', color: 'var(--mod-domain)', name: 'Domain Reputation', desc: 'Age, typos, safe browsing' },
-      { href: 'graph.html', icon: 'share-2', color: 'var(--mod-graph)', name: 'Relationship Graph', desc: 'Visual entity mapping' },
+      // Relationship Graph removed
     ];
     const TOOL_MODULES = [
+      { href: 'api-search.html', icon: 'search', color: 'var(--navy)', name: 'API Search', desc: 'Search the API and docs' },
       { href: 'quick-scan.html', icon: 'zap', color: '#f59e0b', name: 'Quick Scan', desc: 'No login — light website or email check' },
       { href: 'sandbox.html', icon: 'flask-conical', color: 'var(--slate)', name: 'Sandbox Demo', desc: 'Mock data, no live targets' },
       { href: 'developer.html', icon: 'terminal', color: 'var(--navy)', name: 'Developers', desc: 'Named API keys & limits' },

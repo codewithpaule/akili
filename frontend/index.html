@@ -77,16 +77,7 @@
     <div class="modules-grid" id="modules-grid"></div>
   </section>
 
-  <section class="graph-section">
-    <div class="container graph-wrap">
-      <div>
-        <h2>See how everything connects</h2>
-        <p style="color:#94A3B8;margin:1rem 0">Relationship mapping across domains, people, IPs, and companies.</p>
-        <a href="graph.html" class="btn btn-outline" style="color:#fff;border-color:#fff">Explore Graph</a>
-      </div>
-      <div id="landing-graph"></div>
-    </div>
-  </section>
+  <!-- Relationship Graph removed for free deployment -->
 
   <section class="container" style="padding:4rem 1.5rem">
     <h2 style="text-align:center;margin-bottom:2rem">How it works</h2>
@@ -141,7 +132,8 @@
       { href:'company.html', color:'var(--mod-company)', name:'Company Intel', desc:'Domains, people, stack' },
       { href:'email.html', color:'var(--mod-email)', name:'Email Investigator', desc:'MX, breaches, validity' },
       { href:'domain.html', color:'var(--mod-domain)', name:'Domain Reputation', desc:'Safe browsing, age, typos' },
-      { href:'graph.html', color:'var(--mod-graph)', name:'Relationship Graph', desc:'Visual entity mapping' },
+      // Relationship Graph removed
+      { href:'api-search.html', color:'var(--navy)', name:'API Search', desc:'Search the API and docs' },
     ];
     document.getElementById('modules-grid').innerHTML = MODULES.map(m => `
       <a href="${m.href}" class="module-card${m.premium ? ' locked' : ''}" data-module="${m.href.replace('.html','')}" style="--accent:${m.color}">

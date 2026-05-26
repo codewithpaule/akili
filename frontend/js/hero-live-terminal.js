@@ -170,17 +170,7 @@
         '[DONE] Template run finished · 3 modules',
       ],
     },
-    {
-      name: 'Relationship Graph',
-      lines: () => [
-        '[AKILI] Graph intelligence (demo)',
-        '[FOUND] Node: example.com (domain)',
-        '[FOUND] Node: 203.0.113.1 (ip)',
-        '[FOUND] Node: Jane Doe (person)',
-        '[FOUND] Edge: domain → ip',
-        '[DONE] Graph ready for exploration',
-      ],
-    },
+    // Relationship Graph demo removed
   ];
 
   function targetFor(mod) {

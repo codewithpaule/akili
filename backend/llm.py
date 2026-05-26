@@ -17,6 +17,15 @@ import time
 load_dotenv()
 logger = logging.getLogger("akili.llm")
 
+# Prompt template for summarizing API endpoints and responses
+API_SCAN_PROMPT = (
+    "You are an expert API analyst. Given the HTTP request and response details, produce a concise JSON summary. "
+    "Return valid JSON only with the following top-level fields when applicable: `summary` (short description), "
+    "`endpoints` (array of observed endpoint patterns), `methods` (array of supported HTTP methods), `status_codes` "
+    "(list of common response codes), `content_types` (list of observed Content-Types), `security_issues` (array of strings), "
+    "and `recommendations` (array of actionable suggestions). Be factual and base conclusions on headers and response bodies provided."
+)
+
 GROQ_API_KEY = (os.getenv("GROQ_API_KEY", "") or "").strip()
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 GEMINI_API_KEY = (os.getenv("GEMINI_API_KEY", "") or "").strip()
