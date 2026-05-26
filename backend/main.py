@@ -796,6 +796,15 @@ async def admin_review_llm_calls(request: Request, page: int = 1, limit: int = 5
     return list_llm_calls(page=page, limit=limit, scan_id=scan_id or "")
 
 
+@app.get("/api/v1/public-config")
+@limiter.limit("600/minute")
+async def public_config(request: Request):
+    """Return non-sensitive public config for frontend (e.g., Google client ID)."""
+    return {
+        "GOOGLE_CLIENT_ID": os.getenv("GOOGLE_CLIENT_ID", "") or "",
+    }
+
+
 @app.post("/api/v1/admin/review/scans/{scan_id}/review")
 @limiter.limit("60/minute")
 async def admin_mark_scan_reviewed(request: Request, scan_id: str, body: ReviewMarkBody, user: dict = Depends(require_admin)):

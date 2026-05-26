@@ -4,4 +4,5 @@ backend/.venv/
 backend/**/__pycache__/
 *.pyc
 frontend/js/config.local.js
+frontend/js/config.runtime.js
 .DS_Store

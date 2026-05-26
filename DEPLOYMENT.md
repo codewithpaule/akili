@@ -85,6 +85,34 @@ Billing and premium plans are disabled in this deployment. You may ignore Paysta
 
 ---
 
+## Runtime frontend config (Vercel)
+
+If you host the frontend separately (e.g., Vercel) and your API is on a different host (e.g., Fly), generate a small runtime config file during the build so the deployed frontend knows the correct `API_BASE` without committing it to source.
+
+1. In your Vercel project settings add an Environment Variable:
+
+    - `API_BASE` = `https://akili.fly.dev` (or your API host)
+
+2. Add a build step (before the frontend build) to generate `frontend/js/config.runtime.js` using the included script:
+
+    - Build Command (example):
+
+      ```bash
+      bash ./scripts/gen-runtime-config.sh
+      # then your normal build step, e.g. `npm run build` or `echo 'static site'`
+      ```
+
+    - The script writes `window.AKILI_RUNTIME = { API_BASE: 'https://akili.fly.dev' };` to `frontend/js/config.runtime.js`.
+
+3. The file `frontend/js/config.runtime.js` is ignored by git (listed in `.gitignore`) so it won't be committed.
+
+Notes:
+
+- If you use Vercel's build step UI, add `bash ./scripts/gen-runtime-config.sh` as the first command in your build commands.
+- Alternatively, you can generate the same file in any CI by echoing the `API_BASE` env var to the file.
+
+---
+
 ## 3. Database
 
 ### 3.1 SQLite (staging / small)
