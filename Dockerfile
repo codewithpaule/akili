@@ -2,13 +2,14 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY backend/requirements.txt .
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+COPY backend/requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY backend/ .
+COPY backend/ /app/
 
 EXPOSE 8080
 
-# Use the PORT env var if provided by the platform (Fly sets $PORT). Fall back to 8080.
-# Use shell form so environment variable expansion works.
-CMD sh -c "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}"
+CMD sh -c "gunicorn main:app -k uvicorn.workers.UvicornWorker -w 2 -b 0.0.0.0:${PORT:-8080}"
