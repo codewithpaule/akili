@@ -5,6 +5,37 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 
+PUBLIC_PATH_PREFIXES = (
+    "/api/v1/auth/",
+    "/api/v1/public/",
+)
+
+PUBLIC_PATHS = {
+    "/",
+    "/api/v1/health",
+    "/api/v1/breaches/nigeria",
+    "/api/v1/public-config",
+    "/api/v1/billing/pricing",
+    "/api/v1/plans",
+}
+
+
+def should_skip_api_key_validation(request: Request) -> bool:
+    """Return True for routes whose handler/dependencies own auth, or public routes."""
+    path = str(request.url.path)
+    if request.method == "OPTIONS":
+        return True
+    if request.headers.get("Authorization") or request.headers.get("X-Session-Token"):
+        return True
+    if path in PUBLIC_PATHS:
+        return True
+    if any(path.startswith(prefix) for prefix in PUBLIC_PATH_PREFIXES):
+        return True
+    if "/health" in path:
+        return True
+    return False
+
+
 def get_reset_timestamp() -> int:
     """Get the timestamp for the next hour reset."""
     now = datetime.utcnow()
@@ -79,12 +110,10 @@ async def update_key_last_used(key_id: str):
 
 async def validate_api_request(request: Request, call_next):
     """Sharp API key validation middleware for all /api/v1/* routes except public and health."""
-    # Skip public routes and health endpoint
-    path = str(request.url.path)
-    if "/public/" in path or "/health" in path or "/auth/" in path:
+    if should_skip_api_key_validation(request):
         return await call_next(request)
     
-    api_key = request.headers.get("X-API-Key")
+    api_key = request.headers.get("X-API-Key") or request.headers.get("x-api-key")
     
     # No key provided
     if not api_key:
@@ -212,13 +241,7 @@ class APIKeyValidationMiddleware(BaseHTTPMiddleware):
     """Middleware to validate API keys for protected routes."""
     
     async def dispatch(self, request: Request, call_next):
-        # Skip public routes and health endpoint
-        path = str(request.url.path)
-        if "/public/" in path or "/health" in path or "/auth/" in path:
-            return await call_next(request)
-        
-        # Skip docs and redoc - they'll be handled separately
-        if path in ["/docs", "/redoc", "/openapi.json"]:
+        if should_skip_api_key_validation(request):
             return await call_next(request)
         
         return await validate_api_request(request, call_next)

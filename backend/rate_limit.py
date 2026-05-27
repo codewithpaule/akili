@@ -12,6 +12,9 @@ limiter = Limiter(key_func=get_remote_address)
 def get_tier_from_request(request) -> tuple[str, int, bool]:
     """Returns (tier_name, hourly_limit, is_sandbox)."""
     api_key = request.headers.get("X-API-Key") or request.headers.get("x-api-key")
+    if not api_key:
+        return "browser", TIER_LIMITS["browser"], False
+
     resolved = lookup_api_key(api_key, increment_usage=False)
     if resolved:
         if resolved.get("is_sandbox"):

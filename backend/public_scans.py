@@ -50,7 +50,7 @@ async def check_ssrf_protection(url: str):
     if not hostname:
         raise HTTPException(status_code=400, detail="Invalid URL")
     
-    if _is_private_ip(hostname):
+    if hostname.lower() in {"localhost", "localhost.localdomain"} or _is_private_ip(hostname):
         raise HTTPException(status_code=400, detail="Private IP addresses are not allowed")
 
 
