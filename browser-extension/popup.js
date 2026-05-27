@@ -28,13 +28,18 @@ chrome.tabs.query({active: true, currentWindow: true}, async (tabs) => {
   }
   
   try {
-    const result = await fetch(`${API_BASE}/api/v1/public/scan/website`, {
+    // Use authenticated deep scan endpoint
+    const result = await fetch(`${API_BASE}/api/v1/scan/website`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-API-Key': apiKey
       },
-      body: JSON.stringify({ url })
+      body: JSON.stringify({ 
+        url,
+        module: 'website',
+        deep: true
+      })
     });
     
     const data = await result.json();

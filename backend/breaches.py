@@ -6,17 +6,16 @@ logger = logging.getLogger("akili.breaches")
 async def get_nigeria_breaches():
     url = "https://api.xposedornot.com/v1/breaches"
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.get(
                 url,
                 headers={
                     "User-Agent": "AKILI-Platform/1.0"
-                },
-                timeout=10.0
+                }
             )
             if response.status_code != 200:
                 logger.error("Failed to fetch breaches from XposedOrNot: status=%s", response.status_code)
-                return []
+                return {"breaches": [], "total": 0, "source": "xposedornot"}
             
             data = response.json()
             
@@ -73,8 +72,12 @@ async def get_nigeria_breaches():
                         "records": item.get("records", 0)
                     })
                     
-            return nigeria_breaches
+            return {
+                "breaches": nigeria_breaches,
+                "total": len(nigeria_breaches),
+                "source": "xposedornot"
+            }
             
     except Exception as e:
         logger.exception("Error while fetching/parsing Nigerian breaches")
-        return []
+        return {"breaches": [], "total": 0, "source": "xposedornot", "error": str(e)}

@@ -6,6 +6,8 @@ import re
 import time
 import uuid
 from typing import Any, Generator
+from functools import lru_cache
+from datetime import datetime, timedelta
 
 from dotenv import load_dotenv
 from groq import Groq
@@ -37,6 +39,35 @@ logger = logging.getLogger("akili.agent")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 MAX_ITERATIONS = 8
+
+# Simple in-memory cache for expensive operations
+_tool_cache = {}
+_cache_ttl = 300  # 5 minutes
+
+
+def _get_cache_key(tool: str, target: str) -> str:
+    """Generate cache key for tool results."""
+    return f"{tool}:{target}"
+
+
+def _get_cached_result(tool: str, target: str) -> Any:
+    """Get cached result if available and not expired."""
+    key = _get_cache_key(tool, target)
+    if key in _tool_cache:
+        cached = _tool_cache[key]
+        if time.time() - cached["timestamp"] < _cache_ttl:
+            return cached["result"]
+    return None
+
+
+def _set_cached_result(tool: str, target: str, result: Any):
+    """Cache tool result."""
+    key = _get_cache_key(tool, target)
+    _tool_cache[key] = {
+        "result": result,
+        "timestamp": time.time()
+    }
+
 
 BASELINE_TOOLS = {
     "website": ["ssl_check", "headers", "fingerprint", "whois_check", "ports", "port_scanner", "tech_fingerprint", "link_crawler", "cve_lookup"],
@@ -377,6 +408,18 @@ def _normalize_tool(name: str) -> str:
 def run_tool(name: str, target: str, context: dict) -> dict | None:
     name = _normalize_tool(name)
     module = context.get("module", "")
+    
+    # Check cache for expensive tools
+    cacheable_tools = {"ssl_check", "whois_check", "fingerprint", "headers", "ip_intel"}
+    if name in cacheable_tools:
+        cached = _get_cached_result(name, target)
+        if cached:
+            context.setdefault("tools_used", []).append(name)
+            context.setdefault("tool_results", []).append(cached)
+            for f in cached.get("findings", []):
+                context.setdefault("findings", []).append(f)
+            return cached
+    
     allowed = set(get_available_tools(module))
     if allowed and name not in allowed:
         context.setdefault("tools_used", []).append(name)
@@ -405,6 +448,11 @@ def run_tool(name: str, target: str, context: dict) -> dict | None:
         if inspect.iscoroutine(result):
             from tools.async_util import run_async
             result = run_async(result)
+        
+        # Cache expensive tool results
+        if name in cacheable_tools:
+            _set_cached_result(name, target, result)
+        
         context.setdefault("tool_results", []).append(result)
         for f in result.get("findings", []):
             context.setdefault("findings", []).append(f)

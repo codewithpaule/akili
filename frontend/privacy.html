@@ -3,47 +3,161 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Privacy — AKILI</title>
+  <title>Privacy Policy — AKILI</title>
   <link rel="stylesheet" href="css/main.css">
   <link rel="stylesheet" href="css/components.css">
   <link rel="stylesheet" href="css/pages.css">
 </head>
 <body>
   <div id="nav-mount"></div>
-  <main class="container" style="padding:1.5rem 1.5rem 4rem;max-width:800px">
+  <main class="container" style="padding:1.5rem 1.5rem 4rem;max-width:900px">
     <div class="page-hero" style="padding-top:0.5rem">
       <h1>Privacy Policy</h1>
-      <p class="lead"><em>Last updated: May 2025</em> — How AKILI handles your account, scans, and API usage.</p>
+      <p class="lead"><em>Last updated: May 2026</em> — How AKILI handles your data in compliance with Nigerian Data Protection Act (NDPA) 2023 and global privacy standards.</p>
     </div>
+
     <section class="legal-section card" style="padding:1.5rem">
-      <h2>1. What we collect</h2>
+      <h2>1. Introduction</h2>
+      <p>AKILI ("we", "our", "us") is committed to protecting your privacy and personal data. This Privacy Policy explains how we collect, use, and protect your information in accordance with the Nigerian Data Protection Act (NDPA) 2023, the Nigeria Data Protection Regulation (NDPR) 2019, and international standards including GDPR where applicable.</p>
+      <p>By using AKILI's services, you agree to the collection and use of information in accordance with this policy.</p>
+    </section>
+
+    <section class="legal-section card" style="padding:1.5rem;margin-top:1rem">
+      <h2>2. Data Controller Information</h2>
+      <p><strong>Data Controller:</strong> AKILI</p>
+      <p><strong>Contact:</strong> codewpaule@gmail.com</p>
+      <p><strong>Jurisdiction:</strong> Federal Republic of Nigeria</p>
+      <p><strong>Regulatory Framework:</strong> Nigerian Data Protection Act (NDPA) 2023, NDPR 2019</p>
+    </section>
+
+    <section class="legal-section card" style="padding:1.5rem;margin-top:1rem">
+      <h2>3. What We Collect</h2>
+      <h3>Account Information:</h3>
       <ul>
-        <li>Account: email, name, password (bcrypt hash), optional Google ID</li>
-        <li>Scan reports stored by scan ID (target, findings, scores)</li>
-        <li>API key previews and usage counters (not raw keys)</li>
-        <li>Per-module daily usage for rate limits</li>
+        <li>Email address (used as primary identifier)</li>
+        <li>Name (optional)</li>
+        <li>Password (stored as bcrypt hash, never in plain text)</li>
+        <li>Optional Google OAuth ID for authentication</li>
+      </ul>
+      <h3>Scan Data:</h3>
+      <ul>
+        <li>Scan targets (domains, IPs, emails) stored by scan ID</li>
+        <li>Scan findings, scores, and reports</li>
+        <li>Timestamps of scan activities</li>
+      </ul>
+      <h3>API Usage:</h3>
+      <ul>
+        <li>API key usage counters (requests per day/month)</li>
+        <li>API key metadata (name, tier, creation date)</li>
+        <li>Rate limit tracking for fair usage</li>
+      </ul>
+      <h3>Technical Data:</h3>
+      <ul>
+        <li>IP address for rate limiting and security</li>
+        <li>Browser type and version</li>
+        <li>Device information</li>
+        <li>Referring website</li>
       </ul>
     </section>
+
     <section class="legal-section card" style="padding:1.5rem;margin-top:1rem">
-      <h2>2. What we do not store</h2>
+      <h2>4. What We Do NOT Store</h2>
       <ul>
-        <li>Raw API keys (only SHA-256 hashes)</li>
-        <li>Passwords in plain text</li>
-        <li>Full request logs of every URL you scan in production logging</li>
+        <li>Raw API keys (only SHA-256 hashes are stored)</li>
+        <li>Passwords in plain text (bcrypt hashed only)</li>
+        <li>Full request logs of every URL scanned in production</li>
+        <li>Credit card or payment information (processed by third-party payment processors)</li>
+        <li>Personal content from scanned websites beyond security findings</li>
       </ul>
     </section>
+
     <section class="legal-section card" style="padding:1.5rem;margin-top:1rem">
-      <h2>3. Third-party services</h2>
-      <p>Scans may call external providers (search, threat intel, AI inference). Their policies apply to data they process. Configure keys in your server <code>.env</code>.</p>
+      <h2>5. Legal Basis for Processing (NDPA 2023 Compliance)</h2>
+      <p>We process your personal data based on the following lawful bases under the Nigerian Data Protection Act 2023:</p>
+      <ul>
+        <li><strong>Consent:</strong> You provide explicit consent when creating an account and using our services</li>
+        <li><strong>Contract:</strong> Processing is necessary for the performance of our service agreement with you</li>
+        <li><strong>Legitimate Interest:</strong> For security, fraud prevention, and service improvement</li>
+        <li><strong>Legal Obligation:</strong> To comply with applicable Nigerian laws and regulations</li>
+      </ul>
     </section>
+
     <section class="legal-section card" style="padding:1.5rem;margin-top:1rem">
-      <h2>4. Your rights</h2>
-      <p>Where GDPR or NDPR applies, you may request access, correction, or deletion via.</p>
+      <h2>6. Data Retention</h2>
+      <p>In accordance with NDPR requirements, we retain your data as follows:</p>
+      <ul>
+        <li><strong>Account Data:</strong> Retained while your account is active. Deleted upon account closure or 30 days after inactivity.</li>
+        <li><strong>Scan Reports:</strong> Retained for 90 days for free tier, 1 year for pro tier, 2 years for enterprise tier.</li>
+        <li><strong>API Usage Logs:</strong> Retained for 30 days for rate limiting and security purposes.</li>
+        <li><strong>Technical Logs:</strong> Retained for 60 days for security monitoring.</li>
+      </ul>
     </section>
+
     <section class="legal-section card" style="padding:1.5rem;margin-top:1rem">
-      <h2>5. Security</h2>
-      <p>HTTPS in production, JWT sessions, rate limits, and tiered access to premium modules. Report issues responsibly via Contact.</p>
+      <h2>7. Third-Party Services</h2>
+      <p>AKILI may use third-party services to enhance our scanning capabilities:</p>
+      <ul>
+        <li><strong>AI/LLM Services:</strong> Groq for AI-powered analysis (data processed under their privacy policy)</li>
+        <li><strong>Threat Intelligence:</strong> External threat feeds for vulnerability detection</li>
+        <li><strong>SSL Certificate Services:</strong> For SSL validation and certificate information</li>
+        <li><strong>Payment Processors:</strong> For subscription payments (we do not store payment details)</li>
+      </ul>
+      <p>All third-party services are carefully vetted for compliance with data protection standards. Their respective privacy policies apply to data they process.</p>
     </section>
+
+    <section class="legal-section card" style="padding:1.5rem;margin-top:1rem">
+      <h2>8. Your Rights Under NDPA 2023</h2>
+      <p>As a data subject under the Nigerian Data Protection Act 2023, you have the following rights:</p>
+      <ul>
+        <li><strong>Right to Access:</strong> Request a copy of your personal data we hold</li>
+        <li><strong>Right to Correction:</strong> Request correction of inaccurate or incomplete data</li>
+        <li><strong>Right to Deletion:</strong> Request deletion of your personal data ("right to be forgotten")</li>
+        <li><strong>Right to Portability:</strong> Request transfer of your data to another service</li>
+        <li><strong>Right to Object:</strong> Object to processing of your personal data in certain circumstances</li>
+        <li><strong>Right to Restrict Processing:</strong> Request limitation of how we process your data</li>
+      </ul>
+      <p>To exercise these rights, contact us at codewpaule@gmail.com. We will respond within 30 days as required by NDPR.</p>
+    </section>
+
+    <section class="legal-section card" style="padding:1.5rem;margin-top:1rem">
+      <h2>9. Data Security</h2>
+      <p>We implement appropriate technical and organizational measures to protect your personal data:</p>
+      <ul>
+        <li>HTTPS/TLS encryption for all data in transit</li>
+        <li>Bcrypt hashing for passwords (never stored in plain text)</li>
+        <li>SHA-256 hashing for API keys</li>
+        <li>JWT-based session authentication with secure token storage</li>
+        <li>Rate limiting to prevent abuse</li>
+        <li>Regular security audits and penetration testing</li>
+        <li>Access controls and principle of least privilege</li>
+        <li>Secure database encryption at rest</li>
+      </ul>
+      <p>Despite our security measures, no method of transmission over the Internet is 100% secure. We cannot guarantee absolute security.</p>
+    </section>
+
+    <section class="legal-section card" style="padding:1.5rem;margin-top:1rem">
+      <h2>10. Data Transfer Outside Nigeria</h2>
+      <p>AKILI primarily stores and processes data within Nigeria. However, we may transfer data to trusted third-party service providers located outside Nigeria for the purposes described in this policy. Such transfers are conducted in accordance with NDPR requirements and only to jurisdictions with adequate data protection laws or with appropriate safeguards in place.</p>
+    </section>
+
+    <section class="legal-section card" style="padding:1.5rem;margin-top:1rem">
+      <h2>11. Children's Privacy</h2>
+      <p>Our services are not intended for children under the age of 18. We do not knowingly collect personal information from children under 18. If we become aware that we have collected personal information from a child under 18, we will take steps to delete such information immediately.</p>
+    </section>
+
+    <section class="legal-section card" style="padding:1.5rem;margin-top:1rem">
+      <h2>12. Changes to This Policy</h2>
+      <p>We may update this Privacy Policy from time to time. We will notify you of any material changes by posting the new policy on this page and updating the "Last updated" date. Your continued use of our services after such changes constitutes your acceptance of the updated policy.</p>
+    </section>
+
+    <section class="legal-section card" style="padding:1.5rem;margin-top:1rem">
+      <h2>13. Contact Us</h2>
+      <p>If you have any questions about this Privacy Policy or our data practices, please contact us:</p>
+      <p><strong>Email:</strong>codewpaule@gmail.com</p>
+      <p><strong>Address:</strong> Lagos, Nigeria</p>
+      <p>For NDPR-related complaints, you may also contact the Nigeria Data Protection Commission (NDPC).</p>
+    </section>
+
     <p style="margin-top:1.5rem"><a href="index.html">← Back to home</a></p>
   </main>
   <script src="js/config.runtime.js"></script>

@@ -886,6 +886,38 @@ async def public_config(request: Request):
     }
 
 
+@app.get("/api/v1/auth/api-keys")
+@limiter.limit("120/minute")
+async def get_user_api_keys(request: Request, user: dict = Depends(require_user)):
+    """Get all API keys for the authenticated user with usage stats."""
+    from database import get_db, ApiKey
+    from api_middleware import get_reset_timestamp
+    
+    with get_db() as db:
+        keys = db.query(ApiKey).filter(ApiKey.user_id == user["user_id"]).all()
+        
+        result = []
+        for key in keys:
+            limit = 50 if key.tier == "free" else 500 if key.tier == "pro" else 2000
+            result.append({
+                "key_id": key.key_id,
+                "key_name": key.key_name,
+                "tier": key.tier,
+                "is_active": key.is_active,
+                "requests_today": key.requests_today or 0,
+                "limit": limit,
+                "remaining": limit - (key.requests_today or 0),
+                "resets_at": get_reset_timestamp(),
+                "created_at": key.created_at,
+                "last_used": key.last_used
+            })
+        
+        return {
+            "keys": result,
+            "total": len(result)
+        }
+
+
 @app.get("/docs")
 async def api_docs(request: Request):
     """Protect API docs behind API key validation."""

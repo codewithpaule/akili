@@ -51,7 +51,6 @@
       <p class="hero-sub fade-up" id="hero-sub" style="opacity:0">AKILI combines cybersecurity scanning, OSINT, and agent-driven analysis — one platform, one blinking eye on what others miss.</p>
       <div class="hero-cta fade-up" id="hero-cta" style="opacity:0">
         <a href="scan-website.html" class="btn btn-primary">Start Scanning</a>
-        <a href="templates.html" class="btn btn-outline">Scan Templates</a>
         <a href="docs.html" class="btn btn-outline">View Docs</a>
       </div>
       <p class="trust-line" id="trust-line" style="opacity:0">Used by security researchers, freelancers, and enterprises.</p>
@@ -96,6 +95,23 @@
           <button onclick="runGuestWebsiteScan()" class="btn btn-primary" id="guest-website-btn">Quick Scan</button>
         </div>
         <div id="guest-website-result" style="display: none; padding: 1rem; background: var(--bg); border-radius: var(--radius); font-size: 0.85rem;"></div>
+      </div>
+
+      <!-- Nigerian Breaches Widget -->
+      <div class="card" style="border-top: 4px solid #EF4444;">
+        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+          <div style="background: #EF444422; color: #EF4444; padding: 0.5rem; border-radius: 8px;">
+            <i data-lucide="alert-triangle"></i>
+          </div>
+          <h3 style="margin: 0; color: var(--navy);">Nigerian Data Breaches</h3>
+        </div>
+        <p style="color: var(--slate); font-size: 0.9rem; margin-bottom: 1rem;">Track recent data breaches affecting Nigerian organizations and infrastructure.</p>
+        <div id="nigeria-breaches-widget" style="padding: 1rem; background: var(--bg); border-radius: var(--radius); font-size: 0.85rem;">
+          <div style="text-align: center; color: var(--slate);">Loading breaches...</div>
+        </div>
+        <div style="margin-top: 1rem;">
+          <a href="breaches.html" class="btn btn-outline" style="width: 100%; text-align: center;">View All Breaches</a>
+        </div>
       </div>
 
     </div>
@@ -347,6 +363,52 @@
         urlBtn.textContent = 'Quick Scan';
       }
     }
+
+    // Load Nigerian Breaches Widget
+    async function loadNigeriaBreachesWidget() {
+      const widget = document.getElementById('nigeria-breaches-widget');
+      if (!widget) return;
+
+      try {
+        const baseUrl = (window.AKILI_CONFIG && AKILI_CONFIG.API_BASE) || 'http://localhost:8001';
+        const response = await fetch(`${baseUrl}/api/v1/breaches/nigeria`);
+        const data = await response.json();
+
+        if (!response.ok) {
+          widget.innerHTML = '<div style="color:#EF4444">Failed to load breaches</div>';
+          return;
+        }
+
+        const breaches = data.breaches || [];
+        const total = data.total || 0;
+
+        if (total === 0) {
+          widget.innerHTML = '<div style="color:#10B981">✓ No recent Nigerian breaches detected</div>';
+          return;
+        }
+
+        const breachesHtml = breaches.slice(0, 3).map(b => `
+          <div style="margin-bottom:0.5rem;padding:0.5rem;background:var(--surface);border-radius:4px;border-left:3px solid #EF4444">
+            <strong>${AKILI.escapeHtml(b.breach)}</strong><br>
+            <small style="color:var(--slate)">Domain: ${AKILI.escapeHtml(b.domain)} | Year: ${b.year}</small><br>
+            <small style="color:var(--slate)">Records: ${b.records || 'Unknown'}</small>
+          </div>
+        `).join('');
+
+        widget.innerHTML = `
+          <div style="margin-bottom:0.5rem;">
+            <strong>Total Breaches:</strong> <span style="color:#EF4444;font-weight:bold">${total}</span>
+          </div>
+          ${breachesHtml}
+          ${total > 3 ? '<div style="margin-top:0.5rem;color:var(--slate);font-size:0.8rem">And ' + (total - 3) + ' more...</div>' : ''}
+        `;
+      } catch (err) {
+        widget.innerHTML = '<div style="color:#EF4444">Failed to load breaches</div>';
+      }
+    }
+
+    // Load Nigerian breaches on page load
+    loadNigeriaBreachesWidget();
 
     (function graph() {
       const w = document.getElementById('landing-graph').clientWidth || 500;
