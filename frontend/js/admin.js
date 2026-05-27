@@ -67,7 +67,7 @@
 
   function logout() {
     clearSession();
-    location.href = 'admin-login.html';
+    location.href = 'index.html';
   }
 
   function fmtTime(ts) {
