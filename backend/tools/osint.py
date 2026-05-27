@@ -125,8 +125,34 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
     social_cards = []
     all_urls = []
 
-    web_results, search_source = await search_with_fallback(query, 10)
-    for item in web_results:
+    # Run all searches in parallel (multi-source approach)
+    search_queries = [
+        f"{name} {keywords}",
+        f'"{name}" {keywords}',
+        f"{name} site:linkedin.com",
+        f"{name} site:github.com",
+        f"{name} site:twitter.com",
+        f"{name} {keywords} Nigeria",
+    ]
+    
+    search_tasks = [search_with_fallback(q, 10) for q in search_queries]
+    search_results = await asyncio.gather(*search_tasks, return_exceptions=True)
+    
+    # Flatten and deduplicate results
+    seen_urls = set()
+    unique_results = []
+    for result_set in search_results:
+        if isinstance(result_set, Exception):
+            continue
+        web_results, _ = result_set
+        for item in web_results:
+            link = item.get("link", "")
+            if link and link not in seen_urls:
+                seen_urls.add(link)
+                unique_results.append(item)
+    
+    # Process unique results
+    for item in unique_results[:30]:
         link = item.get("link", "")
         raw_results.append({
             "title": item.get("title", ""),
@@ -218,7 +244,7 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
 
     # Find explicit emails in search snippets and check breaches only for those exact emails.
     found_emails = []
-    for item in web_results:
+    for item in raw_results:
         emails = re.findall(r"[\w.\-]+@[\w.\-]+\.\w+", item.get("snippet", ""))
         for em in emails:
             if em not in found_emails:
@@ -245,7 +271,7 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
         "name": name,
         "keywords": keywords,
         "raw_results": raw_results,
-        "search_source": search_source,
+        "search_source": "parallel_multi_source",
         "verified_images": verified_images,
         "web_images": web_images,
         "images": web_images,
@@ -261,6 +287,7 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
         "serpapi_configured": bool(os.getenv("SERPAPI_KEY")),
         "confidence_breakdown": confidence,
         "all_urls": all_urls[:20],
+        "total_sources": len(unique_results),
     }
 
 

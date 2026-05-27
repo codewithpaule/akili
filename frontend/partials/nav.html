@@ -15,6 +15,7 @@
     <ul class="nav-links">
       <li><a href="index.html" data-page="index.html" id="nav-home">Home</a></li>
       <li><a href="quick-scan.html" data-page="quick-scan.html" id="nav-quick-scan">Quick Scan</a></li>
+      <li><a href="breaches.html" data-page="breaches.html" id="nav-breaches">Nigerian Breaches</a></li>
       <li class="nav-guest-only"><a href="about.html" data-page="about.html">About</a></li>
       <li class="nav-guest-only"><a href="contact.html" data-page="contact.html">Contact</a></li>
       <li class="nav-guest-only"><a href="privacy.html" data-page="privacy.html">Privacy</a></li>
@@ -34,6 +35,15 @@
   <div class="nav-right">
     <a href="dashboard.html" class="hide-mobile nav-auth-only" id="nav-dashboard" style="display:none;font-weight:600">Dashboard</a>
     <a href="profile.html" class="hide-mobile nav-auth-only" id="nav-profile" style="display:none">Profile</a>
+    <div class="hide-mobile nav-auth-only" id="nav-scan-counter" style="display:none;margin-right:0.5rem;text-align:right">
+      <div style="font-size:0.75rem;color:#64748B">Scans today</div>
+      <div style="font-size:0.85rem;font-weight:600;color:var(--navy)">
+        <span id="scan-used">0</span>/<span id="scan-limit">5</span>
+      </div>
+      <div id="scan-progress" style="height:3px;background:#E2E8F0;border-radius:2px;margin-top:2px;overflow:hidden">
+        <div id="scan-progress-bar" style="height:100%;background:#10B981;width:0%;transition:width 0.3s"></div>
+      </div>
+    </div>
     <button type="button" class="btn btn-outline btn-sm hide-mobile nav-auth-only" id="nav-logout" style="display:none">Sign out</button>
     <a href="login.html" class="hide-mobile nav-guest-only" id="nav-login">Sign in</a>
     <!-- <a href="signup.html" class="hide-mobile nav-guest-only" id="nav-signup" style="font-size:0.85rem">Sign up</a> -->

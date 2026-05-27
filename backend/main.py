@@ -64,6 +64,7 @@ from tools.api_scanner import scan_api
 from tools.verify_domain import check_txt_record, generate_token
 from rate_limit import get_tier_from_request, limiter, rate_limit_headers
 from sandbox import get_mock_report, stream_sandbox
+from api_middleware import APIKeyValidationMiddleware, validate_api_request
 from security import (
     MAX_BODY_BYTES,
     validate_company,
@@ -124,11 +125,12 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, lambda r, e: JSONResponse({
     "error": "rate_limit_exceeded",
     "message": "You have exceeded your rate limit",
-    "upgrade_url": "https://akili.io/developer",
+    "upgrade_url": "https://akili.com.ng/developer",
 }, status_code=429))
 
 app.add_middleware(BodySizeLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(APIKeyValidationMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -404,15 +406,80 @@ def _require_json(request: Request):
 
 
 @app.get("/api/v1/health")
-@limiter.limit("60/minute")
+@limiter.limit("120/minute")
 async def health(request: Request):
-    ok, detail = check_groq_health()
+    from agent import check_groq_health
     return {
         "status": "ok",
         "api": "live",
-        "groq": "connected" if ok else "disconnected",
-        "groq_detail": detail or None,
+        "groq": check_groq_health(),
     }
+
+
+@app.get("/api/v1/breaches/nigeria")
+@limiter.limit("60/minute")
+async def nigeria_breaches(request: Request):
+    from breaches import get_nigeria_breaches
+    data = await get_nigeria_breaches()
+    return data
+
+
+class PublicEmailBody(BaseModel):
+    email: str = Field(..., max_length=254)
+
+
+class PublicWebsiteBody(BaseModel):
+    url: str = Field(..., max_length=500)
+
+
+@app.post("/api/v1/public/scan/email")
+@limiter.limit("30/minute")
+async def public_scan_email(request: Request, body: PublicEmailBody):
+    """Public email scan without authentication (IP rate limited)."""
+    from public_scans import public_email_scan, check_ip_rate_limit
+    
+    # Get client IP
+    client_ip = request.client.host if request.client else "unknown"
+    
+    # Check IP rate limit (30 requests/hour)
+    if not check_ip_rate_limit(client_ip, limit=30):
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "rate_limit_exceeded",
+                "message": "30 requests per hour limit exceeded for this IP",
+                "limit": 30,
+                "reset_at": "1 hour"
+            }
+        )
+    
+    result = await public_email_scan(body.email)
+    return result
+
+
+@app.post("/api/v1/public/scan/website")
+@limiter.limit("30/minute")
+async def public_scan_website(request: Request, body: PublicWebsiteBody):
+    """Public website scan without authentication (IP rate limited, shallow checks only)."""
+    from public_scans import public_website_scan, check_ip_rate_limit
+    
+    # Get client IP
+    client_ip = request.client.host if request.client else "unknown"
+    
+    # Check IP rate limit (30 requests/hour)
+    if not check_ip_rate_limit(client_ip, limit=30):
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "rate_limit_exceeded",
+                "message": "30 requests per hour limit exceeded for this IP",
+                "limit": 30,
+                "reset_at": "1 hour"
+            }
+        )
+    
+    result = await public_website_scan(body.url)
+    return result
 
 
 @app.post("/api/v1/auth/register")
@@ -566,6 +633,20 @@ async def auth_delete_account(request: Request, body: DeleteAccountBody, user: d
 @limiter.limit("120/minute")
 async def auth_usage(request: Request, user: dict = Depends(require_user)):
     return usage_payload(user)
+
+
+@app.get("/api/v1/auth/scan-count")
+@limiter.limit("120/minute")
+async def auth_scan_count(request: Request, user: dict = Depends(require_user)):
+    """Get daily scan count for the authenticated user."""
+    from database import get_daily_scan_count, get_midnight_utc
+    count = get_daily_scan_count(user["user_id"])
+    return {
+        "used": count,
+        "limit": 5,
+        "remaining": 5 - count,
+        "resets_at": get_midnight_utc()
+    }
 
 
 # --- Admin (requires role=admin) ---
@@ -803,6 +884,69 @@ async def public_config(request: Request):
     return {
         "GOOGLE_CLIENT_ID": os.getenv("GOOGLE_CLIENT_ID", "") or "",
     }
+
+
+@app.get("/docs")
+async def api_docs(request: Request):
+    """Protect API docs behind API key validation."""
+    api_key = request.headers.get("X-API-Key")
+    if not api_key:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "error": "missing_api_key",
+                "message": "X-API-Key header is required to access API documentation",
+                "get_key": "akili.com.ng/developer"
+            }
+        )
+    # Validate the key
+    import hashlib
+    from api_middleware import get_api_key
+    key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+    db_key = await get_api_key(key_hash)
+    if not db_key or not db_key["is_active"]:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "error": "invalid_api_key",
+                "message": "Valid API key required to access API documentation",
+                "get_key": "akili.com.ng/developer"
+            }
+        )
+    # If valid, return the actual docs
+    from fastapi.openapi.utils import get_openapi
+    return get_openapi(title=app.title, version=app.version, routes=app.routes)
+
+
+@app.get("/redoc")
+async def api_redoc(request: Request):
+    """Protect ReDoc behind API key validation."""
+    api_key = request.headers.get("X-API-Key")
+    if not api_key:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "error": "missing_api_key",
+                "message": "X-API-Key header is required to access API documentation",
+                "get_key": "akili.com.ng/developer"
+            }
+        )
+    # Validate the key
+    import hashlib
+    from api_middleware import get_api_key
+    key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+    db_key = await get_api_key(key_hash)
+    if not db_key or not db_key["is_active"]:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "error": "invalid_api_key",
+                "message": "Valid API key required to access API documentation",
+                "get_key": "akili.com.ng/developer"
+            }
+        )
+    # If valid, redirect to the actual ReDoc (handled by FastAPI)
+    return JSONResponse({"message": "Valid API key. Access ReDoc at /docs?redoc=1"})
 
 
 @app.post("/api/v1/admin/review/scans/{scan_id}/review")

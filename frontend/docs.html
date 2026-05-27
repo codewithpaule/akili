@@ -37,6 +37,7 @@
           <a href="#scan-org">Organization</a>
           <a href="#scan-company">Company</a>
           <a href="#scan-api">API</a>
+          <a href="#breaches-ng">Nigerian Breaches</a>
         </div>
         <div class="docs-nav-group">
           <span class="docs-nav-label">Data</span>
@@ -241,6 +242,25 @@ COMPLETE:{"scan_id":"…","score":72,"grade":"B",…}</pre></div>
             <p>Notes: POST/PUT/PATCH will send a small non-destructive payload by default. Use `form_payload` to send `application/x-www-form-urlencoded` data.</p>
           </div>
         </div>
+        
+        <div class="docs-endpoint" id="breaches-ng">
+          <div class="docs-endpoint-head"><span class="docs-method get">GET</span><span class="docs-endpoint-path">/api/v1/breaches/nigeria</span></div>
+          <div class="docs-endpoint-body">
+            <p>Returns a filtered real-time feed of confirmed compromised data indexes and breaches targeting Nigerian infrastructure (.ng domains, banks, and major local tech services).</p>
+            <p>Response matches array format:</p>
+            <div class="docs-code-wrap"><button type="button" class="docs-copy-btn" data-copy>Copy</button><pre>[
+  {
+    "breach": "GTBank Customer Portal",
+    "domain": "gtbank.com",
+    "details": "Exposed customer database credentials",
+    "exposed_data": ["Emails", "Names", "Passwords"],
+    "year": "2025",
+    "records": 450000
+  }
+]</pre></div>
+          </div>
+        </div>
+
         <div class="docs-endpoint">
           <div class="docs-endpoint-head"><span class="docs-method post">POST</span><span class="docs-endpoint-path">/api/v1/scan/template</span></div>
           <div class="docs-endpoint-body">

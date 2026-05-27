@@ -166,6 +166,14 @@ class PhoneQueryLog(Base):
     created_at = Column(Integer, nullable=False)
 
 
+class ScanUsage(Base):
+    __tablename__ = "scan_usage"
+
+    user_id = Column(String, primary_key=True)
+    date = Column(String, primary_key=True)
+    scan_count = Column(Integer, default=0)
+
+
 def _table_columns(conn, table: str) -> set[str]:
     from sqlalchemy import inspect
 
@@ -212,6 +220,18 @@ def migrate_schema():
         add_col("users", "renewal_reminder_at", "INTEGER DEFAULT 0")
         add_col("users", "email_verified", "BOOLEAN DEFAULT 0")
         add_col("users", "email_verify_hash", "VARCHAR DEFAULT ''")
+        
+        # Create scan_usage table if it doesn't exist
+        if "scan_usage" not in tables:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS scan_usage (
+                    user_id TEXT NOT NULL,
+                    date TEXT NOT NULL,
+                    scan_count INTEGER DEFAULT 0,
+                    PRIMARY KEY (user_id, date)
+                )
+            """))
+            conn.commit()
 
 
 def init_db():
@@ -815,3 +835,54 @@ def log_phone_query(query_id: str, actor_user_id: str, actor_api_key: str, actio
             redacted=bool(redacted),
             created_at=int(time.time()),
         ))
+
+
+def get_daily_scan_count(user_id: str) -> int:
+    from datetime import datetime
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    with get_db() as db:
+        row = db.query(ScanUsage).filter(
+            ScanUsage.user_id == user_id,
+            ScanUsage.date == today
+        ).first()
+        return row.scan_count if row else 0
+
+
+def check_and_increment_scan_limit(user_id: str) -> int:
+    from datetime import datetime
+    from fastapi import HTTPException
+    
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    
+    with get_db() as db:
+        usage = db.query(ScanUsage).filter(
+            ScanUsage.user_id == user_id,
+            ScanUsage.date == today
+        ).first()
+        
+        count = usage.scan_count if usage else 0
+        
+        if count >= 5:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "error": "daily_limit_reached",
+                    "message": "5 scan limit reached. Resets at midnight UTC.",
+                    "used": count,
+                    "limit": 5,
+                    "resets_at": get_midnight_utc()
+                }
+            )
+        
+        if usage:
+            usage.scan_count = count + 1
+        else:
+            db.add(ScanUsage(user_id=user_id, date=today, scan_count=1))
+        
+        return count + 1
+
+
+def get_midnight_utc() -> int:
+    from datetime import datetime, timedelta
+    tomorrow = (datetime.utcnow() + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    return int(tomorrow.timestamp())

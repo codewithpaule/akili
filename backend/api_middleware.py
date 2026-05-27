@@ -1,0 +1,213 @@
+import hashlib
+from datetime import datetime, timedelta
+from fastapi import Request, HTTPException
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
+
+
+def get_reset_timestamp() -> int:
+    """Get the timestamp for the next hour reset."""
+    now = datetime.utcnow()
+    next_hour = (now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1))
+    return int(next_hour.timestamp())
+
+
+async def get_api_key(key_hash: str) -> dict:
+    """Look up API key by hash."""
+    from database import get_db, ApiKey
+    with get_db() as db:
+        row = db.query(ApiKey).filter(ApiKey.key_hash == key_hash).first()
+        if not row:
+            return None
+        return {
+            "key_id": row.key_id,
+            "user_id": row.user_id,
+            "key_name": row.key_name,
+            "tier": row.tier,
+            "is_active": row.is_active,
+            "requests_today": row.requests_today,
+            "limit": 50 if row.tier == "free" else 500 if row.tier == "pro" else 2000
+        }
+
+
+async def get_user(user_id: str) -> dict:
+    """Get user by ID."""
+    from database import get_db, User
+    with get_db() as db:
+        row = db.query(User).filter(User.user_id == user_id).first()
+        if not row:
+            return None
+        return {
+            "user_id": row.user_id,
+            "email": row.email,
+            "is_active": row.is_active,
+            "email_verified": row.email_verified,
+            "plan": row.plan
+        }
+
+
+async def get_hourly_usage(key_id: str) -> int:
+    """Get hourly usage for an API key."""
+    from database import get_db, ApiKey
+    with get_db() as db:
+        row = db.query(ApiKey).filter(ApiKey.key_id == key_id).first()
+        if not row:
+            return 0
+        return row.requests_today or 0
+
+
+async def update_key_last_used(key_id: str):
+    """Update the last used timestamp for an API key."""
+    import time
+    from database import get_db, ApiKey
+    with get_db() as db:
+        row = db.query(ApiKey).filter(ApiKey.key_id == key_id).first()
+        if row:
+            row.last_used = int(time.time())
+
+
+async def validate_api_request(request: Request, call_next):
+    """Sharp API key validation middleware for all /api/v1/* routes except public and health."""
+    # Skip public routes and health endpoint
+    path = str(request.url.path)
+    if "/public/" in path or "/health" in path or "/auth/" in path:
+        return await call_next(request)
+    
+    api_key = request.headers.get("X-API-Key")
+    
+    # No key provided
+    if not api_key:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "error": "missing_api_key",
+                "message": "X-API-Key header is required",
+                "get_key": "akili.com.ng/developer"
+            }
+        )
+    
+    # Hash and look up
+    key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+    db_key = await get_api_key(key_hash)
+    
+    # Key not found
+    if not db_key:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "error": "invalid_api_key",
+                "message": "API key is invalid or has been revoked",
+                "get_key": "akili.com.ng/developer"
+            }
+        )
+    
+    # Key inactive
+    if not db_key["is_active"]:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "error": "revoked_api_key",
+                "message": "This API key has been revoked"
+            }
+        )
+    
+    # User check
+    user = await get_user(db_key["user_id"])
+    
+    if not user:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "error": "user_not_found",
+                "message": "No user associated with this API key"
+            }
+        )
+    
+    if not user["is_active"]:
+        return JSONResponse(
+            status_code=403,
+            content={
+                "error": "account_suspended",
+                "message": "This account has been suspended"
+            }
+        )
+    
+    if not user["email_verified"]:
+        return JSONResponse(
+            status_code=403,
+            content={
+                "error": "email_not_verified",
+                "message": "Please verify your email address first"
+            }
+        )
+    
+    # Rate limit check
+    limit = db_key["limit"]
+    used = await get_hourly_usage(db_key["key_id"])
+    
+    if used >= limit:
+        reset = get_reset_timestamp()
+        return JSONResponse(
+            status_code=429,
+            content={
+                "error": "rate_limit_exceeded",
+                "message": f"Hourly limit of {limit} requests exceeded",
+                "limit": limit,
+                "used": used,
+                "reset_at": reset,
+                "upgrade": "akili.com.ng/pricing"
+            },
+            headers={
+                "X-RateLimit-Limit": str(limit),
+                "X-RateLimit-Remaining": "0",
+                "X-RateLimit-Reset": str(reset),
+                "Retry-After": "3600"
+            }
+        )
+    
+    # Daily scan limit check
+    from database import get_daily_scan_count
+    scan_count = await get_daily_scan_count(user["user_id"])
+    if scan_count >= 5:
+        from database import get_midnight_utc
+        return JSONResponse(
+            status_code=429,
+            content={
+                "error": "daily_scan_limit",
+                "message": "5 daily scans used. Resets at midnight UTC."
+            }
+        )
+    
+    # All good — attach user to request
+    request.state.user = user
+    request.state.api_key = db_key
+    
+    # Update last used
+    await update_key_last_used(db_key["key_id"])
+    
+    response = await call_next(request)
+    
+    # Add rate limit headers to response
+    response.headers["X-RateLimit-Limit"] = str(limit)
+    response.headers["X-RateLimit-Remaining"] = str(limit - used - 1)
+    response.headers["X-RateLimit-Reset"] = str(get_reset_timestamp())
+    response.headers["X-Scans-Used-Today"] = str(scan_count + 1)
+    response.headers["X-Scans-Remaining"] = str(5 - scan_count - 1)
+    
+    return response
+
+
+class APIKeyValidationMiddleware(BaseHTTPMiddleware):
+    """Middleware to validate API keys for protected routes."""
+    
+    async def dispatch(self, request: Request, call_next):
+        # Skip public routes and health endpoint
+        path = str(request.url.path)
+        if "/public/" in path or "/health" in path or "/auth/" in path:
+            return await call_next(request)
+        
+        # Skip docs and redoc - they'll be handled separately
+        if path in ["/docs", "/redoc", "/openapi.json"]:
+            return await call_next(request)
+        
+        return await validate_api_request(request, call_next)

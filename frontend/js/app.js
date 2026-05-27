@@ -522,6 +522,8 @@
           location.href = 'index.html';
         });
       }
+      // Fetch and update scan counter
+      updateScanCounter();
     } else {
       if (logo) logo.href = 'index.html';
       if (navInner) {
@@ -530,6 +532,41 @@
       }
       guestEls.forEach((el) => { el.style.display = ''; });
       authEls.forEach((el) => { el.style.display = 'none'; });
+    }
+  }
+
+  async function updateScanCounter() {
+    const token = getToken();
+    if (!token) return;
+    
+    const scanCounter = document.getElementById('nav-scan-counter');
+    const scanUsed = document.getElementById('scan-used');
+    const scanLimit = document.getElementById('scan-limit');
+    const scanProgressBar = document.getElementById('scan-progress-bar');
+    
+    if (!scanCounter) return;
+    
+    try {
+      const res = await fetch(`${API()}/api/v1/auth/scan-count`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (scanUsed) scanUsed.textContent = data.used;
+        if (scanLimit) scanLimit.textContent = data.limit;
+        if (scanProgressBar) {
+          const percentage = (data.used / data.limit) * 100;
+          scanProgressBar.style.width = `${percentage}%`;
+          // Change color to red when at 4/5 or 5/5
+          if (data.used >= 4) {
+            scanProgressBar.style.background = '#EF4444';
+          } else {
+            scanProgressBar.style.background = '#10B981';
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch scan count:', e);
     }
   }
 
@@ -575,6 +612,7 @@
       { href: 'company.html', icon: 'briefcase', color: 'var(--mod-company)', name: 'Company Intel', desc: 'Domains, people, stack' },
       { href: 'email.html', icon: 'mail', color: 'var(--mod-email)', name: 'Email Investigator', desc: 'MX, breaches, validity' },
       { href: 'domain.html', icon: 'shield-check', color: 'var(--mod-domain)', name: 'Domain Reputation', desc: 'Age, typos, safe browsing' },
+      { href: 'breaches.html', icon: 'shield-alert', color: '#EF4444', name: 'Nigerian Breaches', desc: 'Nigerian compromised infrastructure data feed' },
       // Relationship Graph removed
     ];
     const TOOL_MODULES = [

@@ -27,6 +27,10 @@ from tools import (
     vulnerability,
     whois_check,
 )
+from tools.port_scanner import run_port_scan
+from tools.tech_fingerprint import run_tech_fingerprint
+from tools.cve_lookup import run_cve_lookup
+from tools.link_crawler import run_link_crawler
 
 load_dotenv()
 logger = logging.getLogger("akili.agent")
@@ -35,16 +39,16 @@ GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 MAX_ITERATIONS = 8
 
 BASELINE_TOOLS = {
-    "website": ["ssl_check", "headers", "fingerprint", "whois_check", "ports"],
-    "vulnerability": ["vulnerability", "headers"],
+    "website": ["ssl_check", "headers", "fingerprint", "whois_check", "ports", "port_scanner", "tech_fingerprint", "link_crawler", "cve_lookup"],
+    "vulnerability": ["vulnerability", "headers", "tech_fingerprint", "cve_lookup"],
     "subdomains": ["subdomains"],
-    "ip": ["ip_intel", "ports"],
+    "ip": ["ip_intel", "ports", "port_scanner"],
     "organization": ["org_scan"],
     "person": ["osint_person"],
-    "company": ["org_scan", "fingerprint"],
+    "company": ["org_scan", "fingerprint", "tech_fingerprint"],
     "email": ["email_intel"],
     "domain": ["domain_rep", "whois_check"],
-    "api": ["headers", "fingerprint", "ssl_check", "ports"],
+    "api": ["headers", "fingerprint", "ssl_check", "ports", "tech_fingerprint", "cve_lookup"],
 }
 
 TOOL_MAP = {
@@ -67,6 +71,10 @@ TOOL_MAP = {
     "osint_person": lambda t, c: _osint_person(t, c),
     "nmap": lambda t, c: ports.run(_as_url(t), c),
     "port_scan": lambda t, c: ports.run(_as_url(t), c),
+    "port_scanner": lambda t, c: run_port_scan(t if c.get("module") == "ip" else _as_url(t).hostname or _as_url(t).netloc, c),
+    "tech_fingerprint": lambda t, c: run_tech_fingerprint(_as_url(t), c),
+    "cve_lookup": lambda t, c: run_cve_lookup(c.get("technologies", []), c),
+    "link_crawler": lambda t, c: run_link_crawler(_as_url(t), c),
 }
 
 # Modules that only run baseline tools — no follow-up AI tool picker (avoids nmap on names)

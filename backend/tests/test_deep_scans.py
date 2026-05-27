@@ -1,0 +1,104 @@
+import pytest
+import sys
+import os
+
+# Add parent directory to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+class TestPortScanner:
+    
+    def test_port_scanner_import(self):
+        """Test that port scanner module can be imported."""
+        from tools.port_scanner import run_port_scan
+        assert run_port_scan is not None
+    
+    def test_common_ports_defined(self):
+        """Test that common ports are defined."""
+        from tools.port_scanner import COMMON_PORTS
+        assert len(COMMON_PORTS) > 0
+        assert 80 in COMMON_PORTS
+        assert 443 in COMMON_PORTS
+
+
+class TestTechFingerprint:
+    
+    def test_tech_fingerprint_import(self):
+        """Test that tech fingerprint module can be imported."""
+        from tools.tech_fingerprint import run_tech_fingerprint
+        assert run_tech_fingerprint is not None
+    
+    def test_tech_patterns_defined(self):
+        """Test that technology patterns are defined."""
+        from tools.tech_fingerprint import TECH_PATTERNS
+        assert len(TECH_PATTERNS) > 0
+        assert "WordPress" in TECH_PATTERNS
+        assert "Nginx" in TECH_PATTERNS
+
+
+class TestCVELookup:
+    
+    def test_cve_lookup_import(self):
+        """Test that CVE lookup module can be imported."""
+        from tools.cve_lookup import run_cve_lookup
+        assert run_cve_lookup is not None
+    
+    def test_known_vulnerabilities_defined(self):
+        """Test that known vulnerabilities database is defined."""
+        from tools.cve_lookup import KNOWN_VULNERABILITIES
+        assert len(KNOWN_VULNERABILITIES) > 0
+        assert "WordPress" in KNOWN_VULNERABILITIES
+
+
+class TestLinkCrawler:
+    
+    def test_link_crawler_import(self):
+        """Test that link crawler module can be imported."""
+        from tools.link_crawler import run_link_crawler
+        assert run_link_crawler is not None
+    
+    def test_common_hidden_paths_defined(self):
+        """Test that common hidden paths are defined."""
+        from tools.link_crawler import COMMON_HIDDEN_PATHS
+        assert len(COMMON_HIDDEN_PATHS) > 0
+        assert "/admin" in COMMON_HIDDEN_PATHS
+        assert "/.env" in COMMON_HIDDEN_PATHS
+
+
+class TestSubdomains:
+    
+    def test_subdomains_import(self):
+        """Test that subdomains module can be imported."""
+        from tools.subdomains import run
+        assert run is not None
+    
+    def test_common_subdomains_defined(self):
+        """Test that common subdomains are defined."""
+        from tools.subdomains import COMMON_SUBDOMAINS
+        assert len(COMMON_SUBDOMAINS) > 0
+        assert "www" in COMMON_SUBDOMAINS
+        assert "admin" in COMMON_SUBDOMAINS
+
+
+class TestAgentIntegration:
+    
+    def test_agent_includes_deep_scans(self):
+        """Test that agent.py includes deep scan tools."""
+        from agent import BASELINE_TOOLS, TOOL_MAP
+        
+        # Check that deep scan tools are in baseline
+        website_tools = BASELINE_TOOLS.get("website", [])
+        assert "port_scanner" in website_tools
+        assert "tech_fingerprint" in website_tools
+        assert "link_crawler" in website_tools
+        assert "cve_lookup" in website_tools
+        
+        # Check that tools are mapped
+        assert "port_scanner" in TOOL_MAP
+        assert "tech_fingerprint" in TOOL_MAP
+        assert "cve_lookup" in TOOL_MAP
+        assert "link_crawler" in TOOL_MAP
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
