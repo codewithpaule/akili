@@ -5,7 +5,18 @@ chrome.tabs.query({active: true, currentWindow: true}, async (tabs) => {
   if (!tabs[0]) return;
   
   const url = tabs[0].url;
-  const domain = new URL(url).hostname;
+  let domain = '';
+  try {
+    const parsed = new URL(url);
+    if (!/^https?:$/.test(parsed.protocol)) {
+      showError('Open a public http or https website before scanning.');
+      return;
+    }
+    domain = parsed.hostname;
+  } catch (error) {
+    showError('This tab URL cannot be scanned.');
+    return;
+  }
   
   document.getElementById('current-domain').textContent = domain;
   
@@ -42,11 +53,12 @@ chrome.tabs.query({active: true, currentWindow: true}, async (tabs) => {
       })
     });
     
-    const data = await result.json();
-    
     if (!result.ok) {
+      const data = await result.json().catch(() => ({}));
       throw new Error(data.detail || data.message || 'Scan failed');
     }
+
+    const data = await readScanResult(result);
     
     // Cache result for 1 hour
     await cacheResult(domain, data);
@@ -76,6 +88,39 @@ chrome.tabs.query({active: true, currentWindow: true}, async (tabs) => {
     showError(error.message);
   }
 });
+
+async function readScanResult(response) {
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    return response.json();
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let finalReport = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+    for (const line of lines) {
+      if (line.startsWith('COMPLETE:')) {
+        finalReport = JSON.parse(line.slice(9));
+      }
+    }
+  }
+
+  if (!finalReport && buffer.startsWith('COMPLETE:')) {
+    finalReport = JSON.parse(buffer.slice(9));
+  }
+  if (!finalReport) {
+    throw new Error('Deep scan finished without a report.');
+  }
+  return finalReport;
+}
 
 function showLoading() {
   document.getElementById('loading').style.display = 'flex';

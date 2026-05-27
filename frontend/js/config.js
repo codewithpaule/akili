@@ -5,7 +5,7 @@ window.AKILI_CONFIG = {
 };
 
 // Load public config (non-sensitive) from the API at runtime.
-(async function loadPublicConfig() {
+window.AKILI_CONFIG_READY = (async function loadPublicConfig() {
   try {
     const base = (window.AKILI_CONFIG.API_BASE || '').replace(/\/$/, '');
     const url = (base || '') + '/api/v1/public-config';

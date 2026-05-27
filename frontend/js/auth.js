@@ -70,13 +70,16 @@
     location.href = 'dashboard.html';
   }
 
-  function renderGoogleButton(containerId, onSuccess) {
+  async function renderGoogleButton(containerId, onSuccess) {
+    if (window.AKILI_CONFIG_READY) {
+      await window.AKILI_CONFIG_READY.catch(() => {});
+    }
     const cid = ((window.AKILI_CONFIG && AKILI_CONFIG.GOOGLE_CLIENT_ID) || '').trim();
     const el = document.getElementById(containerId);
     if (!el) return;
     el.classList.add('google-btn-mount');
     if (!cid) {
-      el.innerHTML = '<p class="label-sm" style="color:var(--slate)">Add GOOGLE_CLIENT_ID to frontend/js/config.js</p>';
+      el.innerHTML = '<p class="label-sm" style="color:var(--slate)">Google sign-in is not configured on the server.</p>';
       return;
     }
     if (!window.google?.accounts?.id) {
@@ -112,7 +115,10 @@
     });
   }
 
-  function waitForGoogleButton(containerId, onSuccess, attempts = 0) {
+  async function waitForGoogleButton(containerId, onSuccess, attempts = 0) {
+    if (window.AKILI_CONFIG_READY) {
+      await window.AKILI_CONFIG_READY.catch(() => {});
+    }
     if (window.google?.accounts?.id) {
       renderGoogleButton(containerId, onSuccess);
       return;

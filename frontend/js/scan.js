@@ -201,7 +201,28 @@
     const gradeEl = document.getElementById('grade');
     if (gradeEl) gradeEl.innerHTML = `<div class="grade-lg grade-${grade}">${grade}</div>`;
     const sumEl = document.getElementById('summary');
-    if (sumEl) sumEl.textContent = report.summary || report.ai_summary || '';
+    if (sumEl) {
+      const topFindings = report.top_findings || report.findings || [];
+      sumEl.innerHTML = `
+        <div class="card" style="border-left:4px solid ${report.ssl_valid === false ? 'var(--red)' : 'var(--green)'};margin-bottom:1rem">
+          <p class="label-sm">Website quick scan</p>
+          <h2 style="margin:0.25rem 0">${AKILI.escapeHtml(report.url || report.target || '')}</h2>
+          <p>Grade: <strong>${AKILI.escapeHtml(grade)}</strong>${report.ssl_expiry ? ` · SSL expires in ${AKILI.escapeHtml(String(report.ssl_expiry))} days` : ''}</p>
+          ${report.summary || report.ai_summary ? `<p>${AKILI.escapeHtml(report.summary || report.ai_summary)}</p>` : ''}
+        </div>
+        ${topFindings.length ? `
+          <div class="card">
+            <h3 style="margin-top:0">Top findings</h3>
+            <ul>${topFindings.map((f) => `
+              <li style="margin-bottom:0.55rem">
+                <strong>${AKILI.escapeHtml(f.severity || 'INFO')}:</strong>
+                ${AKILI.escapeHtml(f.name || f.title || 'Finding')}
+                ${f.explanation ? `<br><span class="label-sm">${AKILI.escapeHtml(f.explanation)}</span>` : ''}
+              </li>
+            `).join('')}</ul>
+          </div>` : ''}
+      `;
+    }
     const purposeEl = document.getElementById('site-purpose');
     if (purposeEl) {
       const bits = [
@@ -327,14 +348,15 @@
   function renderEmail(report) {
     const sumEl = document.getElementById('summary');
     const breaches = report.breaches || [];
-    const pwned = report.pwned || breaches.length > 0;
+    const pwned = report.pwned || report.breach_found || breaches.length > 0;
     const src = report.breach_source || 'breach databases';
     if (sumEl) {
       sumEl.innerHTML = `
         <div class="card" style="border-left:4px solid ${pwned ? 'var(--red)' : 'var(--green)'};margin-bottom:1rem">
           <p class="label-sm">${pwned ? 'Pwned' : 'No breaches found'}</p>
           <h2 style="margin:0.25rem 0">${AKILI.escapeHtml(report.email || report.target || '')}</h2>
-          <p>${AKILI.escapeHtml(report.summary || report.ai_summary || '')}</p>
+          <p>${AKILI.escapeHtml(report.summary || report.ai_summary || (report.mx_valid === false ? 'No valid MX records were found for this domain.' : 'Basic email checks completed.'))}</p>
+          <p class="label-sm">Format: ${report.valid_format === false ? 'invalid' : 'valid'} · MX: ${report.mx_valid === false ? 'not found' : 'found'}</p>
           <p class="label-sm" style="margin-top:0.5rem">Sources: ${AKILI.escapeHtml(src)}</p>
         </div>`;
     }
@@ -607,6 +629,14 @@
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.detail || err.message || res.statusText);
+      }
+
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const report = await res.json();
+        appendTerminal('[DONE] Quick scan complete', thisScanId);
+        renderResults(report, thisScanId);
+        return;
       }
 
       const reader = res.body.getReader();

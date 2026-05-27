@@ -115,6 +115,10 @@ async def public_email_scan(email: str) -> dict:
 
 async def public_website_scan(url: str) -> dict:
     """Public website scan without authentication (shallow checks only)."""
+    url = (url or "").strip()
+    if url and not re.match(r"^https?://", url, flags=re.I):
+        url = f"https://{url.lstrip('/')}"
+
     # Validate URL
     parsed = urlparse(url)
     if not parsed.scheme or not parsed.netloc:

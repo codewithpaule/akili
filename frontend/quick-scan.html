@@ -23,7 +23,7 @@
       </div>
       <div id="panel-web">
         <label class="label-sm">Website URL</label>
-        <input id="url" type="url" placeholder="https://example.com" style="width:100%;padding:0.75rem;border:1px solid var(--border);border-radius:var(--radius);margin:0.5rem 0 1rem">
+        <input id="url" type="text" inputmode="url" placeholder="akili.com.ng" style="width:100%;padding:0.75rem;border:1px solid var(--border);border-radius:var(--radius);margin:0.5rem 0 1rem">
       </div>
       <div id="panel-email" class="hidden">
         <label class="label-sm">Email address</label>
@@ -54,19 +54,26 @@
       document.getElementById('tab-web').className = 'btn btn-outline btn-sm';
     };
     function applyScanConfig() {
+      const normalizeWebsite = (value) => {
+        const raw = String(value || '').trim();
+        if (!raw) return '';
+        return /^https?:\/\//i.test(raw) ? raw : `https://${raw.replace(/^\/+/, '')}`;
+      };
       if (mode === 'email') {
         window.AKILI_SCAN = {
           public: true,
           module: 'email',
           endpoint: '/api/v1/public/scan/email',
-          buildBody: () => ({ email: document.getElementById('email').value }),
+          buttonLabel: 'Run quick scan',
+          buildBody: () => ({ email: document.getElementById('email').value.trim() }),
         };
       } else {
         window.AKILI_SCAN = {
           public: true,
           module: 'website',
           endpoint: '/api/v1/public/scan/website',
-          buildBody: () => ({ url: document.getElementById('url').value }),
+          buttonLabel: 'Run quick scan',
+          buildBody: () => ({ url: normalizeWebsite(document.getElementById('url').value) }),
         };
       }
     }
