@@ -3,9 +3,9 @@
 from fastapi import HTTPException
 
 from database import check_and_increment_scan_limit, count_user_keys, get_daily_scan_count, get_usage_summary, increment_usage
-from plans import can_access_module, effective_plan, get_limits, module_cap
+from plans import ACCOUNT_DAILY_SCAN_LIMIT, can_access_module, effective_plan, get_limits, module_cap
 
-PLAN_LABELS = {"trial": "Account", "premium": "Account", "expired": "Expired"}
+PLAN_LABELS = {"account": "Account", "trial": "Account", "premium": "Account", "expired": "Expired"}
 
 
 def usage_identity(user: dict) -> str:
@@ -25,15 +25,6 @@ def enforce_scan_access(user: dict | None, module: str, *, sandbox: bool = False
 
     identity = usage_identity(user)
     check_and_increment_scan_limit(identity)
-    plan = effective_plan(user)
-    usage = get_usage_summary(identity)
-    cap = module_cap(plan, mod)
-    used = usage.get(mod, 0)
-    if used >= cap:
-        raise HTTPException(
-            429,
-            f"Daily limit for {mod} reached ({cap}). Contact the administrator for higher limits.",
-        )
     increment_usage(identity, mod)
 
 
@@ -52,9 +43,10 @@ def usage_payload(user: dict) -> dict:
         "hourly_limit": limits["hourly"],
         "daily_total_limit": limits.get("daily", limits.get("monthly", 0)),
         "daily_scans_used": daily_used,
-        "daily_scans_remaining": max(0, limits.get("daily", limits.get("monthly", 0)) - daily_used),
+        "daily_scans_remaining": max(0, ACCOUNT_DAILY_SCAN_LIMIT - daily_used),
         "active_api_keys": key_count,
         "max_api_keys": limits["max_keys"],
         "usage_today": usage,
         "module_caps": caps,
+        "quota_model": "account_daily_total",
     }

@@ -647,6 +647,20 @@
     if (typeof AKILI.refreshHealth === 'function') AKILI.refreshHealth();
   }
 
+  function scanErrorMessage(err, fallback = 'Scan failed') {
+    const detail = err && (err.detail || err.message || err.error || err);
+    if (typeof detail === 'string') return detail;
+    if (detail && typeof detail.message === 'string') return detail.message;
+    if (detail && typeof detail.detail === 'string') return detail.detail;
+    if (detail && typeof detail.error === 'string') return detail.error;
+    try {
+      const text = JSON.stringify(detail);
+      return text && text !== '{}' ? text : fallback;
+    } catch (_) {
+      return fallback;
+    }
+  }
+
   async function runScan() {
     const body = currentBuildBody()();
     const cfg_now = currentCfg();
@@ -708,8 +722,7 @@
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        const detail = err.detail || err.message || res.statusText;
-        throw new Error(typeof detail === 'string' ? detail : (detail.message || JSON.stringify(detail)));
+        throw new Error(scanErrorMessage(err, res.statusText));
       }
 
       const contentType = res.headers.get('content-type') || '';
@@ -744,8 +757,9 @@
       }
     } catch (e) {
       if (e.name === 'AbortError') return;
-      AKILI.showToast(e.message || 'Scan failed', 'error');
-      appendTerminal('[CRITICAL] ' + (e.message || 'Error'), thisScanId);
+      const message = scanErrorMessage(e, 'Scan failed');
+      AKILI.showToast(message, 'error');
+      appendTerminal('[CRITICAL] ' + message, thisScanId);
       showResultsLoading(false);
       const session = sessionStore.get(thisScanId);
       if (session) {

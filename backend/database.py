@@ -62,7 +62,7 @@ class User(Base):
     email = Column(String, nullable=False, unique=True)
     password_hash = Column(String, default="")
     name = Column(String, default="")
-    plan = Column(String, default="trial")
+    plan = Column(String, default="account")
     trial_ends_at = Column(Integer, default=0)
     google_id = Column(String, default="")
     phone = Column(String, default="")
@@ -124,7 +124,7 @@ class ApiKey(Base):
     key_name = Column(String, default="")
     key_hash = Column(String, nullable=False, unique=True)
     key_preview = Column(String, nullable=False)
-    tier = Column(String, default="trial")
+    tier = Column(String, default="account")
     created_at = Column(Integer, nullable=False)
     last_used = Column(Integer, default=0)
     requests_today = Column(Integer, default=0)
@@ -893,14 +893,16 @@ def check_and_increment_scan_limit(user_id: str) -> int:
         
         count = usage.scan_count if usage else 0
         
-        if count >= 5:
+        from plans import ACCOUNT_DAILY_SCAN_LIMIT
+
+        if count >= ACCOUNT_DAILY_SCAN_LIMIT:
             raise HTTPException(
                 status_code=429,
                 detail={
                     "error": "daily_limit_reached",
-                    "message": "5 scan limit reached. Resets at midnight UTC.",
+                    "message": f"{ACCOUNT_DAILY_SCAN_LIMIT} daily account scans used. Resets at midnight UTC.",
                     "used": count,
-                    "limit": 5,
+                    "limit": ACCOUNT_DAILY_SCAN_LIMIT,
                     "resets_at": get_midnight_utc()
                 }
             )

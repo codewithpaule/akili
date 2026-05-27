@@ -179,7 +179,7 @@
   <footer class="footer">
     <div class="container footer-grid">
       <div><a href="index.html" class="logo">AKILI</a><p style="color:var(--slate);margin-top:0.5rem;font-size:0.9rem">See everything others miss.</p></div>
-      <div><strong>Product</strong><br><a href="signup.html">Start free trial</a><br><a href="login.html">Sign in</a><br><a href="docs.html">Documentation</a></div>
+      <div><strong>Product</strong><br><a href="signup.html">Create account</a><br><a href="login.html">Sign in</a><br><a href="docs.html">Documentation</a></div>
       <div><strong>Learn</strong><br><a href="about.html">About</a><br><a href="contact.html">Contact</a></div>
       <div><strong>Company</strong><br><a href="about.html">About</a><br><a href="contact.html">Contact</a><br><a href="privacy.html">Privacy</a><br><a href="docs.html">Docs</a></div>
     </div>
@@ -213,7 +213,7 @@
       <a href="${m.href}" class="module-card${m.premium ? ' locked' : ''}" data-module="${m.href.replace('.html','')}" style="--accent:${m.color}">
         <div class="module-icon" style="background:${m.color}22;color:${m.color}"><i data-lucide="shield"></i></div>
         <h4>${m.name}${m.premium ? '<span class="badge-premium">PRO</span>' : ''}</h4><p>${m.desc}</p>
-        ${m.premium ? '<p class="lock-overlay">Premium · free during trial</p>' : ''}
+        ${m.premium ? '<p class="lock-overlay">Account required</p>' : ''}
       </a>`).join('');
 
     // Intercept clicks on locked module cards and check access before navigating
@@ -228,8 +228,8 @@
             window.location.href = el.getAttribute('href');
             return;
           }
-          const msg = (res && res.message) ? res.message : 'This feature requires an account. Start a trial to continue.';
-          AKILI.openModal(`<p>${AKILI.escapeHtml(msg)}</p><p style="margin-top:1rem"><a class=\"btn btn-primary\" href=\"signup.html\">Start free trial</a></p>`, { title: 'Sign up required' });
+          const msg = (res && res.message) ? res.message : 'This feature requires an account.';
+          AKILI.openModal(`<p>${AKILI.escapeHtml(msg)}</p><p style="margin-top:1rem"><a class=\"btn btn-primary\" href=\"signup.html\">Create account</a></p>`, { title: 'Sign up required' });
         });
       });
     }, 300);

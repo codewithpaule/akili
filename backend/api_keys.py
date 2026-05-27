@@ -9,6 +9,7 @@ from plans import PLAN_LIMITS, effective_plan, get_limits
 
 TIER_LIMITS = {
     "browser": 10,
+    "account": PLAN_LIMITS.get("account", {}).get("hourly", 120),
     "trial": PLAN_LIMITS.get("trial", {}).get("hourly", 120),
     "premium": PLAN_LIMITS.get("premium", {}).get("hourly", 500),
     "pro": 500,
@@ -84,7 +85,7 @@ def lookup_api_key(header_value: Optional[str], increment_usage: bool = False) -
             row.last_used = int(time.time())
             row.requests_today = (row.requests_today or 0) + 1
             row.requests_month = (row.requests_month or 0) + 1
-        tier = row.tier or "trial"
+        tier = row.tier or "account"
         return {
             "key_id": row.key_id,
             "user_id": row.user_id or "",
@@ -101,7 +102,7 @@ def resolve_api_key(header_value: Optional[str]) -> Optional[dict]:
 
 
 def _key_usage_fields(row: ApiKey) -> dict:
-    tier = row.tier or "trial"
+    tier = row.tier or "account"
     sandbox = bool(row.is_sandbox)
     hourly_limit = TIER_LIMITS["sandbox"] if sandbox else TIER_LIMITS.get(tier, TIER_LIMITS.get("trial", 120))
     calls_today = row.requests_today or 0

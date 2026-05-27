@@ -11,7 +11,7 @@ def pricing_payload() -> dict:
         "plans": {},
         "scan_profiles": {},
         "plan_comparison": [],
-        "note": "Billing and premium plans are disabled on this deployment.",
+        "note": "Billing and paid plan upgrades are disabled on this deployment. Accounts receive 5 scans per day.",
         "billing_disabled": True,
     }
 

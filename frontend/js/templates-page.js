@@ -77,7 +77,11 @@
         body: JSON.stringify({ template: tpl, target }),
         signal: tplAbort.signal,
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const detail = err.detail || err.message || err.error || res.statusText;
+        throw new Error(typeof detail === 'string' ? detail : (detail.message || JSON.stringify(detail)));
+      }
 
       const reader = res.body.getReader();
       const dec = new TextDecoder();

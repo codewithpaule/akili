@@ -174,7 +174,6 @@ def register_user(
     email_l = email.strip().lower()
     now = int(time.time())
     user_id = str(uuid.uuid4())
-    trial_end = now + TRIAL_DAYS * 86400
 
     with get_db() as db:
         if db.query(User).filter(User.email == email_l).first():
@@ -186,8 +185,8 @@ def register_user(
             password_hash=hash_password(password),
             name=(name or email_l.split("@")[0])[:120],
             phone=(phone or "")[:40],
-            plan="trial",
-            trial_ends_at=trial_end,
+            plan="account",
+            trial_ends_at=0,
             usage_identity=usage_identity_for_email(email_l),
             google_id="",
             created_at=now,
@@ -259,8 +258,8 @@ def google_login(id_token: str) -> dict:
                 email=email,
                 password_hash="",
                 name=name,
-                plan="trial",
-                trial_ends_at=now + TRIAL_DAYS * 86400,
+                plan="account",
+                trial_ends_at=0,
                 usage_identity=usage_identity_for_email(email),
                 google_id=google_sub,
                 created_at=now,
@@ -408,8 +407,8 @@ def patch_user_profile(user_id: str, **fields) -> dict:
 
 
 def upgrade_user_premium(user_id: str) -> dict:
-    # Billing disabled on this deployment: premium activation is not supported.
-    raise HTTPException(410, "Billing and premium activation are disabled on this deployment.")
+    # Billing disabled on this deployment: paid plan activation is not supported.
+    raise HTTPException(410, "Billing and paid plan activation are disabled on this deployment.")
 
 
 def delete_user_account(user_id: str, password: str = "") -> None:

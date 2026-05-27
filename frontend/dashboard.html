@@ -142,7 +142,7 @@
           <article class="dash-stat-card">
             <span class="label-sm">Plan</span>
             <p class="dash-stat-value" id="plan-name">Free</p>
-            <span class="dash-plan-badge" id="plan-badge">Free tier</span>
+            <span class="dash-plan-badge" id="plan-badge">Account</span>
           </article>
           <article class="dash-stat-card">
             <span class="label-sm">Scans today</span>
@@ -308,11 +308,10 @@
       ]);
       const u = me.user;
       const usage = me.usage || keysData.account || {};
-      // Force-hide trial UI for this deployment. Only show premium when `premium_until` exists.
-      const isPremium = Boolean(u && u.premium_until);
+      const plan = 'account';
+      const planLabel = usage.plan_label || 'Account';
+      const isPremium = false;
       const isTrial = false;
-      const plan = isPremium ? 'premium' : isTrial ? 'trial' : 'free';
-      const planLabel = usage.plan_label || (isPremium ? 'PREMIUM' : isTrial ? 'TRIAL' : 'FREE');
       document.getElementById('welcome').textContent = `Hello, ${u.name || (u.email || '').split('@')[0]}`;
       document.getElementById('welcome-email').textContent = u.email || '';
       const memberEl = document.getElementById('member-since');
@@ -327,7 +326,7 @@
       }
       document.getElementById('plan-name').textContent = planLabel;
       const badge = document.getElementById('plan-badge');
-      badge.textContent = isPremium ? 'Premium' : 'Free tier';
+      badge.textContent = 'Account';
       badge.className = 'dash-plan-badge ' + planBadgeClass(plan);
       const mUsed = usage.daily_scans_used ?? 0;
       const mCap = usage.daily_total_limit ?? 50;
@@ -347,12 +346,7 @@
       } else {
         if (trialCard) trialCard.style.display = 'none';
       }
-      document.getElementById('usage-plan-desc').textContent =
-        plan === 'premium'
-          ? 'Premium — higher daily caps on all modules.'
-          : plan === 'trial'
-            ? 'Trial — all modules unlocked with elevated daily limits.'
-            : 'Free — core modules with daily limits.';
+      document.getElementById('usage-plan-desc').textContent = 'Account quota: 5 total scans per day across all modules.';
       const caps = usage.module_caps || {};
       const used = usage.usage_today || {};
       const mods = [...new Set([...Object.keys(caps), ...Object.keys(used)])].sort();

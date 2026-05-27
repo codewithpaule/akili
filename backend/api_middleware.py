@@ -209,14 +209,18 @@ async def validate_api_request(request: Request, call_next):
     
     # Daily scan limit check
     from database import get_daily_scan_count
+    from plans import ACCOUNT_DAILY_SCAN_LIMIT
     scan_count = get_daily_scan_count(user.get("usage_identity") or user["user_id"])
-    if scan_count >= 5:
+    if scan_count >= ACCOUNT_DAILY_SCAN_LIMIT:
         from database import get_midnight_utc
         return JSONResponse(
             status_code=429,
             content={
                 "error": "daily_scan_limit",
-                "message": "5 daily scans used. Resets at midnight UTC."
+                "message": f"{ACCOUNT_DAILY_SCAN_LIMIT} daily account scans used. Resets at midnight UTC.",
+                "used": scan_count,
+                "limit": ACCOUNT_DAILY_SCAN_LIMIT,
+                "resets_at": get_midnight_utc()
             }
         )
     
@@ -234,7 +238,7 @@ async def validate_api_request(request: Request, call_next):
     response.headers["X-RateLimit-Remaining"] = str(limit - used - 1)
     response.headers["X-RateLimit-Reset"] = str(get_reset_timestamp())
     response.headers["X-Scans-Used-Today"] = str(scan_count + 1)
-    response.headers["X-Scans-Remaining"] = str(5 - scan_count - 1)
+    response.headers["X-Scans-Remaining"] = str(ACCOUNT_DAILY_SCAN_LIMIT - scan_count - 1)
     
     return response
 

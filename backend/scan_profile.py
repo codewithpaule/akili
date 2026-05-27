@@ -16,13 +16,14 @@ SCAN_PROFILES = {
     },
     "account": {
         "label": "Account",
-        "max_iterations": 8,
+        "max_iterations": 12,
         "lite": False,
         "website_baseline": ["ssl_check", "headers", "dns", "fingerprint", "tech_fingerprint", "cve_lookup", "ports", "exposed_files", "link_crawler", "vulnerability"],
         "email_baseline": ["email_intel"],
+        "ip_baseline": ["ip_intel", "ports", "port_scanner"],
         "vulnerability_baseline": ["vulnerability", "headers", "fingerprint", "tech_fingerprint", "cve_lookup", "exposed_files", "link_crawler"],
         "ai_depth": "deep",
-        "description": "Deep scan: SSL, headers, DNS/WHOIS, ports, exposed files, crawler, technology/CVE checks, and AI-guided follow-up.",
+        "description": "Deep scan: SSL, headers, DNS/WHOIS, ports, exposed files, crawler, technology/CVE checks, IP intelligence, and AI-guided follow-up.",
     },
     "trial": {
         "label": "Account",
@@ -54,7 +55,9 @@ def tier_for_user(user: dict | None, *, guest: bool = False) -> str:
 
 
 def profile_for_tier(tier: str) -> dict:
-    return dict(SCAN_PROFILES.get(tier, SCAN_PROFILES["trial"]))
+    if tier in ("trial", "premium"):
+        tier = "account"
+    return dict(SCAN_PROFILES.get(tier, SCAN_PROFILES["account"]))
 
 
 def baseline_tools(module: str, tier: str) -> list[str]:
@@ -71,14 +74,14 @@ def baseline_tools(module: str, tier: str) -> list[str]:
 
 def plan_comparison_rows() -> list[dict]:
     rows = []
-    for tid in ("guest", "trial", "premium"):
+    for tid in ("guest", "account"):
         p = SCAN_PROFILES[tid]
         rows.append({
             "tier": tid,
             "name": p["label"],
             "ai_followups": p["max_iterations"],
             "website_checks": len(p.get("website_baseline", [])),
-            "premium_modules": tid in ("trial", "premium"),
+            "premium_modules": False,
             "description": p["description"],
         })
     return rows

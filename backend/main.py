@@ -1282,10 +1282,12 @@ async def plans_info(request: Request):
     from pricing import pricing_payload
 
     return {
-        "trial_days": TRIAL_DAYS,
+        "trial_days": 0,
         "free_modules": sorted(FREE_MODULES),
         "premium_modules": sorted(PREMIUM_MODULES),
         "plans": PLAN_LIMITS,
+        "account_daily_scan_limit": PLAN_LIMITS["account"]["daily"],
+        "quota_model": "account_daily_total",
         "pricing": pricing_payload(),
     }
 

@@ -8,6 +8,7 @@ import uuid
 from typing import Any, Generator
 from functools import lru_cache
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 from groq import Groq
@@ -38,7 +39,7 @@ load_dotenv()
 logger = logging.getLogger("akili.agent")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-MAX_ITERATIONS = 8
+MAX_ITERATIONS = 12
 
 # Simple in-memory cache for expensive operations
 _tool_cache = {}
@@ -102,7 +103,7 @@ TOOL_MAP = {
     "osint_person": lambda t, c: _osint_person(t, c),
     "nmap": lambda t, c: ports.run(_as_url(t), c),
     "port_scan": lambda t, c: ports.run(_as_url(t), c),
-    "port_scanner": lambda t, c: run_port_scan(t if c.get("module") == "ip" else _as_url(t).hostname or _as_url(t).netloc, c),
+    "port_scanner": lambda t, c: run_port_scan(t if c.get("module") == "ip" else _host_from_target(t), c),
     "tech_fingerprint": lambda t, c: run_tech_fingerprint(_as_url(t), c),
     "cve_lookup": lambda t, c: run_cve_lookup(c.get("technologies", []), c),
     "link_crawler": lambda t, c: run_link_crawler(_as_url(t), c),
@@ -119,28 +120,43 @@ TOOL_ALIASES = {
     "exposed": "exposed_files",
 }
 
-NEXT_ACTION_PROMPT = """You are an expert cybersecurity analyst agent running an authorized security assessment.
-Review the findings collected so far and decide the single most valuable next tool to run.
+NEXT_ACTION_PROMPT = """You are AKILI's senior autonomous cybersecurity triage engine running an authorized assessment.
+Your job is to push the scan deeper without wasting a tool call. Read the evidence, identify the riskiest unresolved question, and pick exactly one next tool.
+
+Think like an operator and a defender:
+- If exposed services, databases, admin panels, weak TLS, missing headers, leaked files, suspicious domains, stale technologies, or takeover paths appear, choose the tool that can confirm impact or collect better evidence.
+- Prefer evidence-rich checks over cosmetic checks.
+- Do not repeat tools already used.
+- Stop only when every useful tool has run or no remaining tool can add meaningful security evidence.
+
 Available tools: {available_tools}
 Already used: {used_tools}
-Respond ONLY in valid JSON:
-{{"tool": "tool_name", "reason": "one sentence", "priority": "high|medium|low"}}
-Or if complete: {{"done": true, "reason": "all key checks complete"}}
-Never repeat a used tool. Prioritize high-severity paths."""
 
-FINAL_WEBSITE_PROMPT = """You are a senior cybersecurity analyst. Use ONLY the evidence JSON provided.
+Respond ONLY in valid JSON:
+{{"tool": "tool_name", "reason": "one clear sentence explaining the defensive value", "priority": "high|medium|low"}}
+Or if complete: {{"done": true, "reason": "all meaningful checks complete"}}"""
+
+FINAL_WEBSITE_PROMPT = """You are a senior cybersecurity analyst preparing a report that should make a real software owner want to patch. Use ONLY the evidence JSON provided.
 Produce assessment JSON:
 {{"grade":"A-F","score":0-100,"summary":"3 sentences for site owners","site_purpose":"what this website does — university, shop, blog, etc. Use page_title, page_h1, page_description, og fields","legitimacy":"likely_legit|suspicious|unclear","legitimacy_notes":"brief evidence-based note","findings":[{{"severity":"critical|high|medium|low|info","name":"","explanation":"","recommendation":""}}]}}
 Rules:
+- Actively look for exposed admin/login surfaces, public databases, dangerous ports, missing or weak TLS, missing security headers, old frameworks/CMS/plugins, CVEs tied to detected versions, leaked config/backup files, directory listings, risky CORS, mixed content, insecure cookies, suspicious redirects, weak DNS posture, and excessive attack surface.
+- For each finding, explain why it matters to attackers and what the owner should patch or configure.
+- Do not soften real high-risk evidence. Use critical/high when internet-exposed management services, databases, known exploitable CVEs, leaked secrets, or takeover paths are supported by evidence.
 - .edu / .edu.ng / .gov / university in title → likely_legit unless clear malware/phishing signals.
 - Missing security headers alone must NOT yield grade F or score below 55 for institutional sites.
 - Do not invent breaches, malware, or scams without evidence in the payload.
 - site_purpose must describe the actual organization (e.g. Nigerian university portal), not generic filler.
 NEVER include exploit code."""
 
-IP_PROMPT = """You are a cybersecurity analyst. From IP scan evidence JSON, produce JSON:
+IP_PROMPT = """You are a senior cybersecurity analyst reviewing public IP intelligence for defensive remediation.
+Use ONLY the evidence JSON. Tell the owner what this IP exposes and what to fix first.
+Inspect geolocation, ASN/org, reverse DNS, hosted domains/websites, Shodan evidence if present, open ports, service banners, database/remote-admin exposure, and website titles.
+Escalate severity when public services commonly used for administration or data stores are open (SSH, Telnet, SMB, RDP, VNC, MySQL, PostgreSQL, Redis, MongoDB), when many ports are exposed, or when hosted websites reveal sensitive systems.
+Do not claim compromise without evidence. Do not include exploit code.
+Produce JSON:
 {{"summary":"2-3 sentences","risk_level":"low|medium|high","hosted_websites_summary":"what websites/domains run on this IP","findings":[{{"severity":"info|low|medium|high","name":"","explanation":"","recommendation":""}}]}}
-Use hosted_websites and reverse_dns from evidence. Mention primary website title if present."""
+Use hosted_websites and reverse_dns from evidence. Mention primary website title if present. Recommendations must be concrete patching, firewalling, hardening, or monitoring actions."""
 
 EMAIL_PROMPT = """You are a cybersecurity analyst. From email scan JSON (breaches, MX, disposable), write JSON:
 {{"summary":"2-3 sentences","risk_level":"low|medium|high","recommendations":["action1","action2"],"pwned_assessment":"plain explanation if breaches listed"}}
@@ -157,6 +173,11 @@ def _as_url(target: str) -> str:
     if re.match(r"^\d+\.\d+\.\d+\.\d+", target):
         return f"http://{target}"
     return f"https://{target}"
+
+
+def _host_from_target(target: str) -> str:
+    url = _as_url(target)
+    return urlparse(url).hostname or target
 
 
 def _osint_person(target: str, context: dict) -> dict:
@@ -466,7 +487,7 @@ def get_available_tools(module: str) -> list[str]:
         return ["osint_person"]
     base = ["headers", "ssl_check", "whois_check", "dns", "ports", "port_scanner", "fingerprint", "tech_fingerprint", "cve_lookup", "exposed_files", "link_crawler", "vulnerability", "subdomains"]
     if module == "ip":
-        return ["ip_intel", "ports"]
+        return ["ip_intel", "ports", "port_scanner"]
     if module == "email":
         return ["email_intel"]
     if module == "domain":

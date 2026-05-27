@@ -81,17 +81,17 @@ def welcome_email(name: str, frontend_url: str) -> tuple[str, str]:
     display = name or "there"
     body = _layout(
         f"""<h1 style="margin:0 0 12px;font-size:22px;color:#0f172a;">Welcome to AKILI, {display}</h1>
-        <p>Your account is ready. You have a <strong>14-day trial</strong> with full access to intelligence modules, API keys, and the sandbox.</p>
+        <p>Your account is ready. You have access to AKILI intelligence modules, API keys, and the sandbox.</p>
         <ul style="padding-left:1.2rem;color:#475569;">
           <li>Website, vulnerability, OSINT &amp; domain scans</li>
           <li>Dashboard usage tracking</li>
           <li>Shareable reports</li>
         </ul>
         {_btn(f"{frontend_url}/dashboard.html", "Open dashboard")}
-        <p style="font-size:13px;color:#64748b;">After trial, contact the administrator for extended usage. Billing and paid plans are disabled on this deployment.</p>""",
-        preheader="Your AKILI trial has started — 14 days of full access.",
+        <p style="font-size:13px;color:#64748b;">Your account has 5 scans per day. Contact the administrator for extended usage.</p>""",
+        preheader="Your AKILI account is ready.",
     )
-    return f"Welcome to AKILI — your trial has started", body.replace("{{frontend_url}}", frontend_url.rstrip("/"))
+    return f"Welcome to AKILI — your account is ready", body.replace("{{frontend_url}}", frontend_url.rstrip("/"))
 
 
 def payment_success_email(name: str, frontend_url: str, plan_id: str, amount_ngn: int) -> tuple[str, str]:

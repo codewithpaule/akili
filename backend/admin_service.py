@@ -471,15 +471,15 @@ def admin_upgrade_user(user_id: str, plan_id: str = "premium_monthly") -> dict:
         if not row:
             raise HTTPException(404, "User not found")
         if plan_id in ("premium", "premium_monthly"):
-            raise HTTPException(410, "Billing and premium activation are disabled on this deployment.")
+            raise HTTPException(410, "Billing and paid plan activation are disabled on this deployment.")
         elif plan_id == "free":
             # Map legacy 'free' action to expired state (no active trial/premium)
             row.plan = "expired"
             row.subscription_status = "cancelled"
             row.premium_until = 0
-        elif plan_id == "trial":
-            row.plan = "trial"
-            row.trial_ends_at = int(time.time()) + 14 * 86400
+        elif plan_id in ("trial", "account"):
+            row.plan = "account"
+            row.trial_ends_at = 0
         else:
             row.plan = plan_id[:30]
         row.updated_at = int(time.time())

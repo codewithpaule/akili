@@ -155,11 +155,11 @@ COMPLETE:{"scan_id":"…","score":72,"grade":"B",…}</pre></div>
               <tr><td><code>X-RateLimit-Limit</code></td><td>Max requests in the window</td></tr>
               <tr><td><code>X-RateLimit-Remaining</code></td><td>Requests left</td></tr>
               <tr><td><code>X-RateLimit-Reset</code></td><td>Unix reset time</td></tr>
-              <tr><td><code>X-AKILI-Tier</code></td><td>Effective tier (free, trial, premium, sandbox)</td></tr>
+              <tr><td><code>X-AKILI-Tier</code></td><td>Effective tier (account or sandbox)</td></tr>
             </tbody>
           </table>
         </div>
-        <p>HTTP <code class="docs-inline-code">429</code> when daily module quota or hourly cap is exceeded. HTTP <code class="docs-inline-code">403</code> for premium-only modules on free plan.</p>
+        <p>HTTP <code class="docs-inline-code">429</code> when the account daily scan quota or hourly cap is exceeded.</p>
       </section>
 
       <section class="docs-section" id="scan-website">
@@ -214,7 +214,7 @@ COMPLETE:{"scan_id":"…","score":72,"grade":"B",…}</pre></div>
         <div class="docs-endpoint" id="scan-org">
           <div class="docs-endpoint-head"><span class="docs-method post">POST</span><span class="docs-endpoint-path">/api/v1/scan/organization</span></div>
           <div class="docs-endpoint-body">
-            <p>Premium / trial. ASN and organizational footprint.</p>
+            <p>Account scan. ASN and organizational footprint.</p>
             <div class="docs-code-wrap"><button type="button" class="docs-copy-btn" data-copy>Copy</button><pre>{"name":"Acme Corp","domain":"acme.com"}</pre></div>
           </div>
         </div>
@@ -342,7 +342,7 @@ COMPLETE:{"scan_id":"…","score":72,"grade":"B",…}</pre></div>
         <h2>Plans</h2>
         <div class="docs-endpoint">
           <div class="docs-endpoint-head"><span class="docs-method get">GET</span><span class="docs-endpoint-path">/api/v1/plans</span></div>
-          <div class="docs-endpoint-body"><p>Public list of modules, trial length, and limit tables.</p></div>
+          <div class="docs-endpoint-body"><p>Public list of modules and account limit tables.</p></div>
         </div>
         <div class="docs-endpoint">
           <div class="docs-endpoint-head"><span class="docs-method get">GET</span><span class="docs-endpoint-path">/api/v1/health</span></div>
@@ -352,7 +352,7 @@ COMPLETE:{"scan_id":"…","score":72,"grade":"B",…}</pre></div>
 
       <footer class="docs-footer-cta">
         <p>Ready to integrate? Generate a named key in the dashboard or sign in to run scans from the browser.</p>
-        <a href="signup.html" class="btn btn-primary">Start free trial</a>
+        <a href="signup.html" class="btn btn-primary">Create account</a>
         <a href="dashboard.html" class="btn btn-outline" style="margin-left:0.5rem">Dashboard</a>
       </footer>
     </article>

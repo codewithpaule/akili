@@ -5,34 +5,32 @@ from typing import Optional
 
 TRIAL_DAYS = 0
 
-# Make the platform free for all users by default: non-premium users are treated
-# as the baseline 'trial' tier with daily limits. Premium remains available.
+# Normal accounts get one shared daily scan bucket. Legacy "trial" and
+# "premium" values may still exist in old database rows, so we keep aliases
+# below while presenting the product as a normal account.
 FREE_MODULES = set()
 
 PREMIUM_MODULES = set()
 
-# Limits are enforced per-day while we run the service free. Adjust numbers as needed.
+ACCOUNT_DAILY_SCAN_LIMIT = 5
+
 PLAN_LIMITS = {
-    "trial": {"hourly": 120, "daily": 5, "max_keys": 2},
-    "premium": {"hourly": 500, "daily": 200, "max_keys": 10},
+    "account": {"hourly": 120, "daily": ACCOUNT_DAILY_SCAN_LIMIT, "max_keys": 2},
+    "trial": {"hourly": 120, "daily": ACCOUNT_DAILY_SCAN_LIMIT, "max_keys": 2},
+    "premium": {"hourly": 120, "daily": ACCOUNT_DAILY_SCAN_LIMIT, "max_keys": 2},
     "sandbox": {"hourly": 9999, "daily": 99999, "max_keys": 3},
 }
 
+SCAN_MODULES = {"sandbox", "website", "email", "person", "domain", "ip", "organization", "company", "vulnerability", "subdomains", "api", "phone", "auth"}
 MODULE_DAILY_CAPS = {
-    "trial": {m: 5 for m in list(PREMIUM_MODULES | {"sandbox", "website", "email", "person", "domain", "ip", "organization", "company", "vulnerability", "subdomains", "api", "phone", "auth"})},
-    "premium": {m: 50 for m in list(PREMIUM_MODULES | {"sandbox"})},
+    "account": {m: ACCOUNT_DAILY_SCAN_LIMIT for m in SCAN_MODULES},
+    "trial": {m: ACCOUNT_DAILY_SCAN_LIMIT for m in SCAN_MODULES},
+    "premium": {m: ACCOUNT_DAILY_SCAN_LIMIT for m in SCAN_MODULES},
 }
 
 
 def effective_plan(user: dict) -> str:
-    now = int(time.time())
-    if user.get("plan") == "premium":
-        status = (user.get("subscription_status") or "").strip()
-        until = int(user.get("premium_until") or 0)
-        if status not in ("past_due", "expired", "cancelled") and (until == 0 or until > now):
-            return "premium"
-    # Treat all non-premium users as the free/trial tier so the platform remains usable
-    return "trial"
+    return "account"
 
 
 def can_access_module(user: Optional[dict], module: str) -> tuple[bool, str]:
@@ -41,15 +39,15 @@ def can_access_module(user: Optional[dict], module: str) -> tuple[bool, str]:
     if not user:
         return False, "Create an account and sign in to run scans"
     plan = effective_plan(user)
-    if plan in ("trial", "premium"):
+    if plan == "account":
         return True, ""
     return False, "Account access is unavailable. Please contact support."
 
 
 def get_limits(plan: str) -> dict:
-    return PLAN_LIMITS.get(plan, PLAN_LIMITS.get("trial", {}))
+    return PLAN_LIMITS.get(plan, PLAN_LIMITS["account"])
 
 
 def module_cap(plan: str, module: str) -> int:
-    caps = MODULE_DAILY_CAPS.get(plan, MODULE_DAILY_CAPS["trial"])
-    return caps.get(module, caps.get("website", 5))
+    caps = MODULE_DAILY_CAPS.get(plan, MODULE_DAILY_CAPS["account"])
+    return caps.get(module, ACCOUNT_DAILY_SCAN_LIMIT)

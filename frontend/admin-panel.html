@@ -311,7 +311,7 @@
           </dl>
           <div class="admin-drawer-actions" style="margin-top:1rem">
             <button type="button" class="btn btn-outline btn-sm" id="act-free">Set Expired</button>
-            <button type="button" class="btn btn-outline btn-sm" id="act-trial">Extend trial</button>
+            <button type="button" class="btn btn-outline btn-sm" id="act-trial">Set account</button>
             <select id="act-role" class="admin-input" style="margin-left:0.5rem">
               <option value="user" ${u.role === 'user' ? 'selected' : ''}>user</option>
               <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>admin</option>
@@ -332,7 +332,7 @@
           openUser(userId);
         };
         document.getElementById('act-trial').onclick = async () => {
-          await AKILI_ADMIN.api('/api/v1/admin/users/' + userId + '/plan', { method: 'POST', body: JSON.stringify({ plan_id: 'trial' }) });
+          await AKILI_ADMIN.api('/api/v1/admin/users/' + userId + '/plan', { method: 'POST', body: JSON.stringify({ plan_id: 'account' }) });
           AKILI.showToast('Trial extended', 'success');
           openUser(userId);
         };
