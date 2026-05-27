@@ -83,14 +83,15 @@ async def get_user(user_id: str) -> dict:
         return {
             "user_id": row.user_id,
             "email": row.email,
+            "usage_identity": getattr(row, "usage_identity", None) or "email:" + hashlib.sha256((row.email or "").strip().lower().encode("utf-8")).hexdigest(),
             "is_active": row.is_active,
             "email_verified": row.email_verified,
             "plan": row.plan
         }
 
 
-async def get_hourly_usage(key_id: str) -> int:
-    """Get hourly usage for an API key."""
+async def get_api_usage_today(key_id: str) -> int:
+    """Get today's usage for an API key."""
     from database import get_db, ApiKey
     with get_db() as db:
         row = db.query(ApiKey).filter(ApiKey.key_id == key_id).first()
@@ -184,7 +185,7 @@ async def validate_api_request(request: Request, call_next):
     
     # Rate limit check
     limit = db_key["limit"]
-    used = await get_hourly_usage(db_key["key_id"])
+    used = await get_api_usage_today(db_key["key_id"])
     
     if used >= limit:
         reset = get_reset_timestamp()
@@ -192,7 +193,7 @@ async def validate_api_request(request: Request, call_next):
             status_code=429,
             content={
                 "error": "rate_limit_exceeded",
-                "message": f"Hourly limit of {limit} requests exceeded",
+                "message": f"Daily API limit of {limit} requests exceeded",
                 "limit": limit,
                 "used": used,
                 "reset_at": reset,
@@ -208,7 +209,7 @@ async def validate_api_request(request: Request, call_next):
     
     # Daily scan limit check
     from database import get_daily_scan_count
-    scan_count = get_daily_scan_count(user["user_id"])
+    scan_count = get_daily_scan_count(user.get("usage_identity") or user["user_id"])
     if scan_count >= 5:
         from database import get_midnight_utc
         return JSONResponse(

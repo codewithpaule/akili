@@ -198,7 +198,7 @@ def _guard(request: Request, module: str, *, sandbox: bool = False):
                 log_from_request(request, "auth.api_key.quota_exceeded", user=user, detail=f"key_id={api_info.get('key_id')} used_today={used_today} limit={limit}")
             except Exception:
                 pass
-            raise HTTPException(429, "API key hourly limit exceeded")
+            raise HTTPException(429, "API key daily limit exceeded")
 
     return user
 
@@ -291,6 +291,7 @@ class ProfilePatchBody(BaseModel):
     organization: str = Field(default="", max_length=200)
     job_title: str = Field(default="", max_length=120)
     country: str = Field(default="", max_length=80)
+    avatar_url: str = Field(default="", max_length=800)
 
 
 class LoginBody(BaseModel):
@@ -622,6 +623,7 @@ async def auth_profile_patch(request: Request, body: ProfilePatchBody, user: dic
         organization=fields.get("organization", user.get("organization", "")),
         job_title=fields.get("job_title", user.get("job_title", "")),
         country=fields.get("country", user.get("country", "")),
+        avatar_url=fields.get("avatar_url", user.get("avatar_url", "")),
     )
     return {"user": updated}
 
@@ -647,7 +649,7 @@ async def auth_usage(request: Request, user: dict = Depends(require_user)):
 async def auth_scan_count(request: Request, user: dict = Depends(require_user)):
     """Get daily scan count for the authenticated user."""
     from database import get_daily_scan_count, get_midnight_utc
-    count = get_daily_scan_count(user["user_id"])
+    count = get_daily_scan_count(user.get("usage_identity") or user["user_id"])
     return {
         "used": count,
         "limit": 5,

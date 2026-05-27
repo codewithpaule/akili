@@ -37,6 +37,10 @@ def _email_ok(email: str) -> bool:
     return bool(re.match(r"^[\w.\-]+@[\w.\-]+\.\w+$", email.strip(), re.I))
 
 
+def usage_identity_for_email(email: str) -> str:
+    return "email:" + hashlib.sha256((email or "").strip().lower().encode("utf-8")).hexdigest()
+
+
 def _password_digest(password: str) -> str:
     """Bcrypt accepts max 72 bytes — use SHA-256 hex digest first."""
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
@@ -129,6 +133,8 @@ def user_to_dict(row: User) -> dict:
         "organization": getattr(row, "organization", None) or "",
         "job_title": getattr(row, "job_title", None) or "",
         "country": getattr(row, "country", None) or "",
+        "avatar_url": getattr(row, "avatar_url", None) or "",
+        "usage_identity": getattr(row, "usage_identity", None) or usage_identity_for_email(row.email),
         "plan": row.plan,
         "trial_ends_at": row.trial_ends_at,
         "created_at": row.created_at,
@@ -180,8 +186,9 @@ def register_user(
             password_hash=hash_password(password),
             name=(name or email_l.split("@")[0])[:120],
             phone=(phone or "")[:40],
-                plan="trial",
+            plan="trial",
             trial_ends_at=trial_end,
+            usage_identity=usage_identity_for_email(email_l),
             google_id="",
             created_at=now,
             updated_at=now,
@@ -254,6 +261,7 @@ def google_login(id_token: str) -> dict:
                 name=name,
                 plan="trial",
                 trial_ends_at=now + TRIAL_DAYS * 86400,
+                usage_identity=usage_identity_for_email(email),
                 google_id=google_sub,
                 created_at=now,
                 is_active=True,
@@ -267,6 +275,8 @@ def google_login(id_token: str) -> dict:
                 row.google_id = google_sub
             if name and not row.name:
                 row.name = name
+            if not getattr(row, "usage_identity", ""):
+                row.usage_identity = usage_identity_for_email(row.email)
         user_out = user_to_dict(row)
         token = create_token(row.user_id)
     if is_new:
@@ -389,7 +399,7 @@ def patch_user_profile(user_id: str, **fields) -> dict:
         row = db.query(User).filter(User.user_id == user_id, User.is_active == True).first()
         if not row:
             raise HTTPException(404, "User not found")
-        allowed = {"name", "phone", "organization", "job_title", "country"}
+        allowed = {"name", "phone", "organization", "job_title", "country", "avatar_url"}
         for key, val in fields.items():
             if key in allowed:
                 setattr(row, key, str(val or "")[:200] if key != "name" else str(val or "")[:120])

@@ -2,7 +2,7 @@
 
 from plans import effective_plan
 
-# guest = no account quick scan; free/trial/premium = signed-in tiers
+# guest = no account quick scan; account = signed-in deep scans
 SCAN_PROFILES = {
     "guest": {
         "label": "Quick scan (no account)",
@@ -14,16 +14,25 @@ SCAN_PROFILES = {
         "ai_depth": "summary_only",
         "description": "Surface check only — 1–2 checks, no deep AI follow-up. Sign up for full scans.",
     },
-    # 'free' tier removed — use 'trial' as the baseline for signed-in users during trial.
-    "trial": {
-        "label": "Trial",
-        "max_iterations": 3,
+    "account": {
+        "label": "Account",
+        "max_iterations": 8,
         "lite": False,
-        "website_baseline": ["ssl_check", "headers", "whois_check", "fingerprint", "ports"],
+        "website_baseline": ["ssl_check", "headers", "whois_check", "dns", "fingerprint", "tech_fingerprint", "cve_lookup", "ports", "port_scanner", "exposed_files", "link_crawler", "vulnerability", "subdomains"],
         "email_baseline": ["email_intel"],
-        "vulnerability_baseline": ["vulnerability", "headers", "fingerprint"],
-        "ai_depth": "enhanced",
-        "description": "Baseline plus up to 3 AI-driven follow-up tools. All modules unlocked.",
+        "vulnerability_baseline": ["vulnerability", "headers", "fingerprint", "tech_fingerprint", "cve_lookup", "exposed_files", "link_crawler"],
+        "ai_depth": "deep",
+        "description": "Deep scan: SSL, headers, DNS/WHOIS, ports, exposed files, crawler, technology/CVE checks, and AI-guided follow-up.",
+    },
+    "trial": {
+        "label": "Account",
+        "max_iterations": 8,
+        "lite": False,
+        "website_baseline": ["ssl_check", "headers", "whois_check", "dns", "fingerprint", "tech_fingerprint", "cve_lookup", "ports", "port_scanner", "exposed_files", "link_crawler", "vulnerability", "subdomains"],
+        "email_baseline": ["email_intel"],
+        "vulnerability_baseline": ["vulnerability", "headers", "fingerprint", "tech_fingerprint", "cve_lookup", "exposed_files", "link_crawler"],
+        "ai_depth": "deep",
+        "description": "Deep scan: SSL, headers, DNS/WHOIS, ports, exposed files, crawler, technology/CVE checks, and AI-guided follow-up.",
     },
     "premium": {
         "label": "Premium",
@@ -41,7 +50,7 @@ SCAN_PROFILES = {
 def tier_for_user(user: dict | None, *, guest: bool = False) -> str:
     if guest or not user:
         return "guest"
-    return effective_plan(user)
+    return "account"
 
 
 def profile_for_tier(tier: str) -> dict:
@@ -57,8 +66,6 @@ def baseline_tools(module: str, tier: str) -> list[str]:
     base = list(BASELINE_TOOLS.get(module, ["headers"]))
     if tier == "guest":
         return base[:1]
-    if tier == "trial":
-        return base[:3] if module == "website" else base[:2]
     return base
 
 

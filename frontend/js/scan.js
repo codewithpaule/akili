@@ -211,6 +211,10 @@
     return findings.length ? 'Quick check found issues worth reviewing.' : 'Quick check completed.';
   }
 
+  function findingLink(f) {
+    return AKILI.externalUrl(f.url || f.reference_url || f.link || '');
+  }
+
   function renderWebsite(report) {
     const grade = (report.grade || '—').toUpperCase();
     const gradeEl = document.getElementById('grade');
@@ -233,6 +237,7 @@
               <li style="margin-bottom:0.55rem">
                 <strong>${AKILI.escapeHtml(f.severity || 'INFO')}:</strong>
                 ${AKILI.escapeHtml(f.name || f.title || 'Finding')}
+                ${findingLink(f) ? ` - ${AKILI.externalLink(findingLink(f), 'Open evidence')}` : ''}
                 ${f.explanation ? `<br><span class="label-sm">${AKILI.escapeHtml(f.explanation)}</span>` : ''}
                 ${f.recommendation ? `<br><span class="label-sm" style="color:var(--blue)">Fix: ${AKILI.escapeHtml(f.recommendation)}</span>` : ''}
               </li>
@@ -242,6 +247,21 @@
             <h3 style="margin-top:0">No major issues found</h3>
             <p class="label-sm">This guest scan checked SSL and visible headers. Sign in for the deeper AI scan, DNS, ports, history, and legitimacy checks.</p>
           </div>`}
+        ${(report.exposed_files || []).length ? `
+          <div class="card">
+            <h3 style="margin-top:0">Exposed path probes</h3>
+            <ul>${(report.exposed_files || []).slice(0, 12).map((p) => `
+              <li><span class="label-sm">${AKILI.escapeHtml(p.risk || 'INFO')}</span> ${AKILI.escapeHtml(p.path || '')} - HTTP ${AKILI.escapeHtml(String(p.status || 0))}</li>
+            `).join('')}</ul>
+          </div>` : ''}
+        ${(report.interesting_links || report.hidden_paths || []).length ? `
+          <div class="card">
+            <h3 style="margin-top:0">Discovered links</h3>
+            <ul>${[
+              ...(report.interesting_links || []).map((u) => ({ url: u, label: u })),
+              ...(report.hidden_paths || []).map((p) => ({ url: p.url, label: `${p.path} (HTTP ${p.status_code})` })),
+            ].slice(0, 12).map((l) => `<li>${AKILI.externalLink(l.url, l.label || l.url)}</li>`).join('')}</ul>
+          </div>` : ''}
         ${report.cta ? `<p class="label-sm" style="margin-top:0.75rem">${AKILI.escapeHtml(report.cta)}</p>` : ''}
       `;
     }
@@ -275,6 +295,7 @@
       fg.innerHTML = (report.findings || []).map((f) => `
         <div class="card"><span class="badge badge-${(f.severity || 'info').toLowerCase()}">${f.severity}</span>
         <h4>${AKILI.escapeHtml(f.name || '')}</h4><p>${AKILI.escapeHtml(f.explanation || '')}</p>
+        ${findingLink(f) ? `<p>${AKILI.externalLink(findingLink(f), 'Open evidence')}</p>` : ''}
         <p style="color:var(--blue)">${AKILI.escapeHtml(f.recommendation || '')}</p></div>
       `).join('');
     }
@@ -606,6 +627,11 @@
     else if (mod_now === 'ip') renderIp(report);
     else renderWebsite(report);
     AKILI.showToast('Scan complete', 'success');
+    if (!currentCfg().public && 'Notification' in window) {
+      const notify = () => new Notification('AKILI scan ready', { body: `${currentModule()} scan finished for ${report.target || report.url || 'your target'}` });
+      if (Notification.permission === 'granted') notify();
+      else if (Notification.permission !== 'denied') Notification.requestPermission().then((p) => { if (p === 'granted') notify(); });
+    }
     if (report.scan_id && !sandbox) {
       const view = document.createElement('p');
       view.className = 'scan-report-link no-print';

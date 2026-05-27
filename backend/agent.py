@@ -464,7 +464,7 @@ def run_tool(name: str, target: str, context: dict) -> dict | None:
 def get_available_tools(module: str) -> list[str]:
     if module == "person":
         return ["osint_person"]
-    base = ["headers", "ssl_check", "whois_check", "ports", "fingerprint", "exposed_files", "dns", "vulnerability", "subdomains"]
+    base = ["headers", "ssl_check", "whois_check", "dns", "ports", "port_scanner", "fingerprint", "tech_fingerprint", "cve_lookup", "exposed_files", "link_crawler", "vulnerability", "subdomains"]
     if module == "ip":
         return ["ip_intel", "ports"]
     if module == "email":
@@ -495,6 +495,8 @@ def _merge_website_report(context: dict, ai: dict) -> dict:
         tool = tr.get("tool", "")
         if tool == "ports":
             report["ports"] = raw.get("ports", [])
+        if tool == "port_scanner":
+            report["port_scan"] = raw
         if tool == "fingerprint":
             techs = raw.get("technologies") or raw.get("tech_stack") or []
             if techs:
@@ -506,6 +508,15 @@ def _merge_website_report(context: dict, ai: dict) -> dict:
                 report["dns"] = raw["dns"]
             if raw.get("whois"):
                 report["whois"] = raw["whois"]
+        if tool == "exposed_files":
+            report["exposed_files"] = raw.get("probes", [])
+        if tool == "link_crawler":
+            report["crawl"] = raw
+            report["interesting_links"] = raw.get("interesting_links", [])
+            report["hidden_paths"] = raw.get("hidden_paths", [])
+            report["all_links"] = raw.get("all_links", [])
+        if tool == "vulnerability":
+            report["vulnerability"] = raw
         if tool == "headers":
             report["page_title"] = raw.get("page_title", "")
             report["page_description"] = raw.get("page_description", "")
@@ -602,7 +613,7 @@ def run_agent(
     prof = profile_for_tier(scan_tier)
     if scan_tier == "guest":
         lite = True
-    yield stream_line("AKILI", f"Starting {module} assessment… ({prof.get('label', scan_tier)})")
+    yield stream_line("AKILI", f"Starting deep {module} assessment… ({prof.get('label', scan_tier)})")
     yield stream_line("THINK", f"Target: {target[:120]}")
     yield stream_line("THINK", prof.get("description", "Running security checks…")[:200])
 
@@ -634,6 +645,9 @@ def run_agent(
         context["iteration"] += 1
         allowed_set = set(get_available_tools(module))
         available = [t for t in allowed_set if t not in context["tools_used"]]
+        if not available:
+            yield stream_line("THINK", "All configured deep tools have run — finishing discovery")
+            break
         n_findings = len(context["findings"])
         yield stream_line("THINK", f"Reviewing {n_findings} finding(s) — deciding what to try next…")
         yield stream_line("THINK", "AKILI is thinking…")

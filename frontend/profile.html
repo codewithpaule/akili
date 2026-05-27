@@ -15,6 +15,13 @@
     <p class="lead" style="margin-bottom:1.5rem">Name, contact details, and organization are saved to your account. Scan history is linked to this profile.</p>
     <div class="card usage-account-card" id="profile-usage" style="margin-bottom:1.25rem;padding:1rem 1.25rem"></div>
     <form id="profile-form" class="card" style="display:grid;gap:1rem">
+      <div style="display:flex;align-items:center;gap:1rem">
+        <img id="avatar-preview" alt="" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:1px solid var(--border);background:var(--slate-light)">
+        <div class="auth-field" style="flex:1;margin:0">
+          <label>Avatar URL</label>
+          <input type="url" id="avatar_url" autocomplete="photo" maxlength="800" placeholder="https://...">
+        </div>
+      </div>
       <div class="auth-field">
         <label>Full name</label>
         <input type="text" id="name" autocomplete="name" maxlength="120">
@@ -82,7 +89,7 @@
       ]);
       const u = data.user;
       const usage = me.usage || {};
-      const plan = usage.plan_label || usage.plan || 'free';
+      const plan = usage.plan_label || 'Account';
       const mUsed = usage.daily_scans_used ?? 0;
       const mCap = usage.daily_total_limit ?? 50;
       document.getElementById('profile-usage').innerHTML = `
@@ -102,7 +109,10 @@
       document.getElementById('organization').value = u.organization || '';
       document.getElementById('job_title').value = u.job_title || '';
       document.getElementById('country').value = u.country || '';
-      document.getElementById('plan').value = (usage.plan_label || u.effective_plan || u.plan || 'free').toString();
+      document.getElementById('avatar_url').value = u.avatar_url || '';
+      const avatar = u.avatar_url || `https://www.gravatar.com/avatar/${''}?d=mp`;
+      document.getElementById('avatar-preview').src = avatar;
+      document.getElementById('plan').value = (usage.plan_label || 'Account').toString();
       document.getElementById('created').value = u.created_at
         ? new Date(u.created_at * 1000).toLocaleString()
         : '—';
@@ -121,6 +131,7 @@
             organization: document.getElementById('organization').value,
             job_title: document.getElementById('job_title').value,
             country: document.getElementById('country').value,
+            avatar_url: document.getElementById('avatar_url').value,
           }),
         });
         AKILI_AUTH.setSession(AKILI_AUTH.getToken(), data.user);
@@ -129,6 +140,9 @@
         AKILI.showToast(err.message, 'error');
       }
     };
+    document.getElementById('avatar_url').addEventListener('input', (e) => {
+      document.getElementById('avatar-preview').src = e.target.value || 'https://www.gravatar.com/avatar/?d=mp';
+    });
     document.getElementById('delete-account-btn').onclick = async () => {
       if (!confirm('Delete your AKILI account permanently?')) return;
       try {

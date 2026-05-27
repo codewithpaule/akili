@@ -2,10 +2,14 @@
 
 from fastapi import HTTPException
 
-from database import count_user_keys, get_usage_summary, increment_usage
+from database import check_and_increment_scan_limit, count_user_keys, get_daily_scan_count, get_usage_summary, increment_usage
 from plans import can_access_module, effective_plan, get_limits, module_cap
 
-PLAN_LABELS = {"trial": "Trial", "premium": "Premium", "expired": "Expired"}
+PLAN_LABELS = {"trial": "Account", "premium": "Account", "expired": "Expired"}
+
+
+def usage_identity(user: dict) -> str:
+    return user.get("usage_identity") or user.get("user_id", "")
 
 
 def enforce_scan_access(user: dict | None, module: str, *, sandbox: bool = False) -> None:
@@ -19,8 +23,10 @@ def enforce_scan_access(user: dict | None, module: str, *, sandbox: bool = False
     if not user:
         return
 
+    identity = usage_identity(user)
+    check_and_increment_scan_limit(identity)
     plan = effective_plan(user)
-    usage = get_usage_summary(user["user_id"])
+    usage = get_usage_summary(identity)
     cap = module_cap(plan, mod)
     used = usage.get(mod, 0)
     if used >= cap:
@@ -28,15 +34,16 @@ def enforce_scan_access(user: dict | None, module: str, *, sandbox: bool = False
             429,
             f"Daily limit for {mod} reached ({cap}). Contact the administrator for higher limits.",
         )
-    increment_usage(user["user_id"], mod)
+    increment_usage(identity, mod)
 
 
 def usage_payload(user: dict) -> dict:
     plan = effective_plan(user)
     limits = get_limits(plan)
-    usage = get_usage_summary(user["user_id"])
+    identity = usage_identity(user)
+    usage = get_usage_summary(identity)
     caps = {m: module_cap(plan, m) for m in set(list(usage.keys()) + ["website", "person", "sandbox"]) }
-    daily_used = sum(usage.values())
+    daily_used = get_daily_scan_count(identity)
     key_count = count_user_keys(user["user_id"])
     return {
         "plan": plan,

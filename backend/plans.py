@@ -3,7 +3,7 @@
 import time
 from typing import Optional
 
-TRIAL_DAYS = 14
+TRIAL_DAYS = 0
 
 # Make the platform free for all users by default: non-premium users are treated
 # as the baseline 'trial' tier with daily limits. Premium remains available.
@@ -13,13 +13,13 @@ PREMIUM_MODULES = set()
 
 # Limits are enforced per-day while we run the service free. Adjust numbers as needed.
 PLAN_LIMITS = {
-    "trial": {"hourly": 120, "daily": 20, "max_keys": 2},
+    "trial": {"hourly": 120, "daily": 5, "max_keys": 2},
     "premium": {"hourly": 500, "daily": 200, "max_keys": 10},
     "sandbox": {"hourly": 9999, "daily": 99999, "max_keys": 3},
 }
 
 MODULE_DAILY_CAPS = {
-    "trial": {m: 5 for m in list(PREMIUM_MODULES | {"sandbox"})},
+    "trial": {m: 5 for m in list(PREMIUM_MODULES | {"sandbox", "website", "email", "person", "domain", "ip", "organization", "company", "vulnerability", "subdomains", "api", "phone", "auth"})},
     "premium": {m: 50 for m in list(PREMIUM_MODULES | {"sandbox"})},
 }
 
@@ -43,7 +43,7 @@ def can_access_module(user: Optional[dict], module: str) -> tuple[bool, str]:
     plan = effective_plan(user)
     if plan in ("trial", "premium"):
         return True, ""
-    return False, "Your trial has ended — contact the administrator for higher limits or access"
+    return False, "Account access is unavailable. Please contact support."
 
 
 def get_limits(plan: str) -> dict:

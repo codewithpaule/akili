@@ -26,6 +26,16 @@ SECURITY_HEADERS = {
     "x-xss-protection": ("X-XSS-Protection", "INFO"),
 }
 
+HEADER_DOCS = {
+    "strict-transport-security": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Strict-Transport-Security",
+    "content-security-policy": "https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP",
+    "x-frame-options": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Frame-Options",
+    "x-content-type-options": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Content-Type-Options",
+    "referrer-policy": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Referrer-Policy",
+    "permissions-policy": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Permissions-Policy",
+    "x-xss-protection": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-XSS-Protection",
+}
+
 
 def run(url: str, context: dict) -> dict:
     hostname = urlparse(url).hostname
@@ -64,6 +74,8 @@ def run(url: str, context: dict) -> dict:
                     + (" Common on university/government sites; still worth adding." if institutional else "")
                 ),
                 "recommendation": f"Configure your web server to send a proper {name} header.",
+                "url": HEADER_DOCS.get(header_key, ""),
+                "reference_url": HEADER_DOCS.get(header_key, ""),
             })
 
     server = raw_headers.get("server", "")

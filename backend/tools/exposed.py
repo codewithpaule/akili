@@ -45,6 +45,7 @@ def run(url: str, context: dict) -> dict:
                             "name": f"Exposed path: {path}",
                             "explanation": f"Path {path} returned HTTP {status} (presence detected, contents not retrieved).",
                             "recommendation": "Remove or restrict access to sensitive files immediately.",
+                            "url": probe_url,
                         })
                 except Exception:
                     exposed.append({"path": path, "status": 0, "accessible": False, "risk": risk})
