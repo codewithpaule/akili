@@ -12,4 +12,4 @@ COPY backend/ /app/
 
 EXPOSE 8080
 
-CMD sh -c "gunicorn main:app -k uvicorn.workers.UvicornWorker -w 2 -b 0.0.0.0:${PORT:-8080}"
+CMD sh -c "gunicorn main:app -k uvicorn.workers.UvicornWorker -w ${WEB_CONCURRENCY:-1} --timeout ${WEB_TIMEOUT:-180} --graceful-timeout 30 -b 0.0.0.0:${PORT:-8080}"

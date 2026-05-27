@@ -55,4 +55,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'showBadge') {
     injectResultBadge(request.grade, request.score);
   }
+  if (request.action === 'extractPageSignals') {
+    const links = [...document.links].slice(0, 80).map((a) => a.href).filter(Boolean);
+    const forms = [...document.forms].map((form) => ({
+      action: form.action || location.href,
+      method: (form.method || 'get').toLowerCase(),
+      inputs: [...form.querySelectorAll('input')].map((i) => ({
+        type: i.type || 'text',
+        name: i.name || i.id || '',
+        placeholder: i.placeholder || ''
+      })).slice(0, 20)
+    })).slice(0, 8);
+    sendResponse({
+      title: document.title || '',
+      description: document.querySelector('meta[name="description"]')?.content || '',
+      h1: document.querySelector('h1')?.innerText || '',
+      text: document.body?.innerText?.replace(/\s+/g, ' ').slice(0, 4000) || '',
+      links,
+      forms,
+      url: location.href,
+    });
+  }
+  return true;
 });

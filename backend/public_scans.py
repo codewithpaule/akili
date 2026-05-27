@@ -113,7 +113,38 @@ async def public_email_scan(email: str) -> dict:
     }
 
 
-async def public_website_scan(url: str) -> dict:
+def _page_legitimacy_findings(page_context: dict) -> list[dict]:
+    text = " ".join(str(page_context.get(k, "")) for k in ("page_title", "page_description", "page_h1", "page_text")).lower()
+    forms = page_context.get("page_forms") or []
+    links = page_context.get("page_links") or []
+    findings = []
+    danger_words = ["seed phrase", "private key", "verify wallet", "urgent", "account suspended", "gift card", "wire transfer"]
+    if any(word in text for word in danger_words):
+        findings.append({
+            "severity": "HIGH",
+            "name": "Suspicious page wording",
+            "explanation": "The visible page content contains wording commonly seen in phishing or scam pages.",
+            "recommendation": "Do not enter passwords, wallet details, or payment data until you verify the site independently.",
+        })
+    has_password_form = any(any(i.get("type") == "password" for i in form.get("inputs", [])) for form in forms)
+    if has_password_form:
+        findings.append({
+            "severity": "INFO",
+            "name": "Login form detected",
+            "explanation": "The current page asks for credentials.",
+            "recommendation": "Confirm the domain, HTTPS lock, and organization before signing in.",
+        })
+    if len(links) > 30:
+        findings.append({
+            "severity": "INFO",
+            "name": "Many links detected on page",
+            "explanation": f"The extension saw {len(links)} links in the visible page.",
+            "recommendation": "Review unusual external links before clicking.",
+        })
+    return findings
+
+
+async def public_website_scan(url: str, page_context: dict | None = None) -> dict:
     """Public website scan without authentication (shallow checks only)."""
     url = (url or "").strip()
     if url and not re.match(r"^https?://", url, flags=re.I):
@@ -134,7 +165,8 @@ async def public_website_scan(url: str) -> dict:
     grade = await calculate_grade(headers_result, ssl_result)
     
     # Top 3 findings only
-    all_findings = headers_result.get("findings", []) + ssl_result.get("findings", [])
+    page_findings = _page_legitimacy_findings(page_context or {})
+    all_findings = headers_result.get("findings", []) + ssl_result.get("findings", []) + page_findings
     top_findings = sorted(
         all_findings,
         key=lambda x: {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "INFO": 0}.get(x.get("severity", "INFO"), 0),
@@ -148,5 +180,7 @@ async def public_website_scan(url: str) -> dict:
         "ssl_valid": ssl_result.get("severity") != "CRITICAL",
         "ssl_expiry": ssl_raw.get("days_remaining"),
         "top_findings": top_findings,
+        "summary": (page_context or {}).get("page_title") or context.get("page_title", ""),
+        "page_legitimacy_findings": page_findings,
         "cta": "Sign up for deep AI-powered scan"
     }

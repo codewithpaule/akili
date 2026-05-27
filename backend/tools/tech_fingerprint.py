@@ -228,8 +228,12 @@ async def fingerprint_technologies(url: str) -> Dict[str, Any]:
     html = await fetch_html(url)
     headers = await fetch_headers(url)
     
-    # Detect technologies
-    technologies = detect_technologies(html, headers)
+    # Detect technologies. Wappalyzer can occasionally spend too long or warn on
+    # malformed upstream regexes, so fall back to lightweight pattern matching.
+    try:
+        technologies = detect_technologies(html, headers)
+    except Exception:
+        technologies = []
     
     # Detect from meta tags
     generator = re.search(r'<meta[^>]+name=["\']generator["\'][^>]+content=["\']([^"\']+)', html, re.IGNORECASE)

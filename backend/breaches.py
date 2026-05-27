@@ -48,13 +48,19 @@ def _flatten_breaches(data) -> list[dict]:
 
 
 def _normalize_breach(item: dict) -> dict:
-    name = item.get("breach") or item.get("Name") or item.get("name") or item.get("title") or "Unknown"
-    domain = item.get("domain") or item.get("Domain") or item.get("site") or ""
-    details = item.get("details") or item.get("Description") or item.get("description") or ""
-    exposed = item.get("exposed_data") or item.get("DataClasses") or item.get("data_exposed") or []
+    name = item.get("Breach ID") or item.get("breach") or item.get("Name") or item.get("name") or item.get("title") or "Unknown"
+    domain = item.get("Domain") or item.get("domain") or item.get("site") or ""
+    details = item.get("Exposure Description") or item.get("details") or item.get("Description") or item.get("description") or ""
+    exposed = item.get("Exposed Data") or item.get("exposed_data") or item.get("DataClasses") or item.get("data_exposed") or []
     if isinstance(exposed, str):
-        exposed = [part.strip() for part in exposed.split(",") if part.strip()]
-    year = item.get("year") or item.get("BreachDate") or item.get("breach_date") or item.get("date") or "Unknown"
+        exposed = [part.strip() for part in exposed.replace(";", ",").split(",") if part.strip()]
+    breached_date = item.get("Breached Date") or item.get("BreachDate") or item.get("breach_date") or item.get("date") or item.get("year") or "Unknown"
+    industry = item.get("Industry") or item.get("industry") or ""
+    records = item.get("Exposed Records") or item.get("records") or item.get("PwnCount") or item.get("xposed_records") or 0
+    password_risk = item.get("Password Risk") or item.get("password_risk") or "Unknown"
+    status = item.get("Verified") or item.get("Status") or item.get("status") or "Verified"
+    logo = item.get("Logo") or item.get("logo") or ""
+    safe_name = "".join(ch for ch in str(name) if ch.isalnum() or ch in ("-", "_", "."))
     return {
         "breach": str(name),
         "name": str(name),
@@ -62,10 +68,14 @@ def _normalize_breach(item: dict) -> dict:
         "details": str(details),
         "exposed_data": exposed if isinstance(exposed, list) else [],
         "password_hash": bool(item.get("password_hash", False)),
-        "industry": str(item.get("industry") or item.get("Industry") or ""),
-        "year": str(year),
-        "records": item.get("records") or item.get("PwnCount") or item.get("xposed_records") or 0,
-        "source_link": item.get("source_link") or item.get("References") or item.get("reference") or "",
+        "industry": str(industry),
+        "year": str(breached_date),
+        "breached_date": str(breached_date),
+        "records": records,
+        "password_risk": str(password_risk),
+        "status": str(status),
+        "logo": str(logo),
+        "source_link": item.get("source_link") or item.get("References") or item.get("reference") or f"https://xposedornot.com/xposed#breach-{safe_name}",
         "country_hint": _country_hint(item),
     }
 

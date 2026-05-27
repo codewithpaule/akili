@@ -438,6 +438,12 @@ class PublicEmailBody(BaseModel):
 
 class PublicWebsiteBody(BaseModel):
     url: str = Field(..., max_length=500)
+    page_title: str = Field(default="", max_length=300)
+    page_description: str = Field(default="", max_length=600)
+    page_h1: str = Field(default="", max_length=300)
+    page_text: str = Field(default="", max_length=5000)
+    page_links: list[str] = Field(default_factory=list)
+    page_forms: list[dict] = Field(default_factory=list)
 
 
 @app.post("/api/v1/public/scan/email")
@@ -486,7 +492,7 @@ async def public_scan_website(request: Request, body: PublicWebsiteBody):
             }
         )
     
-    result = await public_website_scan(body.url)
+    result = await public_website_scan(body.url, page_context=body.model_dump())
     return result
 
 

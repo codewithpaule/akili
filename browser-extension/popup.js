@@ -33,23 +33,24 @@ chrome.tabs.query({active: true, currentWindow: true}, async (tabs) => {
   // Get stored API key
   const { apiKey } = await chrome.storage.local.get('apiKey');
   
-  if (!apiKey) {
-    showConnectPrompt();
-    return;
-  }
-  
   try {
-    // Use authenticated deep scan endpoint
-    const result = await fetch(`${API_BASE}/api/v1/scan/website`, {
+    const pageSignals = await getPageSignals(tabs[0].id);
+    const endpoint = apiKey ? '/api/v1/scan/website' : '/api/v1/public/scan/website';
+    const headers = { 'Content-Type': 'application/json' };
+    if (apiKey) headers['X-API-Key'] = apiKey;
+    const result = await fetch(`${API_BASE}${endpoint}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': apiKey
-      },
+      headers,
       body: JSON.stringify({ 
         url,
         module: 'website',
-        deep: true
+        deep: Boolean(apiKey),
+        page_title: pageSignals.title,
+        page_description: pageSignals.description,
+        page_h1: pageSignals.h1,
+        page_text: pageSignals.text,
+        page_links: pageSignals.links,
+        page_forms: pageSignals.forms,
       })
     });
     
@@ -59,6 +60,9 @@ chrome.tabs.query({active: true, currentWindow: true}, async (tabs) => {
     }
 
     const data = await readScanResult(result);
+    if (!apiKey) {
+      data.summary = data.summary || 'Guest page check completed. Add an API key in the extension for full deep scanning.';
+    }
     
     // Cache result for 1 hour
     await cacheResult(domain, data);
@@ -88,6 +92,20 @@ chrome.tabs.query({active: true, currentWindow: true}, async (tabs) => {
     showError(error.message);
   }
 });
+
+async function getPageSignals(tabId) {
+  const fallback = { title: '', description: '', h1: '', text: '', links: [], forms: [] };
+  try {
+    return await chrome.tabs.sendMessage(tabId, { action: 'extractPageSignals' }) || fallback;
+  } catch (error) {
+    try {
+      await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
+      return await chrome.tabs.sendMessage(tabId, { action: 'extractPageSignals' }) || fallback;
+    } catch (_) {
+      return fallback;
+    }
+  }
+}
 
 async function readScanResult(response) {
   const contentType = response.headers.get('content-type') || '';

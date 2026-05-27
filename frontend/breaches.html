@@ -3,63 +3,71 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Breaches — AKILI</title>
+  <title>Data Breaches - AKILI</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/main.css">
   <link rel="stylesheet" href="css/components.css">
   <link rel="stylesheet" href="css/pages.css">
-  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body class="akili-cursor dashboard-page">
   <div id="nav-mount"></div>
-
-  <main class="container" style="padding:2rem 1.5rem; max-width:1000px;">
-    <header class="page-hero" style="border-bottom: 1px solid var(--border); padding-bottom: 1.5rem; margin-bottom: 2rem;">
-      <p class="dash-eyebrow">Data Intelligence Feed</p>
-      <h1 style="font-size: 2.25rem; color: var(--navy); margin-top: 0.25rem;">Global Data Breaches</h1>
-      <p class="lead" style="margin-top: 0.5rem; color: var(--slate);">
-        Search global breach intelligence, then narrow it to Nigerian or African signals when you need local context.
-      </p>
+  <main class="container" style="padding:2rem 1.5rem;max-width:1180px">
+    <header class="page-hero" style="border-bottom:1px solid var(--border);padding-bottom:1.5rem;margin-bottom:1.5rem">
+      <p class="dash-eyebrow">Breach Intelligence</p>
+      <h1 style="font-size:2.25rem;color:var(--navy);margin-top:0.25rem">Data Breach Database</h1>
+      <p class="lead" style="margin-top:0.5rem;color:var(--slate)">Latest public breach feed from XposedOrNot, normalized for search, industry, year, password risk, and country hints.</p>
     </header>
 
-    <div class="card" style="margin-bottom: 2rem; background: var(--surface);">
-      <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
-        <div style="flex: 1; min-width: 280px; position: relative;">
-          <input type="text" id="search-filter" placeholder="Search breach, domain, industry, country..." style="width: 100%; padding: 0.75rem 1rem; border: 1px solid var(--border); border-radius: var(--radius); font-family: var(--font-body); font-size: 0.9rem;">
-        </div>
-        <div style="min-width: 170px;">
-          <select id="country-filter" style="width: 100%; padding: 0.75rem 1rem; border: 1px solid var(--border); border-radius: var(--radius); font-family: var(--font-body); font-size: 0.9rem; background: var(--white);">
-            <option value="all">All breaches</option>
-            <option value="nigeria">Nigeria</option>
-            <option value="africa">Africa</option>
-          </select>
-        </div>
-        <div style="display: flex; gap: 0.5rem; align-items: center;">
-          <span style="font-size: 0.85rem; color: var(--slate);">Total breaches found:</span>
-          <span id="breach-counter" class="badge badge-info" style="font-size: 0.85rem; padding: 0.25rem 0.6rem;">0</span>
-        </div>
+    <section class="card" style="margin-bottom:1rem">
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:0.75rem;align-items:end">
+        <label class="auth-field" style="margin:0">Search
+          <input type="text" id="search-filter" placeholder="Search by name, domain, or description...">
+        </label>
+        <label class="auth-field" style="margin:0">Industry
+          <select id="industry-filter"><option value="all">All Industries</option></select>
+        </label>
+        <label class="auth-field" style="margin:0">Year
+          <select id="year-filter"><option value="all">All Years</option></select>
+        </label>
+        <label class="auth-field" style="margin:0">Password Risk
+          <select id="risk-filter"><option value="all">All Risk Levels</option></select>
+        </label>
+        <button type="button" class="btn btn-outline" id="reset-btn">Reset</button>
       </div>
-    </div>
-
-    <!-- Spinner / Loading Area -->
-    <div id="loading-spinner" class="scan-results-spinner">
-      <div class="spinner-ring" aria-hidden="true"></div>
-      <p>Fetching compromised records from global intelligence indexes...</p>
-    </div>
-
-    <!-- Empty State -->
-    <div id="empty-state" class="card hidden" style="text-align: center; padding: 3rem 1.5rem;">
-      <i data-lucide="shield-check" style="width: 48px; height: 48px; color: var(--green); margin: 0 auto 1rem;"></i>
-      <h3 style="color: var(--navy);">No Infrastructure Matches Found</h3>
-      <p style="color: var(--slate); max-width: 420px; margin: 0.5rem auto 0;">No active compromised infrastructure indexes matched your search criteria.</p>
-    </div>
-
-    <!-- Breaches Grid -->
-    <section id="breaches-container" class="hidden" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.25rem; margin-top: 1rem;">
-      <!-- JavaScript will dynamically populate the cards here -->
     </section>
 
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;margin:1rem 0">
+      <h2 style="font-size:1.15rem;margin:0">Data Breach Database</h2>
+      <span id="breach-counter" class="badge badge-info">0 breaches found</span>
+    </div>
+
+    <div id="loading-spinner" class="scan-results-spinner">
+      <div class="spinner-ring" aria-hidden="true"></div>
+      <p>Fetching latest breach records...</p>
+    </div>
+
+    <section id="empty-state" class="card hidden" style="text-align:center;padding:3rem 1.5rem">
+      <h3>No breach matches found</h3>
+      <p class="label-sm">Try a different name, domain, year, industry, or risk filter.</p>
+    </section>
+
+    <section id="breaches-container" class="card hidden" style="padding:0;overflow:auto">
+      <table class="data-table" style="min-width:920px">
+        <thead>
+          <tr>
+            <th>Logo</th>
+            <th>Breach</th>
+            <th>Industry</th>
+            <th>Records</th>
+            <th>Breach Date</th>
+            <th>Password Risk</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="breach-rows"></tbody>
+      </table>
+    </section>
   </main>
 
   <script src="js/config.runtime.js"></script>
@@ -68,110 +76,92 @@
   <script>
     let allBreaches = [];
 
+    const fmtRecords = (n) => Number(n || 0) ? Number(n).toLocaleString() : 'Unknown';
+    const fmtDate = (v) => {
+      if (!v || v === 'Unknown') return 'Unknown';
+      const d = new Date(v);
+      return Number.isNaN(d.getTime()) ? String(v) : d.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+    };
+    const siteUrl = (domain) => domain && domain !== '-' && domain !== 'Not-Applicable' ? AKILI.externalUrl(domain) : '';
+    const detailsUrl = (b) => b.source_link || `https://xposedornot.com/xposed#breach-${encodeURIComponent(b.name || b.breach || '')}`;
+
     async function loadBreaches() {
       const spinner = document.getElementById('loading-spinner');
-      const container = document.getElementById('breaches-container');
-      const counter = document.getElementById('breach-counter');
-      const emptyState = document.getElementById('empty-state');
-
+      const baseUrl = (window.AKILI_CONFIG && AKILI_CONFIG.API_BASE) || 'http://localhost:8001';
       try {
         spinner.classList.remove('hidden');
-        container.classList.add('hidden');
-        emptyState.classList.add('hidden');
-
-        const baseUrl = (window.AKILI_CONFIG && AKILI_CONFIG.API_BASE) || 'http://localhost:8001';
-        const response = await fetch(`${baseUrl}/api/v1/breaches?limit=500`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch breaches from infrastructure feed.');
-        }
-
-        const payload = await response.json();
+        const res = await fetch(`${baseUrl}/api/v1/breaches?limit=500`);
+        if (!res.ok) throw new Error('Failed to fetch breach feed');
+        const payload = await res.json();
         allBreaches = Array.isArray(payload) ? payload : (payload.breaches || []);
-        counter.textContent = allBreaches.length;
+        populateFilters();
         applyFilters();
-      } catch (err) {
-        if (window.AKILI) {
-          AKILI.showToast(err.message || 'Error fetching feed', 'error');
-        }
+      } catch (e) {
+        AKILI?.showToast(e.message || 'Could not load breaches', 'error');
+        document.getElementById('empty-state').classList.remove('hidden');
+      } finally {
         spinner.classList.add('hidden');
-        emptyState.classList.remove('hidden');
       }
     }
 
-    function renderBreaches(breaches) {
-      const spinner = document.getElementById('loading-spinner');
-      const container = document.getElementById('breaches-container');
-      const emptyState = document.getElementById('empty-state');
-
-      spinner.classList.add('hidden');
-
-      if (!breaches || breaches.length === 0) {
-        container.classList.add('hidden');
-        emptyState.classList.remove('hidden');
-        return;
-      }
-
-      emptyState.classList.add('hidden');
-      container.classList.remove('hidden');
-
-      container.innerHTML = breaches.map(b => {
-        const recordsStr = b.records ? Number(b.records).toLocaleString() : 'Unknown';
-        const exposedStr = Array.isArray(b.exposed_data) && b.exposed_data.length 
-          ? b.exposed_data.slice(0, 6).join(', ') 
-          : b.details || 'Compromised records';
-        const title = b.breach || b.name || 'Unknown breach';
-        const source = b.source_link || '';
-        
-        return `
-          <div class="card" style="border-top: 4px solid #EF4444; display: flex; flex-direction: column; justify-content: space-between;">
-            <div>
-              <div style="display: flex; justify-content: space-between; align-items: start; gap: 0.5rem; margin-bottom: 0.75rem;">
-                <span class="badge badge-critical">Breach</span>
-                <span class="badge badge-info">${AKILI.escapeHtml(b.year || 'Unknown')}</span>
-              </div>
-              <h3 style="font-size: 1.15rem; color: var(--navy); margin-bottom: 0.35rem;">${AKILI.escapeHtml(title)}</h3>
-              <p style="font-size: 0.85rem; color: var(--blue); font-family: var(--font-mono); margin-bottom: 0.75rem; word-break: break-all;">
-                ${AKILI.escapeHtml(b.domain || 'Target Infrastructure')}
-              </p>
-              <p style="font-size: 0.85rem; color: var(--slate); line-height: 1.5; margin-bottom: 1rem;">
-                <strong>Exposed Assets:</strong> ${AKILI.escapeHtml(exposedStr)}
-              </p>
-            </div>
-            <div style="border-top: 1px solid var(--border); padding-top: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 0.8rem; color: var(--slate);">${source ? AKILI.externalLink(source, 'Source') : 'Compromised accounts:'}</span>
-              <strong style="color: var(--navy); font-size: 0.9rem;">${AKILI.escapeHtml(recordsStr)}</strong>
-            </div>
-          </div>
-        `;
-      }).join('');
-
-      if (typeof lucide !== 'undefined') {
-        lucide.createIcons();
-      }
+    function populateFilters() {
+      const fill = (id, values, fallback) => {
+        const el = document.getElementById(id);
+        el.innerHTML = `<option value="all">${fallback}</option>` + values.filter(Boolean).sort().map((v) => `<option>${AKILI.escapeHtml(v)}</option>`).join('');
+      };
+      fill('industry-filter', [...new Set(allBreaches.map((b) => b.industry || 'Miscellaneous'))], 'All Industries');
+      fill('year-filter', [...new Set(allBreaches.map((b) => String(b.breached_date || b.year || '').slice(0, 4)).filter((y) => /^\d{4}$/.test(y)))].sort((a,b) => b.localeCompare(a)), 'All Years');
+      fill('risk-filter', [...new Set(allBreaches.map((b) => b.password_risk || 'Unknown'))], 'All Risk Levels');
     }
 
     function applyFilters() {
       const q = document.getElementById('search-filter').value.toLowerCase().trim();
-      const country = document.getElementById('country-filter').value;
-      const filtered = allBreaches.filter(b => {
-        const blob = [
-          b.breach, b.name, b.domain, b.details, b.industry, b.year, b.country_hint,
-          ...(Array.isArray(b.exposed_data) ? b.exposed_data : [])
-        ].join(' ').toLowerCase();
-        const countryOk = country === 'all' || b.country_hint === country || blob.includes(country);
-        return countryOk && (!q || blob.includes(q));
+      const industry = document.getElementById('industry-filter').value;
+      const year = document.getElementById('year-filter').value;
+      const risk = document.getElementById('risk-filter').value;
+      const rows = allBreaches.filter((b) => {
+        const blob = [b.name, b.breach, b.domain, b.details, b.industry, b.exposed_data?.join(' ')].join(' ').toLowerCase();
+        const bYear = String(b.breached_date || b.year || '').slice(0, 4);
+        return (!q || blob.includes(q))
+          && (industry === 'all' || (b.industry || 'Miscellaneous') === industry)
+          && (year === 'all' || bYear === year)
+          && (risk === 'all' || (b.password_risk || 'Unknown') === risk);
       });
-      document.getElementById('breach-counter').textContent = filtered.length;
-      renderBreaches(filtered);
+      renderRows(rows);
     }
 
-    document.getElementById('search-filter').addEventListener('input', applyFilters);
-    document.getElementById('country-filter').addEventListener('change', applyFilters);
+    function renderRows(rows) {
+      document.getElementById('breach-counter').textContent = `${rows.length.toLocaleString()} breaches found`;
+      document.getElementById('empty-state').classList.toggle('hidden', rows.length > 0);
+      document.getElementById('breaches-container').classList.toggle('hidden', rows.length === 0);
+      document.getElementById('breach-rows').innerHTML = rows.map((b) => {
+        const name = b.name || b.breach || 'Unknown';
+        const domain = b.domain || '-';
+        const logo = b.logo || `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=32`;
+        const domainLink = siteUrl(domain);
+        const status = b.status || 'Verified';
+        return `
+          <tr>
+            <td><img src="${AKILI.escapeHtml(logo)}" alt="" style="width:28px;height:28px;border-radius:6px" onerror="this.style.display='none'"></td>
+            <td><strong>${AKILI.escapeHtml(name)}</strong><br>${domainLink ? AKILI.externalLink(domainLink, domain) : AKILI.escapeHtml(domain)}</td>
+            <td>${AKILI.escapeHtml(b.industry || 'Miscellaneous')}</td>
+            <td>${AKILI.escapeHtml(fmtRecords(b.records))}</td>
+            <td>${AKILI.escapeHtml(fmtDate(b.breached_date || b.year))}</td>
+            <td>${AKILI.escapeHtml(b.password_risk || 'Unknown')}</td>
+            <td><span class="badge ${String(status).toLowerCase().includes('sensitive') ? 'badge-high' : 'badge-info'}">${AKILI.escapeHtml(status)}</span></td>
+            <td>${AKILI.externalLink(detailsUrl(b), 'Details')}</td>
+          </tr>
+        `;
+      }).join('');
+    }
 
-    // Run immediately
-    document.addEventListener('DOMContentLoaded', () => {
-      loadBreaches();
-    });
+    ['search-filter', 'industry-filter', 'year-filter', 'risk-filter'].forEach((id) => document.getElementById(id).addEventListener('input', applyFilters));
+    document.getElementById('reset-btn').onclick = () => {
+      ['search-filter', 'industry-filter', 'year-filter', 'risk-filter'].forEach((id) => document.getElementById(id).value = 'all');
+      document.getElementById('search-filter').value = '';
+      applyFilters();
+    };
+    document.addEventListener('DOMContentLoaded', loadBreaches);
   </script>
 </body>
 </html>

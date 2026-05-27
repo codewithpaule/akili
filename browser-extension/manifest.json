@@ -5,6 +5,7 @@
   "description": "AI security analysis for every page you visit",
   "permissions": [
     "activeTab",
+    "scripting",
     "storage",
     "notifications",
     "tabs"
