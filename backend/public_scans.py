@@ -15,21 +15,22 @@ from security import _is_private_ip
 _ip_rate_limits = {}
 
 
-def check_ip_rate_limit(ip: str, limit: int = 30) -> bool:
+def check_ip_rate_limit(ip: str, limit: int = 30, namespace: str = "direct") -> bool:
     """Check if IP has exceeded rate limit (30 requests/hour)."""
     now = datetime.utcnow()
     hour_key = now.strftime("%Y-%m-%d-%H")
+    bucket_key = f"{namespace}:{ip}"
     
-    if ip not in _ip_rate_limits:
-        _ip_rate_limits[ip] = {}
+    if bucket_key not in _ip_rate_limits:
+        _ip_rate_limits[bucket_key] = {}
     
-    if hour_key not in _ip_rate_limits[ip]:
-        _ip_rate_limits[ip][hour_key] = 0
+    if hour_key not in _ip_rate_limits[bucket_key]:
+        _ip_rate_limits[bucket_key][hour_key] = 0
     
-    if _ip_rate_limits[ip][hour_key] >= limit:
+    if _ip_rate_limits[bucket_key][hour_key] >= limit:
         return False
     
-    _ip_rate_limits[ip][hour_key] += 1
+    _ip_rate_limits[bucket_key][hour_key] += 1
     return True
 
 

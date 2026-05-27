@@ -269,6 +269,7 @@ def init_db():
 @contextmanager
 def get_db():
     db = SessionLocal()
+    db.engine = engine
     try:
         yield db
         db.commit()

@@ -456,7 +456,7 @@ async def public_scan_email(request: Request, body: PublicEmailBody):
     client_ip = request.client.host if request.client else "unknown"
     
     # Check IP rate limit (30 requests/hour)
-    if not check_ip_rate_limit(client_ip, limit=30):
+    if not check_ip_rate_limit(client_ip, limit=30, namespace="public_email"):
         raise HTTPException(
             status_code=429,
             detail={
@@ -481,7 +481,7 @@ async def public_scan_website(request: Request, body: PublicWebsiteBody):
     client_ip = request.client.host if request.client else "unknown"
     
     # Check IP rate limit (30 requests/hour)
-    if not check_ip_rate_limit(client_ip, limit=30):
+    if not check_ip_rate_limit(client_ip, limit=30, namespace="public_website"):
         raise HTTPException(
             status_code=429,
             detail={
@@ -1352,8 +1352,8 @@ async def scan_organization(request: Request, body: OrgBody):
 @limiter.limit("10/hour")
 async def scan_person(request: Request, body: PersonBody):
     _require_json(request)
-    user = _guard(request, "person")
     name, keywords = validate_person(body.name, body.keywords)
+    user = _guard(request, "person")
     target = f"{name}|{keywords}"
     scan_id = str(uuid.uuid4())
     log_scan(scan_id, "person")

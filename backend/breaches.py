@@ -135,4 +135,5 @@ async def get_breaches(country: Optional[str] = None, q: str = "", limit: int = 
 
 
 async def get_nigeria_breaches():
-    return await get_breaches(country="nigeria")
+    data = await get_breaches(country="nigeria")
+    return data.get("breaches", []) if isinstance(data, dict) else data
