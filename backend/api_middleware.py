@@ -8,6 +8,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 PUBLIC_PATH_PREFIXES = (
     "/api/v1/auth/",
     "/api/v1/public/",
+    "/api/v1/scan/",
 )
 
 PUBLIC_PATHS = {
