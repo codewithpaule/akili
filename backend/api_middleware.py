@@ -13,21 +13,32 @@ def get_reset_timestamp() -> int:
 
 
 async def get_api_key(key_hash: str) -> dict:
-    """Look up API key by hash."""
+    """Look up API key by hash with retry logic for connection errors."""
     from database import get_db, ApiKey
-    with get_db() as db:
-        row = db.query(ApiKey).filter(ApiKey.key_hash == key_hash).first()
-        if not row:
-            return None
-        return {
-            "key_id": row.key_id,
-            "user_id": row.user_id,
-            "key_name": row.key_name,
-            "tier": row.tier,
-            "is_active": row.is_active,
-            "requests_today": row.requests_today,
-            "limit": 50 if row.tier == "free" else 500 if row.tier == "pro" else 2000
-        }
+    import time
+    
+    max_retries = 2
+    for attempt in range(max_retries):
+        try:
+            with get_db() as db:
+                row = db.query(ApiKey).filter(ApiKey.key_hash == key_hash).first()
+                if not row:
+                    return None
+                return {
+                    "key_id": row.key_id,
+                    "user_id": row.user_id,
+                    "key_name": row.key_name,
+                    "tier": row.tier,
+                    "is_active": row.is_active,
+                    "requests_today": row.requests_today,
+                    "limit": 50 if row.tier == "free" else 500 if row.tier == "pro" else 2000
+                }
+        except Exception as e:
+            if attempt < max_retries - 1 and ("SSL connection" in str(e) or "connection" in str(e).lower()):
+                time.sleep(0.1 * (attempt + 1))
+                continue
+            raise
+    return None
 
 
 async def get_user(user_id: str) -> dict:

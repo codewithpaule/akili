@@ -8,12 +8,30 @@ from typing import Any, Optional
 from dotenv import load_dotenv
 from sqlalchemy import Boolean, Column, Integer, String, Text, create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.pool import QueuePool
 
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://neondb_owner:npg_oaTemFVS0dJ2@ep-solitary-silence-aqnbwktz-pooler.c-8.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require")
-connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
-engine = create_engine(DATABASE_URL, connect_args=connect_args)
+
+if DATABASE_URL.startswith("sqlite"):
+    connect_args = {"check_same_thread": False}
+    engine = create_engine(DATABASE_URL, connect_args=connect_args)
+else:
+    # PostgreSQL with SSL connection pool settings for cloud environments
+    engine = create_engine(
+        DATABASE_URL,
+        poolclass=QueuePool,
+        pool_size=5,
+        max_overflow=10,
+        pool_pre_ping=True,  # Verify connections before using
+        pool_recycle=3600,  # Recycle connections after 1 hour
+        connect_args={
+            "sslmode": "require",
+            "connect_timeout": 10,
+        }
+    )
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -250,8 +268,17 @@ def get_db():
     try:
         yield db
         db.commit()
-    except Exception:
+    except Exception as e:
         db.rollback()
+        # Retry once for transient connection errors
+        if "SSL connection has been closed" in str(e) or "connection" in str(e).lower():
+            try:
+                db.close()
+                db = SessionLocal()
+                yield db
+                db.commit()
+            except Exception:
+                raise
         raise
     finally:
         db.close()

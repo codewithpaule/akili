@@ -8,7 +8,7 @@
 
   if (!endpointEl || !methodEl || !tryBtn) return;
 
-  const base = (window.AKILI_CONFIG && AKILI_CONFIG.API_BASE) || (window.AKILI && AKILI.API && AKILI.API()) || 'https://akili.fly.dev';
+  const base = (window.AKILI_CONFIG && AKILI_CONFIG.API_BASE) || (window.AKILI && AKILI.API && AKILI.API()) || 'https://api.akili.com.ng';
   const examples = [
     { path: `${base.replace(/\/$/, '')}/api/v1/public/scan/link`, method: 'POST', payload: JSON.stringify({ url: base }, null, 2) },
     { path: `${base.replace(/\/$/, '')}/api/v1/public/scan/person`, method: 'POST', payload: JSON.stringify({ name: 'Jane Doe', keywords: '' }, null, 2) },

@@ -1,1 +1,1 @@
-﻿window.AKILI_RUNTIME = { API_BASE: 'https://akili.fly.dev' };
+﻿window.AKILI_RUNTIME = { API_BASE: 'https://api.akili.com.ng' };

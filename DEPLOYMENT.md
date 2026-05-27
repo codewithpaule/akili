@@ -91,7 +91,7 @@ If you host the frontend separately (e.g., Vercel) and your API is on a differen
 
 1. In your Vercel project settings add an Environment Variable:
 
-    - `API_BASE` = `https://akili.fly.dev` (or your API host)
+    - `API_BASE` = `https://api.akili.com.ng` (or your API host)
 
 2. Add a build step (before the frontend build) to generate `frontend/js/config.runtime.js` using the included script:
 
@@ -102,7 +102,7 @@ If you host the frontend separately (e.g., Vercel) and your API is on a differen
       # then your normal build step, e.g. `npm run build` or `echo 'static site'`
       ```
 
-    - The script writes `window.AKILI_RUNTIME = { API_BASE: 'https://akili.fly.dev' };` to `frontend/js/config.runtime.js`.
+    - The script writes `window.AKILI_RUNTIME = { API_BASE: 'https://api.akili.com.ng' };` to `frontend/js/config.runtime.js`.
 
 3. The file `frontend/js/config.runtime.js` is ignored by git (listed in `.gitignore`) so it won't be committed.
 
