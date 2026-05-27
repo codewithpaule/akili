@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow,noarchive">
   <title>Admin sign in — AKILI</title>
   <link rel="stylesheet" href="css/main.css">
   <link rel="stylesheet" href="css/components.css">
@@ -39,6 +40,13 @@
   <script src="js/app.js"></script>
   <script src="js/admin.js"></script>
   <script>
+    if (new URLSearchParams(location.search).get('entry') === '1') {
+      sessionStorage.setItem('akili_admin_entry', '1');
+      history.replaceState(null, '', 'admin-login.html');
+    }
+    if (!sessionStorage.getItem('akili_admin_entry') && !AKILI_ADMIN.getToken()) {
+      location.replace('index.html');
+    }
     if (AKILI_ADMIN.getToken() && AKILI_ADMIN.getUser()?.is_admin) {
       location.href = 'admin-panel.html';
     }

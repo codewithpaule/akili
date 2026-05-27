@@ -572,7 +572,7 @@
 
   function initSidebarLayout() {
     const path = location.pathname.split('/').pop() || 'index.html';
-    const PUBLIC_PAGES = ['index.html', 'about.html', 'login.html', 'signup.html', 'privacy.html', 'contact.html', 'admin-login.html'];
+    const PUBLIC_PAGES = ['index.html', 'about.html', 'login.html', 'signup.html', 'privacy.html', 'terms.html', 'contact.html', 'admin-login.html', 'admin-entry.html'];
     if (PUBLIC_PAGES.includes(path)) return;
     if (document.querySelector('.dashboard-layout') || document.querySelector('.admin-layout') || document.querySelector('.admin-topbar')) return;
     if (!localStorage.getItem('akili_token')) return;
@@ -612,7 +612,7 @@
       { href: 'company.html', icon: 'briefcase', color: 'var(--mod-company)', name: 'Company Intel', desc: 'Domains, people, stack' },
       { href: 'email.html', icon: 'mail', color: 'var(--mod-email)', name: 'Email Investigator', desc: 'MX, breaches, validity' },
       { href: 'domain.html', icon: 'shield-check', color: 'var(--mod-domain)', name: 'Domain Reputation', desc: 'Age, typos, safe browsing' },
-      { href: 'breaches.html', icon: 'shield-alert', color: '#EF4444', name: 'Nigerian Breaches', desc: 'Nigerian compromised infrastructure data feed' },
+      // { href: 'breaches.html', icon: 'shield-alert', color: '#EF4444', name: 'Nigerian Breaches', desc: 'Nigerian compromised infrastructure data feed' },
       // Relationship Graph removed
     ];
     const TOOL_MODULES = [

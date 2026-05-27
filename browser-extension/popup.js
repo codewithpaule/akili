@@ -59,7 +59,7 @@ chrome.tabs.query({active: true, currentWindow: true}, async (tabs) => {
       throw new Error(data.detail || data.message || 'Scan failed');
     }
 
-    const data = await readScanResult(result);
+    const data = normalizeScanResult(await readScanResult(result));
     if (!apiKey) {
       data.summary = data.summary || 'Guest page check completed. Add an API key in the extension for full deep scanning.';
     }
@@ -153,7 +153,7 @@ function showResults(data) {
   document.getElementById('error').style.display = 'none';
   document.getElementById('connect-prompt').style.display = 'none';
   
-  const score = data.score || 0;
+  const score = Number.isFinite(Number(data.score)) ? Number(data.score) : scoreFromGrade(data.grade);
   const grade = data.grade || 'N/A';
   
   document.getElementById('score').textContent = score;
@@ -211,6 +211,24 @@ function showError(message) {
   document.getElementById('error').style.display = 'block';
   document.getElementById('error').textContent = 'Error: ' + message;
   document.getElementById('connect-prompt').style.display = 'none';
+}
+
+function normalizeScanResult(data) {
+  const out = data || {};
+  if (!Number.isFinite(Number(out.score))) {
+    out.score = scoreFromGrade(out.grade);
+  }
+  return out;
+}
+
+function scoreFromGrade(grade) {
+  const g = String(grade || '').toUpperCase();
+  if (g === 'A') return 95;
+  if (g === 'B') return 82;
+  if (g === 'C') return 72;
+  if (g === 'D') return 62;
+  if (g === 'F') return 45;
+  return 0;
 }
 
 function showConnectPrompt() {

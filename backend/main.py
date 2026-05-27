@@ -283,6 +283,7 @@ class RegisterBody(BaseModel):
     confirm_password: str = Field(default="", max_length=128)
     name: str = Field(default="", max_length=120)
     phone: str = Field(default="", max_length=40)
+    accepted_terms: bool = Field(default=False)
 
 
 class ProfilePatchBody(BaseModel):
@@ -332,6 +333,13 @@ class AdminLoginBody(BaseModel):
     email: str = Field(..., max_length=254)
     password: str = Field(..., max_length=128)
     admin_pin: str = Field(default="", max_length=32)
+
+
+class AdminMailBody(BaseModel):
+    subject: str = Field(..., min_length=1, max_length=200)
+    html: str = Field(..., min_length=1, max_length=50000)
+    recipient_mode: str = Field(default="single", max_length=20)
+    email: str = Field(default="", max_length=254)
 
 
 class GoogleAuthBody(BaseModel):
@@ -501,6 +509,8 @@ async def public_scan_website(request: Request, body: PublicWebsiteBody):
 async def auth_register(request: Request, body: RegisterBody):
     from audit_log import log_from_request
     _require_json(request)
+    if not body.accepted_terms:
+        raise HTTPException(400, "You must agree to the Terms and Privacy Policy")
     out = register_user(
         body.email, body.password, body.name, body.confirm_password, phone=body.phone
     )
@@ -849,6 +859,25 @@ async def admin_contacts_list(
 ):
     from admin_service import list_contacts_admin
     return list_contacts_admin(page=page, limit=limit)
+
+
+@app.post("/api/v1/admin/mail/send")
+@limiter.limit("20/hour")
+async def admin_mail_send(request: Request, body: AdminMailBody, user: dict = Depends(require_admin)):
+    from admin_service import send_custom_mail_admin
+    from audit_log import log_from_request
+    _require_json(request)
+    out = send_custom_mail_admin(
+        subject=body.subject,
+        html=body.html,
+        recipient_mode=body.recipient_mode,
+        email=body.email,
+    )
+    log_from_request(
+        request, "admin.mail.send", admin_user=user,
+        detail=f"mode={body.recipient_mode} sent={out.get('sent', 0)} skipped={out.get('skipped', 0)}",
+    )
+    return out
 
 
 @app.get("/api/v1/admin/monitors")

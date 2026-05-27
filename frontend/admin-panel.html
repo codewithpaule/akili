@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow,noarchive">
   <title>Admin — AKILI</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <meta name="description" content="AKILI administration console — manage users, scans, and settings.">
@@ -16,6 +17,7 @@
   <link rel="stylesheet" href="css/pages.css">
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.tiny.cloud/1/6ucho90v685nadt4nkhykvggk3xwh2rjcsztlz6yz3atk74f/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
 </head>
 <body class="admin-page akili-cursor">
   <header class="admin-topbar">
@@ -37,6 +39,7 @@
         <button type="button" class="admin-nav-item" data-tab="review">Review</button>
       <button type="button" class="admin-nav-item" data-tab="keys">API keys</button>
       <button type="button" class="admin-nav-item" data-tab="contacts">Contacts</button>
+      <button type="button" class="admin-nav-item" data-tab="mail">Mail</button>
       <button type="button" class="admin-nav-item" data-tab="monitors">Monitors</button>
       <button type="button" class="admin-nav-item" data-tab="billing">Billing</button>
       <button type="button" class="admin-nav-item" data-tab="events">Audit log</button>
@@ -140,6 +143,7 @@
         document.querySelectorAll('.admin-nav-item').forEach((b) => b.classList.remove('active'));
         document.querySelectorAll('.admin-panel').forEach((p) => p.classList.remove('active'));
         btn.classList.add('active');
+        document.getElementById('tab-overview')?.classList.toggle('active', btn.dataset.tab === 'overview');
         // load the requested tab into the dynamic container
         if (typeof loadTab === 'function') loadTab(btn.dataset.tab);
       };
@@ -155,6 +159,7 @@
         if (tab === 'scans') return loadScans();
         if (tab === 'keys') return loadKeys();
         if (tab === 'contacts') return loadContacts();
+        if (tab === 'mail') return loadMail();
         if (tab === 'events') return loadEvents();
         if (tab === 'billing') return loadBilling();
         if (tab === 'review') return loadReview();
@@ -220,6 +225,85 @@
       pager(document.getElementById('contacts-pager'), page, data.total, data.limit, loadContacts);
     }
 
+    async function loadMail() {
+      const out = document.getElementById('admin-dynamic');
+      out.innerHTML = `
+        <section class="admin-mail-shell">
+          <div class="admin-panel-head">
+            <div>
+              <h2>Compose mail</h2>
+              <p class="admin-lead">Send safe formatted HTML email to one user or every active user.</p>
+            </div>
+          </div>
+          <div class="admin-mail-card">
+            <div class="admin-mail-row">
+              <label>To</label>
+              <div class="admin-segment">
+                <button type="button" class="active" data-mail-mode="single">One user</button>
+                <button type="button" data-mail-mode="all">All users</button>
+              </div>
+            </div>
+            <div class="admin-mail-row" id="mail-email-row">
+              <label for="mail-recipient">Email</label>
+              <input id="mail-recipient" class="admin-input" type="email" placeholder="user@example.com">
+            </div>
+            <div class="admin-mail-row">
+              <label for="mail-subject">Subject</label>
+              <input id="mail-subject" class="admin-input" type="text" placeholder="Subject">
+            </div>
+            <textarea id="mail-editor"></textarea>
+            <div class="admin-mail-actions">
+              <span class="label-sm" id="mail-status"></span>
+              <button type="button" class="btn btn-primary" id="mail-send">Send mail</button>
+            </div>
+          </div>
+        </section>`;
+      let mode = 'single';
+      document.querySelectorAll('[data-mail-mode]').forEach((btn) => {
+        btn.onclick = () => {
+          mode = btn.dataset.mailMode;
+          document.querySelectorAll('[data-mail-mode]').forEach((b) => b.classList.remove('active'));
+          btn.classList.add('active');
+          document.getElementById('mail-email-row').style.display = mode === 'all' ? 'none' : '';
+        };
+      });
+      if (window.tinymce) {
+        tinymce.remove('#mail-editor');
+        tinymce.init({
+          selector: '#mail-editor',
+          height: 360,
+          menubar: false,
+          plugins: 'lists link autoresize',
+          toolbar: 'undo redo | blocks | bold italic underline | bullist numlist blockquote | link | removeformat',
+          branding: false,
+          content_style: 'body{font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#0f172a;}',
+        });
+      }
+      document.getElementById('mail-send').onclick = async () => {
+        const subject = document.getElementById('mail-subject').value.trim();
+        const email = document.getElementById('mail-recipient').value.trim();
+        const html = window.tinymce ? tinymce.get('mail-editor').getContent() : document.getElementById('mail-editor').value;
+        const status = document.getElementById('mail-status');
+        if (!subject || !html.trim()) {
+          AKILI.showToast('Subject and message are required', 'error');
+          return;
+        }
+        if (mode === 'all' && !confirm('Send this email to all active users?')) return;
+        status.textContent = 'Sending...';
+        try {
+          const res = await AKILI_ADMIN.api('/api/v1/admin/mail/send', {
+            method: 'POST',
+            body: JSON.stringify({ subject, html, recipient_mode: mode, email }),
+          });
+          status.textContent = `Queued ${res.sent} email(s)`;
+          AKILI.showToast('Mail queued', 'success');
+        } catch (e) {
+          status.textContent = '';
+          AKILI.showToast(e.message || 'Mail failed', 'error');
+        }
+      };
+    }
+
     async function loadEvents(page = 1) {
       const out = document.getElementById('admin-dynamic');
       out.innerHTML = '<p class="label-sm">Loading audit events…</p>';
@@ -260,6 +344,8 @@
     }
 
     async function loadOverview() {
+      const dyn = document.getElementById('admin-dynamic');
+      if (dyn) dyn.innerHTML = '';
       const data = await AKILI_ADMIN.api('/api/v1/admin/dashboard');
       const s = data.stats;
       const cards = [

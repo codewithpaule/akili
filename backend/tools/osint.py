@@ -75,9 +75,12 @@ def _confidence_breakdown(platforms: dict, breaches: list, social_cards: list) -
     signals = []
     red_flags = []
 
-    if platforms.get("github", {}).get("found"):
+    if platforms.get("github", {}).get("found") and platforms.get("github", {}).get("identity_confidence") != "weak":
         score += 20
-        signals.append("GitHub account found and active (+20)")
+        signals.append("GitHub account found with developer/identity evidence (+20)")
+    elif platforms.get("github", {}).get("found"):
+        score -= 10
+        red_flags.append("GitHub match is weak or name-only; not treated as identity proof (-10)")
     if platforms.get("linkedin", {}).get("found"):
         score += 15
         signals.append("LinkedIn profile found (+15)")
@@ -87,6 +90,8 @@ def _confidence_breakdown(platforms: dict, breaches: list, social_cards: list) -
     if social_cards:
         score += 10
         signals.append("Public activity data available (+10)")
+    if not platforms.get("github", {}).get("found"):
+        signals.append("No verified GitHub/developer profile found (+0)")
 
     if breaches:
         score -= 10
@@ -98,6 +103,18 @@ def _confidence_breakdown(platforms: dict, breaches: list, social_cards: list) -
         "red_flags": red_flags,
         "breakdown_visible": True,
     }
+
+
+def _name_terms(name: str) -> list[str]:
+    return [p.lower() for p in re.findall(r"[a-zA-Z0-9]+", name) if len(p) > 1]
+
+
+def _result_matches_name(item: dict, name: str) -> bool:
+    text = f"{item.get('title', '')} {item.get('snippet', '')} {item.get('link', '')}".lower()
+    terms = _name_terms(name)
+    if not terms:
+        return False
+    return all(t in text for t in terms[:2])
 
 
 def _abs_url(url: str | None) -> str | None:
@@ -201,13 +218,53 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
     text_blob = " ".join([r.get("title", "") + " " + r.get("snippet", "") for r in raw_results]).lower() + " " + (keywords or "").lower()
     is_dev = any(t in text_blob for t in dev_terms)
 
+    for platform in list(platforms.keys()):
+        info = platforms.get(platform) or {}
+        if not info.get("found") or not info.get("url"):
+            continue
+        matching_items = [
+            r for r in raw_results
+            if info["url"].rstrip("/") in (_abs_url(r.get("link", "") or "") or "").rstrip("/")
+        ]
+        name_match = any(_result_matches_name(r, name) for r in matching_items)
+        if platform == "github" and not (name_match and is_dev):
+            platforms[platform] = {
+                "found": False,
+                "url": None,
+                "rejected_reason": "Name-only GitHub result; no developer evidence tied to this subject.",
+            }
+        elif platform == "instagram":
+            url = info.get("url", "")
+            if re.search(r"instagram\.com/(p|reel|reels|explore|stories)/", url, re.I) or not name_match:
+                platforms[platform] = {
+                    "found": False,
+                    "url": None,
+                    "rejected_reason": "Generic Instagram content, not a confirmed profile.",
+                }
+
     # Only query the GitHub API for usernames if GitHub-like URLs were found or content looks developer-related.
     if platforms.get("github", {}).get("found") or is_dev:
         gh_user = _extract_username(name)
         gh_profile = _github_user(gh_user)
         if gh_profile:
             username = gh_profile.get("login") or _extract_username(name)
-            platforms["github"] = {"found": True, "url": _abs_url(gh_profile.get("html_url")), "handle": '@' + username}
+            gh_text = f"{gh_profile.get('name') or ''} {gh_profile.get('bio') or ''} {username}".lower()
+            name_match = all(t in gh_text for t in _name_terms(name)[:2])
+            if name_match or is_dev:
+                platforms["github"] = {
+                    "found": True,
+                    "url": _abs_url(gh_profile.get("html_url")),
+                    "handle": '@' + username,
+                    "identity_confidence": "strong" if name_match and is_dev else "weak",
+                }
+            else:
+                platforms["github"] = {
+                    "found": False,
+                    "url": None,
+                    "rejected_reason": "GitHub username matched mechanically, but profile identity did not match the subject.",
+                }
+                gh_profile = None
+        if gh_profile:
             social_cards.append({
                 "platform": "github",
                 "profile_url": gh_profile.get("html_url"),
@@ -288,6 +345,10 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
         "confidence_breakdown": confidence,
         "all_urls": all_urls[:20],
         "total_sources": len(unique_results),
+        "agentic_notes": [
+            "SerpAPI/search results, platform evidence, profile metadata, images, and breach-safe signals were cross-checked before confidence scoring.",
+            "Weak name-only social results are rejected instead of being presented as confirmed profiles.",
+        ],
     }
 
 

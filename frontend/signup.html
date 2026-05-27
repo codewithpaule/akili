@@ -30,6 +30,10 @@
         <div class="auth-field"><label>Email</label><input type="email" id="email" required autocomplete="email"></div>
         <div class="auth-field"><label>Password (8+ chars)</label><input type="password" id="password" required minlength="8" autocomplete="new-password"></div>
         <div class="auth-field"><label>Confirm password</label><input type="password" id="password-confirm" required minlength="8" autocomplete="new-password"></div>
+        <label class="auth-check">
+          <input type="checkbox" id="accepted-terms" required>
+          <span>I agree to the <a href="terms.html" target="_blank" rel="noopener noreferrer">Terms</a> and <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</span>
+        </label>
         <button type="submit" class="btn btn-primary" style="width:100%">Create account</button>
       </form>
       <p style="margin-top:1.25rem;font-size:0.9rem;color:var(--slate)">Already have an account? <a href="login.html">Sign in</a></p>
@@ -59,6 +63,10 @@
         AKILI.showToast('Passwords do not match', 'error');
         return;
       }
+      if (!document.getElementById('accepted-terms').checked) {
+        AKILI.showToast('Please agree to the Terms and Privacy Policy', 'error');
+        return;
+      }
       try {
         const data = await AKILI_AUTH.api('/api/v1/auth/register', {
           method: 'POST',
@@ -68,6 +76,7 @@
             email: document.getElementById('email').value,
             password: pw,
             confirm_password: pw2,
+            accepted_terms: true,
           }),
         });
         AKILI_AUTH.setSession(data.token, data.user);

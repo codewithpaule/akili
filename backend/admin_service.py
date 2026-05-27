@@ -1,6 +1,7 @@
 """Admin operations — stats, users, scans, keys, contacts, monitors."""
 
 import os
+import re
 import time
 import uuid
 from typing import Any, Optional
@@ -9,6 +10,8 @@ from dotenv import load_dotenv
 from fastapi import HTTPException
 from sqlalchemy import func
 import json
+from html.parser import HTMLParser
+from urllib.parse import urlparse
 from auth_service import hash_password, user_to_dict
 from database import ApiKey, Contact, Monitor, Scan, UsageCounter, User, get_db, period_key
 
@@ -16,6 +19,12 @@ load_dotenv()
 
 ADMIN_EMAIL = (os.getenv("ADMIN_EMAIL", "") or "").strip().lower()
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "") or ""
+
+ALLOWED_MAIL_TAGS = {
+    "a", "b", "blockquote", "br", "div", "em", "h1", "h2", "h3", "i",
+    "li", "ol", "p", "span", "strong", "u", "ul",
+}
+ALLOWED_MAIL_ATTRS = {"a": {"href", "title", "target", "rel"}}
 
 
 def bootstrap_admin_user() -> None:
@@ -374,6 +383,105 @@ def list_contacts_admin(*, page: int = 1, limit: int = 30) -> dict:
             "timestamp": c.timestamp,
         } for c in rows]
     return {"items": items, "total": total, "page": page, "limit": limit}
+
+
+def _html_escape(value: str) -> str:
+    return (
+        str(value)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+class _MailSanitizer(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+
+    def handle_starttag(self, tag, attrs):
+        tag = tag.lower()
+        if tag not in ALLOWED_MAIL_TAGS:
+            return
+        clean_attrs = []
+        for key, val in attrs:
+            key = key.lower()
+            if key not in ALLOWED_MAIL_ATTRS.get(tag, set()):
+                continue
+            val = str(val or "").strip()
+            if key == "href":
+                parsed = urlparse(val)
+                if parsed.scheme and parsed.scheme.lower() not in {"http", "https", "mailto"}:
+                    continue
+            if key == "target":
+                val = "_blank"
+            clean_attrs.append(f'{key}="{_html_escape(val)}"')
+        if tag == "a":
+            if not any(a.startswith("rel=") for a in clean_attrs):
+                clean_attrs.append('rel="noopener noreferrer"')
+            if not any(a.startswith("target=") for a in clean_attrs):
+                clean_attrs.append('target="_blank"')
+        attr_text = (" " + " ".join(clean_attrs)) if clean_attrs else ""
+        self.parts.append(f"<{tag}{attr_text}>")
+
+    def handle_endtag(self, tag):
+        tag = tag.lower()
+        if tag in ALLOWED_MAIL_TAGS and tag != "br":
+            self.parts.append(f"</{tag}>")
+
+    def handle_data(self, data):
+        self.parts.append(_html_escape(data))
+
+    def handle_entityref(self, name):
+        self.parts.append(f"&{name};")
+
+    def handle_charref(self, name):
+        self.parts.append(f"&#{name};")
+
+
+def _sanitize_mail_html(html: str) -> str:
+    parser = _MailSanitizer()
+    parser.feed(html or "")
+    body = "".join(parser.parts).strip()
+    return f"""
+    <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a;max-width:680px;margin:0 auto">
+      {body}
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0">
+      <p style="font-size:12px;color:#64748b">Sent by AKILI.</p>
+    </div>
+    """
+
+
+def _html_to_text(html: str) -> str:
+    text = re.sub(r"<\s*br\s*/?>", "\n", html, flags=re.I)
+    text = re.sub(r"</\s*p\s*>", "\n\n", text, flags=re.I)
+    text = re.sub(r"<[^>]+>", "", text)
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
+def send_custom_mail_admin(*, subject: str, html: str, recipient_mode: str, email: str = "") -> dict:
+    from email_service import send_email_async
+    from auth_service import _email_ok
+
+    subject = (subject or "").strip()
+    if not subject:
+        raise HTTPException(400, "Subject is required")
+    mode = (recipient_mode or "single").strip().lower()
+    recipients: list[str] = []
+    with get_db() as db:
+        if mode == "all":
+            recipients = [u.email for u in db.query(User).filter(User.is_active == True).all() if u.email]
+        else:
+            email_l = (email or "").strip().lower()
+            if not _email_ok(email_l):
+                raise HTTPException(400, "Enter a valid recipient email")
+            recipients = [email_l]
+    safe_html = _sanitize_mail_html(html)
+    text = _html_to_text(safe_html)
+    for recipient in recipients:
+        send_email_async(recipient, subject, safe_html, text)
+    return {"sent": len(recipients), "skipped": 0, "mode": mode}
 
 
 def list_monitors_admin() -> dict:

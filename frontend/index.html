@@ -97,7 +97,7 @@
         <div id="guest-website-result" style="display: none; padding: 1rem; background: var(--bg); border-radius: var(--radius); font-size: 0.85rem;"></div>
       </div>
 
-      <!-- Nigerian Breaches Widget -->
+      <!-- Nigerian Breaches Widget disabled for now.
       <div class="card" style="border-top: 4px solid #EF4444;">
         <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
           <div style="background: #EF444422; color: #EF4444; padding: 0.5rem; border-radius: 8px;">
@@ -113,6 +113,7 @@
           <a href="breaches.html" class="btn btn-outline" style="width: 100%; text-align: center;">View All Breaches</a>
         </div>
       </div>
+      -->
 
     </div>
   </section>
@@ -137,16 +138,15 @@
   <section class="container" style="padding:3rem 1.5rem">
     <h2 style="text-align:center;margin-bottom:0.5rem">Intelligence sources</h2>
     <p style="text-align:center;color:var(--slate);margin-bottom:1.5rem">Thanks to the public data and security projects that help AKILI enrich reports.</p>
-    <div class="card source-carousel" style="overflow:hidden;padding:1rem">
+    <div class="source-cloud">
       <div class="source-track">
-        <a href="https://xposedornot.com" target="_blank" rel="noopener noreferrer"><img src="https://www.google.com/s2/favicons?domain=xposedornot.com&sz=64" alt="XposedOrNot"></a>
-        <a href="https://nvd.nist.gov" target="_blank" rel="noopener noreferrer"><img src="https://www.google.com/s2/favicons?domain=nvd.nist.gov&sz=64" alt="NVD"></a>
-        <a href="https://www.cve.org" target="_blank" rel="noopener noreferrer"><img src="https://www.google.com/s2/favicons?domain=cve.org&sz=64" alt="CVE"></a>
-        <a href="https://cve.circl.lu" target="_blank" rel="noopener noreferrer"><img src="https://www.google.com/s2/favicons?domain=cve.circl.lu&sz=64" alt="CIRCL CVE"></a>
-        <a href="https://crt.sh" target="_blank" rel="noopener noreferrer"><img src="https://www.google.com/s2/favicons?domain=crt.sh&sz=64" alt="crt.sh"></a>
-        <a href="https://github.com" target="_blank" rel="noopener noreferrer"><img src="https://www.google.com/s2/favicons?domain=github.com&sz=64" alt="GitHub"></a>
-        <a href="https://xposedornot.com" target="_blank" rel="noopener noreferrer"><img src="https://www.google.com/s2/favicons?domain=xposedornot.com&sz=64" alt="XposedOrNot"></a>
-        <a href="https://nvd.nist.gov" target="_blank" rel="noopener noreferrer"><img src="https://www.google.com/s2/favicons?domain=nvd.nist.gov&sz=64" alt="NVD"></a>
+        <a href="https://xposedornot.com" target="_blank" rel="noopener noreferrer"><img src="https://www.google.com/s2/favicons?domain=xposedornot.com&sz=64" alt=""><span>XposedOrNot</span></a>
+        <a href="https://nvd.nist.gov" target="_blank" rel="noopener noreferrer"><img src="https://www.google.com/s2/favicons?domain=nvd.nist.gov&sz=64" alt=""><span>NVD</span></a>
+        <a href="https://www.cve.org" target="_blank" rel="noopener noreferrer"><img src="https://www.google.com/s2/favicons?domain=cve.org&sz=64" alt=""><span>CVE</span></a>
+        <a href="https://cve.circl.lu" target="_blank" rel="noopener noreferrer"><img src="https://www.google.com/s2/favicons?domain=cve.circl.lu&sz=64" alt=""><span>CIRCL</span></a>
+        <a href="https://crt.sh" target="_blank" rel="noopener noreferrer"><img src="https://www.google.com/s2/favicons?domain=crt.sh&sz=64" alt=""><span>crt.sh</span></a>
+        <a href="https://github.com" target="_blank" rel="noopener noreferrer"><img src="https://www.google.com/s2/favicons?domain=github.com&sz=64" alt=""><span>GitHub</span></a>
+        <a href="https://serpapi.com" target="_blank" rel="noopener noreferrer"><img src="https://www.google.com/s2/favicons?domain=serpapi.com&sz=64" alt=""><span>SerpAPI</span></a>
       </div>
     </div>
   </section>
@@ -183,7 +183,7 @@
       <div><strong>Learn</strong><br><a href="about.html">About</a><br><a href="contact.html">Contact</a></div>
       <div><strong>Company</strong><br><a href="about.html">About</a><br><a href="contact.html">Contact</a><br><a href="privacy.html">Privacy</a><br><a href="docs.html">Docs</a></div>
     </div>
-    <div class="footer-bottom">© 2025 AKILI · Authorized security testing and due diligence only.</div>
+    <div class="footer-bottom">&copy; <span id="footer-year"></span> AKILI · Authorized security testing and due diligence only.</div>
   </footer>
 
   <script src="js/config.runtime.js"></script>
@@ -205,7 +205,7 @@
       { href:'company.html', color:'var(--mod-company)', name:'Company Intel', desc:'Domains, people, stack' },
       { href:'email.html', color:'var(--mod-email)', name:'Email Investigator', desc:'MX, breaches, validity' },
       { href:'domain.html', color:'var(--mod-domain)', name:'Domain Reputation', desc:'Safe browsing, age, typos' },
-      { href:'breaches.html', color:'#EF4444', name:'Nigerian Breaches', desc:'Nigerian compromised infrastructure feed' },
+      // { href:'breaches.html', color:'#EF4444', name:'Nigerian Breaches', desc:'Nigerian compromised infrastructure feed' },
       // Relationship Graph removed
       { href:'api-search.html', color:'var(--navy)', name:'API Search', desc:'Search the API and docs' },
     ];
@@ -424,8 +424,9 @@
       }
     }
 
-    // Load Nigerian breaches on page load
-    loadNigeriaBreachesWidget();
+    document.getElementById('footer-year').textContent = new Date().getFullYear();
+    // Nigerian breaches widget disabled for now.
+    // loadNigeriaBreachesWidget();
 
     (function graph() {
       const w = document.getElementById('landing-graph').clientWidth || 500;

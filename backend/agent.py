@@ -164,6 +164,10 @@ If breaches array is non-empty, state clearly the email was found in data breach
 
 PERSON_PROMPT = """You are a professional due diligence analyst. From public OSINT only, write JSON:
 {{"name":"","confidence":0-100,"platforms":{{}},"trust_signals":[],"red_flags":[],"profile_narrative":"2-4 sentences: who they likely are, role, location hints from public sources","age_context":"age range or life-stage ONLY if public evidence (job title, graduation year, news); else \"not enough public data\"","role_hint":"","location_hint":"","ai_summary":"","overall_assessment":"proceed|verify further|insufficient data"}}
+Rules:
+- Be skeptical with common names and generic social links.
+- If GitHub is absent or rejected, say there is no verified developer/GitHub evidence instead of implying the person is a developer.
+- If the evidence does not prove the same person across platforms, lower confidence and say "insufficient data" or "verify further".
 Never invent private facts. Never make character judgments beyond data."""
 
 
@@ -750,6 +754,7 @@ def run_agent(
             "location_hint": ai.get("location_hint", ""),
             "confidence_breakdown": cb,
             "search_source": osint_data.get("search_source", ""),
+            "agentic_notes": osint_data.get("agentic_notes", []),
         }
     elif module == "email":
         raw = _email_intel_from_context(context)

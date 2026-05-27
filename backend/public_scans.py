@@ -55,8 +55,8 @@ async def check_ssrf_protection(url: str):
         raise HTTPException(status_code=400, detail="Private IP addresses are not allowed")
 
 
-async def calculate_grade(headers_result: dict, ssl_result: dict) -> str:
-    """Calculate security grade based on findings."""
+async def calculate_security_score(headers_result: dict, ssl_result: dict) -> int:
+    """Calculate numeric security score based on findings."""
     score = 100
     
     # Deduct for SSL issues
@@ -69,6 +69,13 @@ async def calculate_grade(headers_result: dict, ssl_result: dict) -> str:
     missing_count = headers_result.get("missing_count", 0)
     score -= min(missing_count * 5, 30)
     
+    return max(0, min(100, score))
+
+
+async def calculate_grade(headers_result: dict, ssl_result: dict) -> str:
+    """Calculate security grade based on findings."""
+    score = await calculate_security_score(headers_result, ssl_result)
+
     if score >= 90:
         return "A"
     elif score >= 80:
@@ -163,6 +170,7 @@ async def public_website_scan(url: str, page_context: dict | None = None) -> dic
     context = {}
     headers_result = headers_check(url, context)
     ssl_result = ssl_check(url, context)
+    score = await calculate_security_score(headers_result, ssl_result)
     grade = await calculate_grade(headers_result, ssl_result)
     
     # Top 3 findings only
@@ -177,6 +185,7 @@ async def public_website_scan(url: str, page_context: dict | None = None) -> dic
     ssl_raw = ssl_result.get("raw", {})
     return {
         "url": url,
+        "score": score,
         "grade": grade,
         "ssl_valid": ssl_result.get("severity") != "CRITICAL",
         "ssl_expiry": ssl_raw.get("days_remaining"),
