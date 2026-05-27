@@ -424,6 +424,13 @@ async def nigeria_breaches(request: Request):
     return data
 
 
+@app.get("/api/v1/breaches")
+@limiter.limit("60/minute")
+async def breaches_feed(request: Request, country: Optional[str] = None, q: str = "", limit: int = 250):
+    from breaches import get_breaches
+    return await get_breaches(country=country, q=q, limit=limit)
+
+
 class PublicEmailBody(BaseModel):
     email: str = Field(..., max_length=254)
 

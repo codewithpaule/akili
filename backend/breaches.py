@@ -1,83 +1,123 @@
-import httpx
 import logging
+from typing import Optional
+
+import httpx
 
 logger = logging.getLogger("akili.breaches")
 
-async def get_nigeria_breaches():
-    url = "https://api.xposedornot.com/v1/breaches"
+XON_BREACHES_URL = "https://api.xposedornot.com/v1/breaches"
+
+COUNTRY_KEYWORDS = {
+    "nigeria": [
+        ".ng", "nigeria", "nigerian", "lagos", "abuja",
+        "gtbank", "gtco", "zenith", "firstbank", "access bank", "uba",
+        "fidelity", "sterling bank", "opay", "palmpay", "cowrywise",
+        "paystack", "flutterwave", "interswitch", "konga", "jumia",
+        "mtn nigeria", "airtel nigeria", "glo", "9mobile",
+    ],
+    "africa": [
+        "africa", ".ng", ".za", ".ke", ".gh", ".eg", ".ma", ".et",
+        ".tz", ".ug", ".rw", ".cm", ".ci", ".sn", ".ao", ".zm",
+        "nigeria", "south africa", "kenya", "ghana", "egypt", "morocco",
+        "ethiopia", "tanzania", "uganda", "rwanda", "cameroon", "senegal",
+    ],
+}
+
+
+def _flatten_breaches(data) -> list[dict]:
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+    if not isinstance(data, dict):
+        return []
+
+    exposed = data.get("exposedBreaches")
+    if isinstance(exposed, list):
+        return [item for item in exposed if isinstance(item, dict)]
+    if isinstance(exposed, dict):
+        breaches = exposed.get("breaches_details") or exposed.get("breaches") or list(exposed.values())
+        if isinstance(breaches, list):
+            return [item for item in breaches if isinstance(item, dict)]
+
+    values = []
+    for value in data.values():
+        if isinstance(value, dict):
+            values.append(value)
+        elif isinstance(value, list):
+            values.extend(item for item in value if isinstance(item, dict))
+    return values
+
+
+def _normalize_breach(item: dict) -> dict:
+    name = item.get("breach") or item.get("Name") or item.get("name") or item.get("title") or "Unknown"
+    domain = item.get("domain") or item.get("Domain") or item.get("site") or ""
+    details = item.get("details") or item.get("Description") or item.get("description") or ""
+    exposed = item.get("exposed_data") or item.get("DataClasses") or item.get("data_exposed") or []
+    if isinstance(exposed, str):
+        exposed = [part.strip() for part in exposed.split(",") if part.strip()]
+    year = item.get("year") or item.get("BreachDate") or item.get("breach_date") or item.get("date") or "Unknown"
+    return {
+        "breach": str(name),
+        "name": str(name),
+        "domain": str(domain),
+        "details": str(details),
+        "exposed_data": exposed if isinstance(exposed, list) else [],
+        "password_hash": bool(item.get("password_hash", False)),
+        "industry": str(item.get("industry") or item.get("Industry") or ""),
+        "year": str(year),
+        "records": item.get("records") or item.get("PwnCount") or item.get("xposed_records") or 0,
+        "source_link": item.get("source_link") or item.get("References") or item.get("reference") or "",
+        "country_hint": _country_hint(item),
+    }
+
+
+def _search_blob(item: dict) -> str:
+    return " ".join(
+        str(item.get(k, ""))
+        for k in ("breach", "name", "domain", "details", "industry", "year", "country_hint")
+    ).lower()
+
+
+def _country_hint(item: dict) -> str:
+    blob = " ".join(str(item.get(k, "")) for k in ("domain", "breach", "name", "details", "industry")).lower()
+    for country, keywords in COUNTRY_KEYWORDS.items():
+        if any(keyword in blob for keyword in keywords):
+            return country
+    return ""
+
+
+def _filter_breaches(breaches: list[dict], *, country: Optional[str] = None, q: str = "") -> list[dict]:
+    country_key = (country or "").strip().lower()
+    query = (q or "").strip().lower()
+    out = breaches
+    if country_key and country_key != "all":
+        keywords = COUNTRY_KEYWORDS.get(country_key, [country_key])
+        out = [item for item in out if any(keyword in _search_blob(item) for keyword in keywords)]
+    if query:
+        out = [item for item in out if query in _search_blob(item)]
+    return out
+
+
+async def get_breaches(country: Optional[str] = None, q: str = "", limit: int = 250) -> dict:
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.get(
-                url,
-                headers={
-                    "User-Agent": "AKILI-Platform/1.0"
-                }
-            )
-            if response.status_code != 200:
-                logger.error("Failed to fetch breaches from XposedOrNot: status=%s", response.status_code)
-                return {"breaches": [], "total": 0, "source": "xposedornot"}
-            
-            data = response.json()
-            
-            # XposedOrNot returns breaches inside an 'exposedBreaches' object
-            raw_breaches = []
-            if isinstance(data, dict):
-                # Standard endpoint is often a dictionary with breach details
-                raw_breaches = data.get("exposedBreaches", [])
-                if not raw_breaches and "exposedBreaches" in data:
-                    raw_breaches = data["exposedBreaches"]
-                elif not raw_breaches:
-                    # Let's inspect dict keys or fall back to checking entries
-                    raw_breaches = list(data.values())
-            elif isinstance(data, list):
-                raw_breaches = data
+            response = await client.get(XON_BREACHES_URL, headers={"User-Agent": "AKILI-Platform/1.0"})
+        if response.status_code != 200:
+            logger.error("Failed to fetch breaches from XposedOrNot: status=%s", response.status_code)
+            return {"breaches": [], "total": 0, "source": "xposedornot", "country": country or "all"}
 
-            nigeria_keywords = [
-                ".ng", "nigeria", "nigerian",
-                "gtbank", "zenith", "firstbank",
-                "access bank", "uba", "fidelity",
-                "mtn nigeria", "airtel nigeria",
-                "glo", "9mobile", "konga", "jumia",
-                "flutterwave", "paystack", "piggyvest",
-                "opay", "palmpay", "cowrywise"
-            ]
-            
-            nigeria_breaches = []
-            for item in raw_breaches:
-                if not isinstance(item, dict):
-                    continue
-                
-                # Check domain, breach name, or details for Nigerian keywords
-                domain = str(item.get("domain", "")).lower()
-                breach_name = str(item.get("breach", "")).lower()
-                details = str(item.get("details", "")).lower()
-                
-                # ONLY matches target Nigerian infrastructure (.ng domain or specific local tech/banks)
-                is_nigerian = (
-                    domain.endswith(".ng") or 
-                    any(f".{kw}" in domain for kw in nigeria_keywords) or
-                    any(kw in domain for kw in nigeria_keywords) or
-                    any(kw in breach_name for kw in nigeria_keywords)
-                )
-                
-                if is_nigerian:
-                    nigeria_breaches.append({
-                        "breach": item.get("breach", "Unknown"),
-                        "domain": item.get("domain", ""),
-                        "details": item.get("details", ""),
-                        "exposed_data": item.get("exposed_data", []),
-                        "password_hash": item.get("password_hash", False),
-                        "industry": item.get("industry", ""),
-                        "year": item.get("year", "Unknown"),
-                        "records": item.get("records", 0)
-                    })
-                    
-            return {
-                "breaches": nigeria_breaches,
-                "total": len(nigeria_breaches),
-                "source": "xposedornot"
-            }
-            
+        normalized = [_normalize_breach(item) for item in _flatten_breaches(response.json())]
+        filtered = _filter_breaches(normalized, country=country, q=q)
+        return {
+            "breaches": filtered[: max(1, min(limit, 500))],
+            "total": len(filtered),
+            "source": "xposedornot",
+            "country": country or "all",
+            "query": q,
+        }
     except Exception as e:
-        logger.exception("Error while fetching/parsing Nigerian breaches")
-        return {"breaches": [], "total": 0, "source": "xposedornot", "error": str(e)}
+        logger.exception("Error while fetching/parsing breaches")
+        return {"breaches": [], "total": 0, "source": "xposedornot", "country": country or "all", "error": str(e)}
+
+
+async def get_nigeria_breaches():
+    return await get_breaches(country="nigeria")

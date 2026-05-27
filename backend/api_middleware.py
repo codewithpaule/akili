@@ -13,6 +13,7 @@ PUBLIC_PATH_PREFIXES = (
 PUBLIC_PATHS = {
     "/",
     "/api/v1/health",
+    "/api/v1/breaches",
     "/api/v1/breaches/nigeria",
     "/api/v1/public-config",
     "/api/v1/billing/pricing",
@@ -207,7 +208,7 @@ async def validate_api_request(request: Request, call_next):
     
     # Daily scan limit check
     from database import get_daily_scan_count
-    scan_count = await get_daily_scan_count(user["user_id"])
+    scan_count = get_daily_scan_count(user["user_id"])
     if scan_count >= 5:
         from database import get_midnight_utc
         return JSONResponse(

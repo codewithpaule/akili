@@ -17,16 +17,23 @@
   <main class="container" style="padding:2rem 1.5rem; max-width:1000px;">
     <header class="page-hero" style="border-bottom: 1px solid var(--border); padding-bottom: 1.5rem; margin-bottom: 2rem;">
       <p class="dash-eyebrow">Data Intelligence Feed</p>
-      <h1 style="font-size: 2.25rem; color: var(--navy); margin-top: 0.25rem;">Nigerian Infrastructure Data Breaches</h1>
+      <h1 style="font-size: 2.25rem; color: var(--navy); margin-top: 0.25rem;">Global Data Breaches</h1>
       <p class="lead" style="margin-top: 0.5rem; color: var(--slate);">
-        Real-time tracking of intelligence feeds and compromised data structures targeting Nigerian institutions, banks, government infrastructure, and enterprise platforms.
+        Search global breach intelligence, then narrow it to Nigerian or African signals when you need local context.
       </p>
     </header>
 
     <div class="card" style="margin-bottom: 2rem; background: var(--surface);">
       <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
         <div style="flex: 1; min-width: 280px; position: relative;">
-          <input type="text" id="search-filter" placeholder="Filter by domain, bank, or breach name..." style="width: 100%; padding: 0.75rem 1rem; border: 1px solid var(--border); border-radius: var(--radius); font-family: var(--font-body); font-size: 0.9rem;">
+          <input type="text" id="search-filter" placeholder="Search breach, domain, industry, country..." style="width: 100%; padding: 0.75rem 1rem; border: 1px solid var(--border); border-radius: var(--radius); font-family: var(--font-body); font-size: 0.9rem;">
+        </div>
+        <div style="min-width: 170px;">
+          <select id="country-filter" style="width: 100%; padding: 0.75rem 1rem; border: 1px solid var(--border); border-radius: var(--radius); font-family: var(--font-body); font-size: 0.9rem; background: var(--white);">
+            <option value="all">All breaches</option>
+            <option value="nigeria">Nigeria</option>
+            <option value="africa">Africa</option>
+          </select>
         </div>
         <div style="display: flex; gap: 0.5rem; align-items: center;">
           <span style="font-size: 0.85rem; color: var(--slate);">Total breaches found:</span>
@@ -73,14 +80,15 @@
         emptyState.classList.add('hidden');
 
         const baseUrl = (window.AKILI_CONFIG && AKILI_CONFIG.API_BASE) || 'http://localhost:8001';
-        const response = await fetch(`${baseUrl}/api/v1/breaches/nigeria`);
+        const response = await fetch(`${baseUrl}/api/v1/breaches?limit=500`);
         if (!response.ok) {
           throw new Error('Failed to fetch breaches from infrastructure feed.');
         }
 
-        allBreaches = await response.json();
+        const payload = await response.json();
+        allBreaches = Array.isArray(payload) ? payload : (payload.breaches || []);
         counter.textContent = allBreaches.length;
-        renderBreaches(allBreaches);
+        applyFilters();
       } catch (err) {
         if (window.AKILI) {
           AKILI.showToast(err.message || 'Error fetching feed', 'error');
@@ -111,6 +119,8 @@
         const exposedStr = Array.isArray(b.exposed_data) && b.exposed_data.length 
           ? b.exposed_data.slice(0, 6).join(', ') 
           : b.details || 'Compromised records';
+        const title = b.breach || b.name || 'Unknown breach';
+        const source = b.source_link || '';
         
         return `
           <div class="card" style="border-top: 4px solid #EF4444; display: flex; flex-direction: column; justify-content: space-between;">
@@ -119,7 +129,7 @@
                 <span class="badge badge-critical">Breach</span>
                 <span class="badge badge-info">${AKILI.escapeHtml(b.year || 'Unknown')}</span>
               </div>
-              <h3 style="font-size: 1.15rem; color: var(--navy); margin-bottom: 0.35rem;">${AKILI.escapeHtml(b.breach)}</h3>
+              <h3 style="font-size: 1.15rem; color: var(--navy); margin-bottom: 0.35rem;">${AKILI.escapeHtml(title)}</h3>
               <p style="font-size: 0.85rem; color: var(--blue); font-family: var(--font-mono); margin-bottom: 0.75rem; word-break: break-all;">
                 ${AKILI.escapeHtml(b.domain || 'Target Infrastructure')}
               </p>
@@ -128,7 +138,7 @@
               </p>
             </div>
             <div style="border-top: 1px solid var(--border); padding-top: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 0.8rem; color: var(--slate);">Compromised accounts:</span>
+              <span style="font-size: 0.8rem; color: var(--slate);">${source ? AKILI.externalLink(source, 'Source') : 'Compromised accounts:'}</span>
               <strong style="color: var(--navy); font-size: 0.9rem;">${AKILI.escapeHtml(recordsStr)}</strong>
             </div>
           </div>
@@ -140,18 +150,23 @@
       }
     }
 
-    document.getElementById('search-filter').addEventListener('input', (e) => {
-      const q = e.target.value.toLowerCase().strip();
+    function applyFilters() {
+      const q = document.getElementById('search-filter').value.toLowerCase().trim();
+      const country = document.getElementById('country-filter').value;
       const filtered = allBreaches.filter(b => {
-        return (
-          String(b.breach || '').toLowerCase().includes(q) ||
-          String(b.domain || '').toLowerCase().includes(q) ||
-          String(b.details || '').toLowerCase().includes(q)
-        );
+        const blob = [
+          b.breach, b.name, b.domain, b.details, b.industry, b.year, b.country_hint,
+          ...(Array.isArray(b.exposed_data) ? b.exposed_data : [])
+        ].join(' ').toLowerCase();
+        const countryOk = country === 'all' || b.country_hint === country || blob.includes(country);
+        return countryOk && (!q || blob.includes(q));
       });
       document.getElementById('breach-counter').textContent = filtered.length;
       renderBreaches(filtered);
-    });
+    }
+
+    document.getElementById('search-filter').addEventListener('input', applyFilters);
+    document.getElementById('country-filter').addEventListener('change', applyFilters);
 
     // Run immediately
     document.addEventListener('DOMContentLoaded', () => {

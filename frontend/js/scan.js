@@ -196,6 +196,21 @@
     terminal.scrollTop = terminal.scrollHeight;
   }
 
+  function severityBorder(findings) {
+    const severities = (findings || []).map((f) => (f.severity || '').toUpperCase());
+    if (severities.includes('CRITICAL') || severities.includes('HIGH')) return 'var(--red)';
+    if (severities.includes('MEDIUM')) return 'var(--amber)';
+    return 'var(--green)';
+  }
+
+  function websiteVerdict(report, findings) {
+    const grade = (report.grade || '').toUpperCase();
+    if (grade === 'A' || grade === 'B') return 'Looks reasonably healthy from this quick check.';
+    if (grade === 'C') return 'Usable, but there are visible security headers or configuration gaps.';
+    if (grade) return 'Needs attention before it should be treated as production-grade.';
+    return findings.length ? 'Quick check found issues worth reviewing.' : 'Quick check completed.';
+  }
+
   function renderWebsite(report) {
     const grade = (report.grade || '—').toUpperCase();
     const gradeEl = document.getElementById('grade');
@@ -204,10 +219,11 @@
     if (sumEl) {
       const topFindings = report.top_findings || report.findings || [];
       sumEl.innerHTML = `
-        <div class="card" style="border-left:4px solid ${report.ssl_valid === false ? 'var(--red)' : 'var(--green)'};margin-bottom:1rem">
+        <div class="card" style="border-left:4px solid ${severityBorder(topFindings)};margin-bottom:1rem">
           <p class="label-sm">Website quick scan</p>
           <h2 style="margin:0.25rem 0">${AKILI.escapeHtml(report.url || report.target || '')}</h2>
-          <p>Grade: <strong>${AKILI.escapeHtml(grade)}</strong>${report.ssl_expiry ? ` · SSL expires in ${AKILI.escapeHtml(String(report.ssl_expiry))} days` : ''}</p>
+          <p style="font-size:1rem;margin:0.35rem 0">${AKILI.escapeHtml(websiteVerdict(report, topFindings))}</p>
+          <p class="label-sm">Grade: <strong>${AKILI.escapeHtml(grade)}</strong> · SSL: ${report.ssl_valid === false ? 'problem detected' : 'valid'}${report.ssl_expiry ? ` · expires in ${AKILI.escapeHtml(String(report.ssl_expiry))} days` : ''}</p>
           ${report.summary || report.ai_summary ? `<p>${AKILI.escapeHtml(report.summary || report.ai_summary)}</p>` : ''}
         </div>
         ${topFindings.length ? `
@@ -218,9 +234,15 @@
                 <strong>${AKILI.escapeHtml(f.severity || 'INFO')}:</strong>
                 ${AKILI.escapeHtml(f.name || f.title || 'Finding')}
                 ${f.explanation ? `<br><span class="label-sm">${AKILI.escapeHtml(f.explanation)}</span>` : ''}
+                ${f.recommendation ? `<br><span class="label-sm" style="color:var(--blue)">Fix: ${AKILI.escapeHtml(f.recommendation)}</span>` : ''}
               </li>
             `).join('')}</ul>
-          </div>` : ''}
+          </div>` : `
+          <div class="card">
+            <h3 style="margin-top:0">No major issues found</h3>
+            <p class="label-sm">This guest scan checked SSL and visible headers. Sign in for the deeper AI scan, DNS, ports, history, and legitimacy checks.</p>
+          </div>`}
+        ${report.cta ? `<p class="label-sm" style="margin-top:0.75rem">${AKILI.escapeHtml(report.cta)}</p>` : ''}
       `;
     }
     const purposeEl = document.getElementById('site-purpose');
@@ -345,6 +367,33 @@
     fillTable('ip-ports-table', report.ports, (p) => `<tr><td>${p.port}</td><td>${p.status || p.service || 'open'}</td></tr>`, 2);
   }
 
+  function breachDate(breach) {
+    return breach.date || breach.BreachDate || breach.year || breach.breach_date || '';
+  }
+
+  function breachLink(breach) {
+    return breach.link || breach.source_link || breach.url || '';
+  }
+
+  function breachExposedData(breach) {
+    return breach.exposed_data || breach.data_exposed || breach.DataClasses || [];
+  }
+
+  function renderBreachItems(breaches) {
+    return breaches.map((b) => {
+      const date = breachDate(b);
+      const link = breachLink(b);
+      const exposed = breachExposedData(b);
+      return `
+        <li style="margin-bottom:0.75rem">
+          <strong>${AKILI.escapeHtml(b.name || b.title || 'Unknown breach')}</strong>
+          ${date ? ` <span class="label-sm">(${AKILI.escapeHtml(String(date))})</span>` : ''}
+          ${link ? ` - ${AKILI.externalLink(link, 'View source')}` : ''}
+          ${exposed.length ? `<br><span class="label-sm">Exposed: ${AKILI.escapeHtml(exposed.slice(0, 8).join(', '))}</span>` : ''}
+        </li>`;
+    }).join('');
+  }
+
   function renderEmail(report) {
     const sumEl = document.getElementById('summary');
     const breaches = report.breaches || [];
@@ -358,18 +407,18 @@
           <p>${AKILI.escapeHtml(report.summary || report.ai_summary || (report.mx_valid === false ? 'No valid MX records were found for this domain.' : 'Basic email checks completed.'))}</p>
           <p class="label-sm">Format: ${report.valid_format === false ? 'invalid' : 'valid'} · MX: ${report.mx_valid === false ? 'not found' : 'found'}</p>
           <p class="label-sm" style="margin-top:0.5rem">Sources: ${AKILI.escapeHtml(src)}</p>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0">${breaches.length ? 'Breach details' : 'No breach details found'}</h3>
+          ${breaches.length
+            ? `<ul style="padding-left:1.1rem;margin-bottom:0">${renderBreachItems(breaches)}</ul>`
+            : '<p class="label-sm">No matching public breach records were returned for this quick check.</p>'}
         </div>`;
     }
     const list = document.getElementById('breach-list');
     if (list) {
       list.innerHTML = breaches.length
-        ? breaches.map((b) => `
-          <li style="margin-bottom:0.5rem">
-            <strong>${AKILI.escapeHtml(b.name || 'Unknown')}</strong>
-            ${b.year ? ` <span class="label-sm">(${AKILI.escapeHtml(b.year)})</span>` : ''}
-            ${b.link ? ` — ${AKILI.externalLink(b.link, 'View breach')}` : ''}
-            ${(b.exposed_data || []).length ? `<br><span class="label-sm">Exposed: ${AKILI.escapeHtml((b.exposed_data || []).slice(0, 6).join(', '))}</span>` : ''}
-          </li>`).join('')
+        ? renderBreachItems(breaches)
         : '<li>No breaches in AKILI databases for this email.</li>';
     }
     const rec = document.getElementById('email-recommendations');
@@ -612,6 +661,11 @@
     showResultsLoading(true);
     AKILI.showToast(`${currentModule()} scan started`, 'info');
     document.body.classList.add('akili-scan-active');
+    if (cfg_now.public) {
+      appendTerminal(`[AKILI] Starting guest ${currentModule()} quick scan`, thisScanId);
+      appendTerminal(`[PROGRESS] Target: ${label}`, thisScanId);
+      appendTerminal('[TOOL] Running lightweight public checks', thisScanId);
+    }
 
     const ep = currentEndpoint();
     const cfg = currentCfg();
@@ -633,6 +687,7 @@
 
       const contentType = res.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
+        if (cfg_now.public) appendTerminal('[FOUND] Public scan returned structured results', thisScanId);
         const report = await res.json();
         appendTerminal('[DONE] Quick scan complete', thisScanId);
         renderResults(report, thisScanId);

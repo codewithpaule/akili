@@ -20,6 +20,22 @@
 .btn-outline:hover { border-color: var(--blue); color: var(--blue); }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-sm { padding: 0.4rem 0.8rem; font-size: 0.8rem; }
+.btn.is-loading,
+button.is-loading {
+  pointer-events: none;
+}
+.btn.is-loading::before,
+button.is-loading::before {
+  content: "";
+  width: 0.9em;
+  height: 0.9em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  display: inline-block;
+  animation: btnSpin 0.65s linear infinite;
+}
+@keyframes btnSpin { to { transform: rotate(360deg); } }
 
 .card {
   background: var(--surface); border: 1px solid var(--border);

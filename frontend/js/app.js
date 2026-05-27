@@ -801,6 +801,13 @@
     initSidebarLayout();
     initBackgroundEyes();
     initAkiliCursor();
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('button, .btn');
+      if (!btn || btn.disabled || btn.classList.contains('is-loading')) return;
+      if (btn.closest('.scan-session-list')) return;
+      btn.classList.add('is-loading');
+      setTimeout(() => btn.classList.remove('is-loading'), 1200);
+    }, true);
     loadNav();
     watchNavMount();
     setTimeout(updateNavAuth, 300);
