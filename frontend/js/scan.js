@@ -708,7 +708,8 @@
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || err.message || res.statusText);
+        const detail = err.detail || err.message || res.statusText;
+        throw new Error(typeof detail === 'string' ? detail : (detail.message || JSON.stringify(detail)));
       }
 
       const contentType = res.headers.get('content-type') || '';

@@ -134,7 +134,7 @@
       document.getElementById('breach-counter').textContent = `${rows.length.toLocaleString()} breaches found`;
       document.getElementById('empty-state').classList.toggle('hidden', rows.length > 0);
       document.getElementById('breaches-container').classList.toggle('hidden', rows.length === 0);
-      document.getElementById('breach-rows').innerHTML = rows.map((b) => {
+      document.getElementById('breach-rows').innerHTML = rows.map((b, idx) => {
         const name = b.name || b.breach || 'Unknown';
         const domain = b.domain || '-';
         const logo = b.logo || `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=32`;
@@ -149,10 +149,34 @@
             <td>${AKILI.escapeHtml(fmtDate(b.breached_date || b.year))}</td>
             <td>${AKILI.escapeHtml(b.password_risk || 'Unknown')}</td>
             <td><span class="badge ${String(status).toLowerCase().includes('sensitive') ? 'badge-high' : 'badge-info'}">${AKILI.escapeHtml(status)}</span></td>
-            <td>${AKILI.externalLink(detailsUrl(b), 'Details')}</td>
+            <td><button type="button" class="btn btn-outline btn-sm" data-breach-idx="${idx}">Details</button></td>
           </tr>
         `;
       }).join('');
+      document.querySelectorAll('[data-breach-idx]').forEach((btn) => {
+        btn.onclick = () => openBreachModal(rows[Number(btn.dataset.breachIdx)]);
+      });
+    }
+
+    function openBreachModal(b) {
+      const name = b.name || b.breach || 'Breach';
+      const exposed = Array.isArray(b.exposed_data) && b.exposed_data.length ? b.exposed_data.join(', ') : 'Not specified';
+      AKILI.openModal(`
+        <div style="display:grid;gap:0.75rem">
+          <h3 style="margin:0">${AKILI.escapeHtml(name)}</h3>
+          <p class="label-sm">${siteUrl(b.domain) ? AKILI.externalLink(siteUrl(b.domain), b.domain) : AKILI.escapeHtml(b.domain || '-')}</p>
+          <p>${AKILI.escapeHtml(b.details || 'No long description was provided by the source feed.')}</p>
+          <table class="data-table"><tbody>
+            <tr><td>Industry</td><td>${AKILI.escapeHtml(b.industry || 'Miscellaneous')}</td></tr>
+            <tr><td>Records</td><td>${AKILI.escapeHtml(fmtRecords(b.records))}</td></tr>
+            <tr><td>Breach date</td><td>${AKILI.escapeHtml(fmtDate(b.breached_date || b.year))}</td></tr>
+            <tr><td>Password risk</td><td>${AKILI.escapeHtml(b.password_risk || 'Unknown')}</td></tr>
+            <tr><td>Status</td><td>${AKILI.escapeHtml(b.status || 'Verified')}</td></tr>
+            <tr><td>Exposed data</td><td>${AKILI.escapeHtml(exposed)}</td></tr>
+          </tbody></table>
+          <p>${AKILI.externalLink(detailsUrl(b), 'Read more on XposedOrNot')}</p>
+        </div>
+      `, { title: 'Breach details' });
     }
 
     ['search-filter', 'industry-filter', 'year-filter', 'risk-filter'].forEach((id) => document.getElementById(id).addEventListener('input', applyFilters));

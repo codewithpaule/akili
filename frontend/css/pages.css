@@ -818,3 +818,28 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+.source-track {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  width: max-content;
+  animation: sourceSlide 22s linear infinite;
+}
+.source-track a {
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 58px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--white);
+}
+.source-track img {
+  width: 36px;
+  height: 36px;
+}
+@keyframes sourceSlide {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}

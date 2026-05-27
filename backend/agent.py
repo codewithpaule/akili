@@ -694,6 +694,8 @@ def run_agent(
     if module == "person":
         osint_data = context.get("osint") or {}
         ai = ask_groq(PERSON_PROMPT, json.dumps(osint_data, default=str)[:12000], scan_tier, expected_schema="person")
+        if not isinstance(ai, dict):
+            ai = {}
         if not ai:
             ai = {
                 "name": target.split("|")[0],
@@ -732,6 +734,8 @@ def run_agent(
         raw = _email_intel_from_context(context)
         payload = {"email_intel": raw, "findings": context.get("findings", [])}
         ai = ask_groq(EMAIL_PROMPT, json.dumps(payload, default=str)[:12000], scan_tier, expected_schema="email")
+        if not isinstance(ai, dict):
+            ai = {}
         if not ai:
             ai = {}
         report = _merge_email_report(context, raw, ai)
@@ -741,14 +745,20 @@ def run_agent(
             if tr.get("tool") == "ip_intel":
                 payload["ip_intel"] = tr.get("raw", {})
         ai = ask_groq(IP_PROMPT, json.dumps(payload, default=str)[:12000], scan_tier, expected_schema="ip")
+        if not isinstance(ai, dict):
+            ai = {}
         report = _merge_ip_report(context, ai if ai else {})
     elif module in ("website", "vulnerability", "subdomains", "organization", "company", "domain"):
         payload = _build_website_ai_payload(context)
         ai = ask_groq(FINAL_WEBSITE_PROMPT, json.dumps(payload, default=str)[:12000], scan_tier, expected_schema="website")
+        if not isinstance(ai, dict):
+            ai = {}
         report = _merge_website_report(context, ai if ai else _fallback_report(context))
     else:
         payload = _build_website_ai_payload(context)
         ai = ask_groq(FINAL_WEBSITE_PROMPT, json.dumps(payload, default=str)[:12000], scan_tier, expected_schema="website")
+        if not isinstance(ai, dict):
+            ai = {}
         report = _merge_website_report(context, ai if ai else _fallback_report(context))
 
     duration = int((time.time() - start) * 1000)

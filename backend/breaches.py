@@ -48,18 +48,23 @@ def _flatten_breaches(data) -> list[dict]:
 
 
 def _normalize_breach(item: dict) -> dict:
-    name = item.get("Breach ID") or item.get("breach") or item.get("Name") or item.get("name") or item.get("title") or "Unknown"
-    domain = item.get("Domain") or item.get("domain") or item.get("site") or ""
-    details = item.get("Exposure Description") or item.get("details") or item.get("Description") or item.get("description") or ""
-    exposed = item.get("Exposed Data") or item.get("exposed_data") or item.get("DataClasses") or item.get("data_exposed") or []
+    lowered = {str(k).strip().lower().replace("_", " "): v for k, v in item.items()}
+    name = (
+        item.get("Breach ID") or item.get("BreachID") or item.get("breach") or item.get("Name")
+        or lowered.get("breach id") or lowered.get("breach") or lowered.get("name") or lowered.get("title")
+        or "Unknown"
+    )
+    domain = item.get("Domain") or lowered.get("domain") or lowered.get("site") or ""
+    details = item.get("Exposure Description") or lowered.get("exposure description") or lowered.get("details") or lowered.get("description") or ""
+    exposed = item.get("Exposed Data") or item.get("DataClasses") or lowered.get("exposed data") or lowered.get("data classes") or []
     if isinstance(exposed, str):
         exposed = [part.strip() for part in exposed.replace(";", ",").split(",") if part.strip()]
-    breached_date = item.get("Breached Date") or item.get("BreachDate") or item.get("breach_date") or item.get("date") or item.get("year") or "Unknown"
-    industry = item.get("Industry") or item.get("industry") or ""
-    records = item.get("Exposed Records") or item.get("records") or item.get("PwnCount") or item.get("xposed_records") or 0
-    password_risk = item.get("Password Risk") or item.get("password_risk") or "Unknown"
-    status = item.get("Verified") or item.get("Status") or item.get("status") or "Verified"
-    logo = item.get("Logo") or item.get("logo") or ""
+    breached_date = item.get("Breached Date") or item.get("BreachDate") or lowered.get("breached date") or lowered.get("breach date") or lowered.get("date") or lowered.get("year") or "Unknown"
+    industry = item.get("Industry") or lowered.get("industry") or ""
+    records = item.get("Exposed Records") or item.get("PwnCount") or lowered.get("exposed records") or lowered.get("records") or 0
+    password_risk = item.get("Password Risk") or lowered.get("password risk") or "Unknown"
+    status = item.get("Verified") or item.get("Status") or lowered.get("verified") or lowered.get("status") or "Verified"
+    logo = item.get("Logo") or lowered.get("logo") or ""
     safe_name = "".join(ch for ch in str(name) if ch.isalnum() or ch in ("-", "_", "."))
     return {
         "breach": str(name),
