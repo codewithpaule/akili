@@ -787,12 +787,13 @@ def run_agent(
     # Human-review gate: flag reports that are high-risk or very low-scoring
     try:
         needs_review = False
-        score = int(report.get("score", 0) or 0)
+        score_raw = report.get("score")
+        score = int(score_raw) if score_raw is not None else None
         grade = str(report.get("grade", "")).upper()
         legitimacy = report.get("legitimacy", "")
         findings = report.get("findings", []) or []
         crit_count = sum(1 for f in findings if str(f.get("severity", "")).lower() == "critical")
-        if score < 40 or grade == "F" or legitimacy == "suspicious" or crit_count > 0:
+        if (score is not None and score < 40) or grade == "F" or legitimacy == "suspicious" or crit_count > 0:
             needs_review = True
         if needs_review:
             report["needs_manual_review"] = True
