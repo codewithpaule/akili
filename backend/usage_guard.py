@@ -19,13 +19,9 @@ def enforce_scan_access(user: dict | None, module: str, *, sandbox: bool = False
     ok, msg = can_access_module(user, mod)
     if not ok:
         raise HTTPException(403, msg or "Module not available on your plan")
-
-    if not user:
-        return
-
-    identity = usage_identity(user)
-    check_and_increment_scan_limit(identity)
-    increment_usage(identity, mod)
+    # Do not increment usage here. Caller should increment or consume a reservation
+    # to allow pre-confirmation/reservation flows.
+    return
 
 
 def usage_payload(user: dict) -> dict:

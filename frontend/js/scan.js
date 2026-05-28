@@ -797,6 +797,7 @@
     }
 
     // If authenticated (not a public scan), check daily scan quota and warn if near limit.
+    let reservationId = null;
     try {
       if (!cfg_now.public && typeof AKILI.apiFetch === 'function') {
         const quota = await AKILI.apiFetch('/api/v1/auth/scan-count').then((r) => r.json()).catch(() => null);
@@ -806,6 +807,23 @@
             const ok = confirm(`You have ${quota.remaining}/${quota.limit} scans remaining today. Continue and consume one scan?`);
             if (!ok) {
               // user cancelled — cleanup state
+              sessionStore.delete(thisScanId);
+              renderSessionList();
+              btn.disabled = false;
+              btn.textContent = cfg_now.buttonLabel || 'SCAN';
+              showResultsLoading(false);
+              document.body.classList.remove('akili-scan-active');
+              return;
+            }
+            // Reserve a slot (consumes one daily scan) — returns reservation id
+            try {
+              const r = await AKILI.apiFetch('/api/v1/scan/reserve', { method: 'POST' }).then((rr) => rr.json());
+              if (r && r.reservation_id) {
+                reservationId = r.reservation_id;
+              }
+            } catch (e) {
+              // If reservation fails, abort scan start
+              AKILI.showToast('Failed to reserve scan slot: ' + (e.message || ''), 'error');
               sessionStore.delete(thisScanId);
               renderSessionList();
               btn.disabled = false;
@@ -828,9 +846,11 @@
       : `${AKILI.API()}${ep}`;
 
     try {
+      const headers = scanHeaders();
+      if (reservationId) headers['X-Scan-Reservation'] = reservationId;
       const res = await fetch(url, {
         method: 'POST',
-        headers: scanHeaders(),
+        headers: headers,
         body: JSON.stringify(body),
         signal: scanAbort.signal,
       });
@@ -841,8 +861,15 @@
 
       const contentType = res.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
+        const j = await res.json().catch(() => null);
+        if (j && j.status === 'queued') {
+          appendTerminal('[PROGRESS] Scan queued for background processing', thisScanId);
+          // start polling persisted logs
+          startPollingScanLogs(j.scan_id || thisScanId);
+          return;
+        }
         if (cfg_now.public) appendTerminal('[FOUND] Public scan returned structured results', thisScanId);
-        const report = await res.json();
+        const report = j;
         appendTerminal('[DONE] Quick scan complete', thisScanId);
         renderResults(report, thisScanId);
         return;

@@ -15,3 +15,17 @@ primary_region = "jnb"
   memory = "512mb"
   cpu_kind = "shared"
   cpus = 1
+
+[env]
+  # Database URL (Postgres)
+  DATABASE_URL = "" # e.g. postgres://user:pass@host:5432/db
+  # Redis URL for queueing / scheduling (set to enable background jobs)
+  REDIS_URL = "" # e.g. redis://:password@redis-host:6379/0
+  # Allowlist for agent egress (comma-separated hostnames)
+  AGENT_ALLOWED_HOSTS = ""
+  # Max agent actions per scan (use 'unlimited' for no limit)
+  MAX_AGENT_ACTIONS = "6"
+  # JWT / session secret
+  JWT_SECRET = ""
+  # Frontend base URL
+  FRONTEND_URL = "http://localhost:5501"

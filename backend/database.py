@@ -194,6 +194,16 @@ class ScanUsage(Base):
     scan_count = Column(Integer, default=0)
 
 
+class Reservation(Base):
+    __tablename__ = "scan_reservations"
+
+    reservation_id = Column(String, primary_key=True)
+    user_id = Column(String, nullable=False)
+    scan_id = Column(String, default="")
+    created_at = Column(Integer, nullable=False)
+    expires_at = Column(Integer, default=0)
+
+
 def _table_columns(conn, table: str) -> set[str]:
     from sqlalchemy import inspect
 
@@ -979,3 +989,37 @@ def get_midnight_utc() -> int:
     from datetime import datetime, timedelta
     tomorrow = (datetime.utcnow() + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
     return int(tomorrow.timestamp())
+
+
+def reserve_scan_slot(user_id: str, ttl: int = 300) -> dict:
+    """Reserve a scan slot for a user by incrementing the daily counter and returning a reservation id.
+    This consumes one of the user's daily scans immediately. Caller should present the reservation to the scan request.
+    """
+    from datetime import datetime
+    rid = secrets.token_urlsafe(12)
+    now = int(time.time())
+    expires = int((datetime.utcnow() + timedelta(seconds=ttl)).timestamp())
+    # Increment the daily scan count (this will raise HTTPException if over limit)
+    count = check_and_increment_scan_limit(user_id)
+    with get_db() as db:
+        try:
+            db.add(Reservation(
+                reservation_id=rid,
+                user_id=user_id,
+                scan_id="",
+                created_at=now,
+                expires_at=expires,
+            ))
+        except Exception:
+            db.rollback()
+    return {"reservation_id": rid, "expires_at": expires, "consumed_count": count}
+
+
+def consume_reservation(reservation_id: str, user_id: str) -> bool:
+    """Mark reservation as consumed (delete) if it exists and belongs to user_id."""
+    with get_db() as db:
+        row = db.query(Reservation).filter(Reservation.reservation_id == reservation_id, Reservation.user_id == user_id).first()
+        if not row:
+            return False
+        db.delete(row)
+        return True

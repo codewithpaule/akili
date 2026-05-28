@@ -60,6 +60,9 @@ from database import (
     save_phone_query,
     log_phone_query,
     increment_usage,
+    check_and_increment_scan_limit,
+    reserve_scan_slot,
+    consume_reservation,
 )
 from tools.auth_scan import run_auth_scan
 from tools.api_scanner import scan_api
@@ -196,6 +199,25 @@ def _guard(request: Request, module: str, *, sandbox: bool = False):
 
     # Enforce per-user module access and monthly caps
     enforce_scan_access(user, module, sandbox=sandbox)
+
+    # Reservation / daily-scan increment handling:
+    # If the client provided a reservation header, consume it (reservation already consumed a slot at reservation time).
+    reservation = request.headers.get('X-Scan-Reservation') or request.headers.get('x-scan-reservation')
+    if reservation:
+        try:
+            ok = consume_reservation(reservation, user.get('usage_identity') or user.get('user_id'))
+            if not ok:
+                raise HTTPException(400, 'Invalid or expired reservation')
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(400, 'Invalid reservation')
+    else:
+        # No reservation — increment and enforce daily limit now
+        try:
+            check_and_increment_scan_limit(user.get('usage_identity') or user.get('user_id'))
+        except Exception:
+            raise
 
     # If request used an API key, increment usage now that it is authorized
     if api_info:
@@ -417,6 +439,21 @@ def _stream_agent(module: str, target: str, scan_id: str, user_id: str = "", sca
                 logger.debug('Failed to increment usage counter')
     except Exception:
         pass
+
+    # If a REDIS_URL is configured, enqueue the scan job for background workers
+    REDIS_URL = os.getenv('REDIS_URL') or os.getenv('REDIS_URI')
+    if REDIS_URL:
+        try:
+            from rq import Queue
+            import redis as _redis
+            from worker import run_agent_job
+            conn = _redis.from_url(REDIS_URL)
+            q = Queue('scans', connection=conn)
+            q.enqueue(run_agent_job, module, target, scan_id, user_id, scan_tier)
+            return JSONResponse({"status": "queued", "scan_id": scan_id})
+        except Exception:
+            # Fall back to streaming if queuing fails
+            pass
 
     async def gen():
         for chunk in run_agent(module, target, scan_id, user_id=user_id, scan_tier=scan_tier):
@@ -692,6 +729,21 @@ async def auth_scan_count(request: Request, user: dict = Depends(require_user)):
         "remaining": 5 - count,
         "resets_at": get_midnight_utc()
     }
+
+
+@app.post("/api/v1/scan/reserve")
+@limiter.limit("30/minute")
+async def reserve_scan(request: Request, user: dict = Depends(require_user)):
+    """Reserve a scan slot for the authenticated user. This consumes one daily scan immediately and
+    returns a short-lived reservation token to include in the actual scan request via header
+    `X-Scan-Reservation`.
+    """
+    try:
+        out = reserve_scan_slot(user.get('usage_identity') or user.get('user_id'))
+        return out
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(400, str(e))
 
 
 # --- Admin (requires role=admin) ---
