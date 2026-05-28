@@ -99,6 +99,27 @@ TECH_PATTERNS = {
         r'\.do',
         r'java',
     ],
+    "core-js": [
+        r'core-js',
+        r'core\-js',
+    ],
+    "jQuery Migrate": [
+        r'jquery-migrate',
+        r'jquery.migrate',
+    ],
+    "Google Font API": [
+        r'fonts.googleapis.com',
+        r'fonts.gstatic.com',
+    ],
+    "LiteSpeed": [
+        r'litespeed',
+    ],
+    "WooCommerce": [
+        r'woocommerce',
+    ],
+    "Elementor": [
+        r'elementor',
+    ],
 }
 
 
@@ -117,6 +138,9 @@ VERSION_PATTERNS = {
     "Apache": [rf"Apache/{VERSION}"],
     "PHP": [rf"PHP/{VERSION}", rf"php/{VERSION}"],
     "Express": [rf"Express/{VERSION}", rf"express@{VERSION}"],
+    "LiteSpeed": [rf"LiteSpeed(?:/|\s){VERSION}", rf"litespeed/{VERSION}"],
+    "WooCommerce": [rf"woocommerce(?:\.min)?\.js(?:\?ver=|[?&]v=|/|-)?{VERSION}", rf"woocommerce@{VERSION}"],
+    "Elementor": [rf"elementor(?:\.min)?\.js(?:\?ver=|[?&]v=|/|-)?{VERSION}", rf"elementor@{VERSION}"],
 }
 
 
@@ -161,9 +185,12 @@ def detect_technologies(html: str, headers: Dict[str, str]) -> List[Dict[str, An
             if re.search(pattern, combined, re.IGNORECASE):
                 # Check if already detected
                 if not any(d["name"] == tech for d in detected):
+                    version = detect_version(tech, html, headers)
+                    # Normalize unknown versions to explicit string for UI
+                    version_display = version if version else "Version hidden"
                     detected.append({
                         "name": tech,
-                        "version": detect_version(tech, html, headers),
+                        "version": version_display,
                         "confidence": "high" if len(patterns) > 1 else "medium",
                     })
                 break
@@ -177,14 +204,14 @@ def detect_technologies(html: str, headers: Dict[str, str]) -> List[Dict[str, An
             if not any(d["name"] == "Nginx" for d in detected):
                 detected.append({
                     "name": "Nginx",
-                    "version": extract_version(server, rf'nginx/{VERSION}'),
+                    "version": extract_version(server, rf'nginx/{VERSION}') or "Version hidden",
                     "confidence": "high",
                 })
         elif "apache" in server.lower():
             if not any(d["name"] == "Apache" for d in detected):
                 detected.append({
                     "name": "Apache",
-                    "version": extract_version(server, rf'Apache/{VERSION}'),
+                    "version": extract_version(server, rf'Apache/{VERSION}') or "Version hidden",
                     "confidence": "high",
                 })
     
@@ -193,7 +220,7 @@ def detect_technologies(html: str, headers: Dict[str, str]) -> List[Dict[str, An
             if not any(d["name"] == "PHP" for d in detected):
                 detected.append({
                     "name": "PHP",
-                    "version": extract_version(x_powered_by, rf'PHP/{VERSION}'),
+                    "version": extract_version(x_powered_by, rf'PHP/{VERSION}') or "Version hidden",
                     "confidence": "high",
                 })
         elif "asp" in x_powered_by.lower():
@@ -262,28 +289,28 @@ async def fingerprint_technologies(url: str) -> Dict[str, Any]:
     for src in script_sources:
         src_lower = src.lower()
         if "jquery" in src_lower and not any(d["name"] == "jQuery" for d in technologies):
-            version = detect_version("jQuery", src, {})
+            version = detect_version("jQuery", src, {}) or "Version hidden"
             technologies.append({
                 "name": "jQuery",
                 "version": version,
                 "confidence": "medium",
             })
         elif "bootstrap" in src_lower and not any(d["name"] == "Bootstrap" for d in technologies):
-            version = detect_version("Bootstrap", src, {})
+            version = detect_version("Bootstrap", src, {}) or "Version hidden"
             technologies.append({
                 "name": "Bootstrap",
                 "version": version,
                 "confidence": "medium",
             })
         elif "react" in src_lower and not any(d["name"] == "React" for d in technologies):
-            version = detect_version("React", src, {})
+            version = detect_version("React", src, {}) or "Version hidden"
             technologies.append({
                 "name": "React",
                 "version": version,
                 "confidence": "medium",
             })
         elif "vue" in src_lower and not any(d["name"] == "Vue.js" for d in technologies):
-            version = detect_version("Vue.js", src, {})
+            version = detect_version("Vue.js", src, {}) or "Version hidden"
             technologies.append({
                 "name": "Vue.js",
                 "version": version,
@@ -318,9 +345,10 @@ def run_tech_fingerprint(url: str, context: dict) -> dict:
     for tech in result["technologies"]:
         name = tech["name"]
         version = tech.get("version")
-        
+        version_exposed = bool(version and version != "Version hidden")
+
         # Check for outdated versions (simplified)
-        if version:
+        if version_exposed:
             if name == "WordPress" and version.startswith(("4.", "5.")):
                 findings.append({
                     "severity": "HIGH",
@@ -345,9 +373,9 @@ def run_tech_fingerprint(url: str, context: dict) -> dict:
                     "recommendation": "Update to the latest Apache version.",
                     "cve_search": f"https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=apache+{version}"
                 })
-        
+
         # Check for technologies that need security headers
-        if name in ["WordPress", "Drupal", "Joomla"] and not version:
+        if name in ["WordPress", "Drupal", "Joomla"] and not version_exposed:
             findings.append({
                 "severity": "MEDIUM",
                 "name": f"{name} detected (version unknown)",

@@ -29,6 +29,41 @@ COMMON_PORTS = {
     27017: "MongoDB",
 }
 
+# Extended port ranges requested by user (string form to keep file compact).
+EXTENDED_PORT_RANGES = (
+    "7,9,13,20-23,25-26,37,42-43,53,70,79-81,88,102,106,110-111,113,119,135,137-139,143-144,"
+    "179,199,201,264,318,383,389,411-412,427,443-445,464-465,497,512-515,540,543-544,546-548,"
+    "554,563,587,591,593,596,631,639,646,691,860,873,902,989-990,993,995,1025-1029,1080,1110,"
+    "1194,1214,1241,1311,1337,1433,1589,1701,1720,1723,1741,1755,1900,2000-2002,2049,2078,2080,"
+    "2082-2083,2086-2087,2100,2121,2222,2483-2484,2717,2967,3000,3050,3128,3222,3306,3389,3690,"
+    "3784,3986,4280,4333,4444-4445,4899,5000,5004-5005,5009,5013,5051,5060,5101,5190,5222-5223,"
+    "5357,5432,5631,5666,5800,5900-5901,5985-5986,6000-6001,6129,6346-6347,6379,6588,6646,6665,"
+    "6679,6699,7000-7001,7070,7199,8000,8008-8009,8080-8081,8200,8222,8443,8500,8888,9000,9042,"
+    "9100,9800,9999-10000,10161-10162,19638,20000,27017,32768,49152-49157"
+)
+
+
+def _expand_ports(range_str: str):
+    ports = set()
+    for part in range_str.split(','):
+        part = part.strip()
+        if not part:
+            continue
+        if '-' in part:
+            a, b = part.split('-', 1)
+            try:
+                a_i = int(a); b_i = int(b)
+            except Exception:
+                continue
+            for p in range(a_i, b_i + 1):
+                ports.add(p)
+        else:
+            try:
+                ports.add(int(part))
+            except Exception:
+                continue
+    return sorted(ports)
+
 
 async def check_port(hostname: str, port: int, timeout: float = 2.0) -> Dict[str, Any]:
     """Check if a specific port is open and attempt to identify the service."""
@@ -158,7 +193,8 @@ async def get_service_info(hostname: str, port: int) -> Dict[str, Any]:
 async def scan_ports(hostname: str, ports: List[int] = None, max_concurrent: int = 50) -> Dict[str, Any]:
     """Scan multiple ports concurrently."""
     if ports is None:
-        ports = list(COMMON_PORTS.keys())
+        # Use the extended list by default for deeper coverage
+        ports = _expand_ports(EXTENDED_PORT_RANGES)
     
     open_ports = []
     closed_ports = []
@@ -201,6 +237,24 @@ def run_port_scan(hostname: str, context: dict) -> dict:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
     
+    # If the caller explicitly requested credential brute-force, we refuse to perform it.
+    if context.get('bruteforce'):
+        result = loop.run_until_complete(scan_ports(hostname))
+        findings = [{
+            "severity": "INFO",
+            "name": "Credential brute-force disabled",
+            "explanation": "Brute-force of usernames/passwords is not supported by AKILI. This behavior is potentially harmful and has been disabled.",
+            "recommendation": "If you need authenticated checks, provide valid credentials and use authorized testing tooling or configure targeted checks that you control.",
+        }]
+        return {
+            "tool": "port_scanner",
+            "severity": "INFO",
+            "title": "Port scan results",
+            "detail": f"{len(result['open_ports'])} open ports found (brute-force disabled)",
+            "raw": result,
+            "findings": findings,
+        }
+
     result = loop.run_until_complete(scan_ports(hostname))
     
     findings = []

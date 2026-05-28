@@ -602,7 +602,7 @@
     const SCAN_MODULES = [
       { href: 'scan-website.html', icon: 'globe', color: 'var(--mod-website)', name: 'Website Scan', desc: 'Headers, SSL, DNS, ports' },
       { href: 'scan-vulnerability.html', icon: 'bug', color: 'var(--mod-vuln)', name: 'Vulnerability', desc: 'CORS, CSRF, misconfigs' },
-      { href: 'scan-subdomains.html', icon: 'git-branch', color: 'var(--mod-subdomain)', name: 'Subdomains', desc: 'CT logs, hidden hosts' },
+      { href: 'scan-subdomains.html', icon: 'git-branch', color: 'var(--mod-subdomain)', name: 'Subdomain Finder', desc: 'Scan a domain to find its subdomains (very effective!)' },
       { href: 'scan-ip.html', icon: 'network', color: 'var(--mod-ip)', name: 'IP Intelligence', desc: 'Geo, ports, reputation' },
       { href: 'scan-organization.html', icon: 'building-2', color: 'var(--mod-org)', name: 'Organization', desc: 'ASN and footprint' },
       { href: 'scan-auth.html', icon: 'lock', color: '#6366F1', name: 'Authenticated Scan', desc: 'Authorized login testing' },

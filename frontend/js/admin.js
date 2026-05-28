@@ -37,6 +37,14 @@
     if (opts.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
     const token = getToken();
     if (token) headers.Authorization = `Bearer ${token}`;
+    // include X-API-Key when available (from global AKILI helper or localStorage)
+    try {
+      const keyFromAkili = (window.AKILI && typeof AKILI.getApiKey === 'function') ? AKILI.getApiKey() : '';
+      const key = keyFromAkili || localStorage.getItem('akili_api_key') || '';
+      if (key && !headers['X-API-Key']) headers['X-API-Key'] = key;
+    } catch (e) {
+      // ignore
+    }
     const res = await fetch(`${API()}${path}`, { ...opts, headers });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {

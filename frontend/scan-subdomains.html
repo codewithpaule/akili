@@ -4,7 +4,7 @@
 <link rel="stylesheet" href="css/main.css"><link rel="stylesheet" href="css/components.css"></head>
 <body><div id="nav-mount"></div><script>fetch('partials/nav.html').then(r=>r.text()).then(h=>document.getElementById('nav-mount').innerHTML=h);</script>
 <main class="container" style="padding:2rem 1.5rem">
-<div class="card" style="border-top:4px solid var(--mod-subdomain)"><h1>Subdomain Discovery</h1></div>
+<div class="card" style="border-top:4px solid var(--mod-subdomain)"><h1 title="Scan a domain to find its subdomains — very effective!">Subdomain Finder</h1></div>
 <div class="card"><input id="domain" placeholder="example.com" style="width:100%;padding:0.75rem;border:1px solid var(--border);margin-bottom:1rem">
 <button class="btn btn-primary" id="scan-btn" style="background:var(--mod-subdomain)">SCAN</button></div>
 <div id="terminal" class="terminal-panel hidden"></div><section id="results" class="hidden"><div id="findings-grid"></div></section>
