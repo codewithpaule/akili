@@ -3,8 +3,6 @@ import json
 import logging
 import os
 import httpx
-import socket
-import ipaddress
 import re
 import time
 import uuid
@@ -175,14 +173,31 @@ EMAIL_PROMPT = """You are a cybersecurity analyst. From email scan JSON (breache
 {{"summary":"2-3 sentences","risk_level":"low|medium|high","recommendations":["action1","action2"],"pwned_assessment":"plain explanation if breaches listed"}}
 If breaches array is non-empty, state clearly the email was found in data breaches."""
 
-PERSON_PROMPT = """You are a professional due diligence analyst. From public OSINT only, write JSON:
-{{"name":"","confidence":0-100,"platforms":{{}},"trust_signals":[],"red_flags":[],"profile_narrative":"2-4 sentences: who they likely are, role, location hints from public sources","age_context":"age range or life-stage ONLY if public evidence (job title, graduation year, news); else \"not enough public data\"","role_hint":"","location_hint":"","ai_summary":"","overall_assessment":"proceed|verify further|insufficient data"}}
+PERSON_PROMPT = """
+You are a professional due diligence analyst. From public OSINT only, produce strict JSON output with the following fields:
+
+{
+    "name": "",
+    "confidence": 0,
+    "platforms": {},
+    "trust_signals": [],
+    "red_flags": [],
+    "profile_narrative": "",
+    "age_context": "",
+    "role_hint": "",
+    "location_hint": "",
+    "ai_summary": "",
+    "overall_assessment": ""
+}
+
 Rules:
-- First identify the majority identity from identity_evidence, keywords, and repeated public sources. For example, if most sources say the subject is a Nigerian musician, summarize and search relevance around that identity.
-- Be skeptical with common names and generic social links.
-- Only accept social profiles that match the majority identity and keywords. If LinkedIn/X/GitHub is absent or rejected, do not imply it exists.
-- If the evidence does not prove the same person across platforms, lower confidence and say "insufficient data" or "verify further".
-Never invent private facts. Never make character judgments beyond data."""
+- Use ONLY the supplied evidence (identity_evidence, platforms, social_cards, fetched_profile snippets, images). Do NOT invent facts.
+- For each accepted platform, include matching evidence strings under platforms[PLATFORM].evidence.
+- If multiple distinct identities are present (ambiguous name), set overall_assessment to "insufficient data" and confidence <= 40.
+- If majority of platforms corroborate the same identity and snippets match name/keywords, set overall_assessment to "proceed" and confidence >= 70.
+- If some evidence exists but cross-platform identity is weak, set overall_assessment to "verify further" and confidence between 40 and 70.
+- Always return valid JSON only. Do not include explanatory text outside JSON.
+"""
 
 
 def _as_url(target: str) -> str:
@@ -203,49 +218,6 @@ def _osint_person(target: str, context: dict) -> dict:
     name, kw = parts[0].strip(), parts[1].strip() if len(parts) > 1 else ""
     data = osint.run_person_collect(name, kw)
     context["osint"] = data
-    # Vet results with AI to produce a concise validated profile summary
-    try:
-        payload = json.dumps(data)
-        vet = ask_groq(PERSON_PROMPT, payload)
-        # If vet returns structured dict, merge key fields
-        if isinstance(vet, dict):
-            data["ai_profile"] = vet
-            # Promote ai_summary to top-level for quick UI display
-            ai_sum = vet.get("ai_summary") or vet.get("profile_narrative") or ""
-            if ai_sum:
-                data["ai_summary"] = ai_sum
-            # Normalize confidence
-            try:
-                conf = int(vet.get("confidence") or vet.get("confidence", 0))
-                data["confidence"] = max(0, min(100, conf))
-            except Exception:
-                pass
-    except Exception:
-        # Non-fatal: keep raw data if vetting fails
-        pass
-    # Redact obvious PII before persisting/returning to UI
-    try:
-        from utils.redact import redact_text
-        data['raw_results'] = [
-            {**r, 'snippet': redact_text(r.get('snippet') or '')} for r in data.get('raw_results', [])
-        ]
-    except Exception:
-        pass
-    # If confidence is low or flagged, enqueue for human review
-    try:
-        conf = int(data.get('confidence') or 0)
-        issues = (data.get('confidence_breakdown') or {}).get('red_flags') or []
-        if conf < 60 or len(issues) > 0:
-            from database import get_db, ReviewQueue
-            with get_db() as db:
-                db.add(ReviewQueue(
-                    scan_id=context.get('scan_id') or '',
-                    created_at=int(time.time()),
-                    status='pending',
-                    notes=f"auto-enqueue: confidence={conf} issues={len(issues)}",
-                ))
-    except Exception:
-        pass
     # Build a short platforms summary for streaming output (easier verification)
     try:
         plats = []
@@ -732,36 +704,9 @@ def run_agent(
             target_host = urlparse(target).hostname or ''
             if target_host and host == target_host:
                 return True
-            # allowlist via env: support exact matches and suffix matches ('.example.com')
-            if AGENT_ALLOWED_HOSTS:
-                for allowed in AGENT_ALLOWED_HOSTS:
-                    if not allowed:
-                        continue
-                    a = allowed.lower()
-                    if a.startswith('.'):
-                        # suffix match
-                        if host.endswith(a):
-                            # proceed to IP checks below
-                            break
-                    if host == a:
-                        break
-                else:
-                    # no allowlist entry matched
-                    return False
-            # Resolve host and block private/internal IP ranges to mitigate SSRF
-            try:
-                infos = socket.getaddrinfo(host, None)
-                for info in infos:
-                    addr = info[4][0]
-                    try:
-                        ip = ipaddress.ip_address(addr)
-                        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
-                            return False
-                    except Exception:
-                        continue
-            except Exception:
-                # If DNS resolution fails, be conservative and disallow
-                return False
+            # allowlist via env
+            if AGENT_ALLOWED_HOSTS and host in AGENT_ALLOWED_HOSTS:
+                return True
             return False
         except Exception:
             return False

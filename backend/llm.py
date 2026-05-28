@@ -347,8 +347,20 @@ SCHEMAS = {
     },
     "person": {
         "type": "object",
-        "required": ["name", "confidence"],
-        "properties": {"name": {"type": "string"}, "confidence": {"type": "number", "minimum": 0, "maximum": 100}},
+        "required": ["name", "confidence", "overall_assessment"],
+        "properties": {
+            "name": {"type": "string"},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 100},
+            "platforms": {"type": "object"},
+            "trust_signals": {"type": "array"},
+            "red_flags": {"type": "array"},
+            "profile_narrative": {"type": "string"},
+            "age_context": {"type": "string"},
+            "role_hint": {"type": "string"},
+            "location_hint": {"type": "string"},
+            "ai_summary": {"type": "string"},
+            "overall_assessment": {"type": "string", "enum": ["proceed", "verify further", "insufficient data"]}
+        },
     },
     "email": {
         "type": "object",
