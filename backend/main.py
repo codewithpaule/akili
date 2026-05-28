@@ -1275,6 +1275,42 @@ async def admin_billing_verify_manual(request: Request, body: AdminManualVerifyB
     return out
 
 
+class PromoteAdminBody(BaseModel):
+    email: str = Field(..., max_length=254)
+    secret: str = Field(..., max_length=200)
+
+
+@app.post("/internal/promote-admin")
+@limiter.limit("5/minute")
+async def internal_promote_admin(request: Request, body: PromoteAdminBody):
+    """Temporarily promote an existing user to admin using a deployment secret.
+
+    Enabled only when `ADMIN_PROMOTE_SECRET` env var is set. Call with JSON {"email":"...","secret":"..."}.
+    """
+    _require_json(request)
+    secret_env = os.getenv("ADMIN_PROMOTE_SECRET", "") or ""
+    if not secret_env:
+        raise HTTPException(403, "Admin promote endpoint not enabled")
+    if (body.secret or "") != secret_env:
+        raise HTTPException(403, "Invalid secret")
+    email_l = (body.email or "").strip().lower()
+    if not email_l:
+        raise HTTPException(400, "email required")
+    try:
+        with database.get_db() as db:
+            u = db.query(database.User).filter(database.User.email == email_l).first()
+            if not u:
+                raise HTTPException(404, "User not found")
+            u.role = "admin"
+            u.is_active = True
+            u.updated_at = int(time.time())
+        return {"promoted": True, "email": email_l}
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(500, "Failed to promote user")
+
+
 @app.post("/api/v1/admin/billing/sync-user/{user_id}")
 @limiter.limit("30/hour")
 async def admin_billing_sync_user(request: Request, user_id: str, user: dict = Depends(require_admin)):
@@ -1391,6 +1427,16 @@ async def proxy_fetch(request: Request, body: ProxyBody, user: dict = Depends(re
         "headers": dict(resp.headers),
         "body": data,
     }
+    # Detect whether this response is a custom 404 (some sites return 200 + custom 404 body)
+    try:
+        should_check = bool(body.analyze) or any(s in url.lower() for s in ['.env', '/.git', '/config', '/wp-login', '/admin'])
+        if should_check:
+            from security import detect_custom_404_async
+            raw_body = resp.content if isinstance(resp.content, (bytes, bytearray)) else (resp.text or '')
+            exists = await detect_custom_404_async(url, raw_body, timeout=timeout)
+            out['exists'] = bool(exists)
+    except Exception:
+        out['exists'] = True
     if body.analyze:
         try:
             # ask LLM to summarize the response

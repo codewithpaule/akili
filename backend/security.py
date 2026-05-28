@@ -3,6 +3,9 @@ import ipaddress
 import re
 import socket
 from urllib.parse import urlparse
+import uuid
+import difflib
+import httpx
 
 from fastapi import HTTPException
 
@@ -135,3 +138,35 @@ def validate_org(name: str, domain: str = "") -> tuple[str, str]:
 
 def validate_company(name: str, domain: str = "") -> tuple[str, str]:
     return validate_org(name, domain)
+
+
+async def detect_custom_404_async(target_url: str, target_body: str | bytes, timeout: int = 8) -> bool:
+    """Attempt to detect whether a fetched page is actually a custom 404.
+
+    Returns True if the resource likely exists (i.e., not the site's generic 404),
+    or False if it looks identical to the site's 404 response.
+    """
+    try:
+        parsed = urlparse(target_url)
+        scheme = parsed.scheme or "https"
+        base = f"{scheme}://{parsed.netloc}"
+        # create a random non-existent path to probe the site's 404 response
+        probe_path = parsed.path.rstrip("/") + f"/.akili_404_probe_{uuid.uuid4().hex}"
+        probe_url = base + probe_path
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            probe = await client.get(probe_url)
+            probe_text = probe.text or ""
+        # Normalize bodies: collapse whitespace, strip tags lightly
+        def _norm(s: str) -> str:
+            return " ".join(str(s or "").split())[:20000]
+
+        t_body = _norm(target_body.decode() if isinstance(target_body, (bytes, bytearray)) else str(target_body))
+        p_body = _norm(probe_text)
+        if not p_body:
+            return True
+        ratio = difflib.SequenceMatcher(None, t_body, p_body).ratio()
+        # If similarity is very high, it's likely the same 404 page
+        return False if ratio >= 0.80 else True
+    except Exception:
+        # On error, be conservative and assume resource exists
+        return True
