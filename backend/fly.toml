@@ -1,4 +1,4 @@
-app = "akili-backend"
+app = "akili"
 primary_region = "jnb"
 
 [build]
