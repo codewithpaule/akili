@@ -235,6 +235,9 @@ def _miss_signatures(client: httpx.Client, base_root: str) -> list[dict]:
 
 
 def _looks_like_custom_miss(hit: dict, misses: list[dict]) -> bool:
+    text = (hit.get("text") or "").lower()
+    if re.search(r"\b(404|not found|page not found|does not exist|could not be found)\b", text):
+        return True
     if not misses:
         return False
     for miss in misses:

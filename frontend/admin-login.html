@@ -44,9 +44,6 @@
       sessionStorage.setItem('akili_admin_entry', '1');
       history.replaceState(null, '', 'admin-login.html');
     }
-    if (!sessionStorage.getItem('akili_admin_entry') && !AKILI_ADMIN.getToken()) {
-      location.replace('index.html');
-    }
     if (AKILI_ADMIN.getToken() && AKILI_ADMIN.getUser()?.is_admin) {
       location.href = 'admin-panel.html';
     }

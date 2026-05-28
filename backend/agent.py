@@ -165,8 +165,9 @@ If breaches array is non-empty, state clearly the email was found in data breach
 PERSON_PROMPT = """You are a professional due diligence analyst. From public OSINT only, write JSON:
 {{"name":"","confidence":0-100,"platforms":{{}},"trust_signals":[],"red_flags":[],"profile_narrative":"2-4 sentences: who they likely are, role, location hints from public sources","age_context":"age range or life-stage ONLY if public evidence (job title, graduation year, news); else \"not enough public data\"","role_hint":"","location_hint":"","ai_summary":"","overall_assessment":"proceed|verify further|insufficient data"}}
 Rules:
+- First identify the majority identity from identity_evidence, keywords, and repeated public sources. For example, if most sources say the subject is a Nigerian musician, summarize and search relevance around that identity.
 - Be skeptical with common names and generic social links.
-- If GitHub is absent or rejected, say there is no verified developer/GitHub evidence instead of implying the person is a developer.
+- Only accept social profiles that match the majority identity and keywords. If LinkedIn/X/GitHub is absent or rejected, do not imply it exists.
 - If the evidence does not prove the same person across platforms, lower confidence and say "insufficient data" or "verify further".
 Never invent private facts. Never make character judgments beyond data."""
 
@@ -753,9 +754,10 @@ def run_agent(
             **ai,
             "scan_type": "person",
             "target": target,
+            "name": ai.get("name") or osint_data.get("identity_evidence", {}).get("canonical_name") or osint_data.get("name") or target.split("|")[0],
             "score": ai.get("confidence", cb.get("score", 50)),
             "confidence": ai.get("confidence", cb.get("score", 50)),
-            "verified_images": osint_data.get("verified_images", []),
+            "verified_images": [],
             "web_images": osint_data.get("web_images", []),
             "images": osint_data.get("web_images", []),
                 "social_cards": osint_data.get("social_cards", []),
@@ -766,6 +768,7 @@ def run_agent(
             "trust_signals": ai.get("trust_signals", cb.get("signals", [])),
             "red_flags": ai.get("red_flags", cb.get("red_flags", [])),
             "profile_narrative": ai.get("profile_narrative", ""),
+            "ai_summary": ai.get("ai_summary") or ai.get("profile_narrative") or osint_data.get("identity_evidence", {}).get("canonical_name", ""),
             "age_context": ai.get("age_context", ""),
             "role_hint": ai.get("role_hint", ""),
             "location_hint": ai.get("location_hint", ""),

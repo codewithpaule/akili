@@ -454,7 +454,7 @@
   function renderPerson(report) {
     const PLATFORM_SVGS = {
       github: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.22 2.2.82A7.6 7.6 0 018 4.6c.68.003 1.36.092 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.19 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>',
-      twitter: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M22.46 6c-.77.35-1.6.58-2.46.69a4.3 4.3 0 001.88-2.37 8.59 8.59 0 01-2.72 1.04 4.28 4.28 0 00-7.29 3.9A12.14 12.14 0 013 4.79a4.28 4.28 0 001.32 5.72 4.25 4.25 0 01-1.94-.54v.05a4.28 4.28 0 003.43 4.2 4.3 4.3 0 01-1.93.07 4.29 4.29 0 004 2.97A8.6 8.6 0 012 19.54a12.13 12.13 0 006.56 1.92c7.88 0 12.2-6.53 12.2-12.2 0-.19-.01-.39-.02-.58A8.7 8.7 0 0022.46 6z"/></svg>',
+      x: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M18.9 2h3.3l-7.2 8.2L23.5 22h-6.6l-5.2-6.8L5.8 22H2.5l7.7-8.8L2 2h6.8l4.7 6.2L18.9 2zm-1.2 18h1.8L7.8 3.9H5.9L17.7 20z"/></svg>',
       instagram: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M7 2C4.24 2 2 4.24 2 7v10c0 2.76 2.24 5 5 5h10c2.76 0 5-2.24 5-5V7c0-2.76-2.24-5-5-5H7zm5 5.5A3.5 3.5 0 0115.5 11 3.5 3.5 0 0112 14.5 3.5 3.5 0 018.5 11 3.5 3.5 0 0112 7.5zM18 6.5a.9.9 0 11-1.8 0 .9.9 0 011.8 0zM12 9.2a1.8 1.8 0 100 3.6 1.8 1.8 0 000-3.6z"/></svg>',
       linkedin: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4.98 3.5C4.98 4.88 3.88 6 2.5 6S0 4.88 0 3.5 1.12 1 2.5 1 4.98 2.12 4.98 3.5zM0 8h5v14H0V8zm7.5 0H12v2.2h.1c.5-1 1.8-2.2 3.7-2.2 4 0 4.7 2.6 4.7 6V22h-5v-6.5c0-1.6 0-3.8-2.4-3.8-2.4 0-2.8 1.9-2.8 3.7V22h-5V8z"/></svg>',
     };
@@ -497,9 +497,10 @@
         };
         pl.innerHTML = entries.map(([k, v]) => {
           const handle = extractHandle(v.url, k);
-          const label = handle ? `${k} · ${handle}` : k;
+          const displayName = k === 'twitter' ? 'x' : k;
+          const label = handle ? `${displayName} · ${handle}` : displayName;
           const href = AKILI.externalUrl(v.url || '');
-          const svg = PLATFORM_SVGS[k] || '';
+          const svg = PLATFORM_SVGS[displayName] || '';
           const linkHtml = href
             ? `<a href="${AKILI.escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="platform-pill">${svg}<span style="margin-left:6px">${AKILI.escapeHtml(label)}</span></a>`
             : AKILI.escapeHtml(label);
@@ -522,10 +523,10 @@
           };
           const inferred = [];
           report.all_urls.forEach((u) => {
-            ['github','twitter','instagram','linkedin','x'].forEach((p) => {
+            ['github','x','instagram','linkedin'].forEach((p) => {
               if (inferred.find(ic => (ic.profile_url || ic.url) === u)) return;
-              const key = p === 'x' ? 'twitter' : p;
-              const re = key === 'github' ? /github\.com\/[\w\-]+/i : key === 'twitter' ? /(?:twitter|x)\.com\/(?:#!\/)?[\w_]+/i : key === 'instagram' ? /instagram\.com\/[\w\.]+/i : key === 'linkedin' ? /linkedin\.com\/(?:in|pub)\/[\w\-]+/i : null;
+              const key = p;
+              const re = key === 'github' ? /github\.com\/[\w\-]+/i : key === 'x' ? /(?:twitter|x)\.com\/(?:#!\/)?[\w_]+/i : key === 'instagram' ? /instagram\.com\/[\w\.]+/i : key === 'linkedin' ? /linkedin\.com\/(?:in|pub)\/[\w\-]+/i : null;
               if (re && re.test(u)) {
                 inferred.push({ platform: key, profile_url: u, url: u, handle: inferHandle(u, key) });
               }
@@ -537,7 +538,7 @@
           if (cards.length) {
             scBlock.classList.remove('hidden');
             scList.innerHTML = cards.map((c) => {
-              const p = (c.platform || 'profile').toLowerCase();
+              const p = (c.platform || 'profile').toLowerCase() === 'twitter' ? 'x' : (c.platform || 'profile').toLowerCase();
               const svg = PLATFORM_SVGS[p] || '';
               const h = c.handle ? `${AKILI.escapeHtml(c.handle)}` : '';
               const title = h ? `${p} · ${h}` : p;
@@ -582,7 +583,6 @@
         el.onclick = () => AKILI.openImageModal(list, +el.dataset.idx);
       });
     };
-    renderGrid('verified-image-grid', report.verified_images, true);
     renderGrid('web-image-grid', report.web_images || report.images, false);
     const narrBlock = document.getElementById('profile-narrative-block');
     const narr = report.profile_narrative || '';

@@ -5,6 +5,11 @@ from urllib.parse import urljoin, urlparse
 from datetime import datetime
 
 
+def looks_like_missing_page(html: str) -> bool:
+    text = re.sub(r"\s+", " ", (html or "").lower())
+    return bool(re.search(r"\b(404|not found|page not found|does not exist|could not be found)\b", text))
+
+
 # Common hidden/interesting paths to check
 COMMON_HIDDEN_PATHS = [
     "/admin",
@@ -136,13 +141,15 @@ async def check_path_exists(base_url: str, path: str) -> Dict[str, Any]:
         async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
             response = await client.get(url, headers={"User-Agent": "AKILI-Deep-Scan/1.0"})
             
+            missing_body = looks_like_missing_page(response.text[:10000])
             return {
                 "path": path,
                 "url": url,
                 "status_code": response.status_code,
-                "exists": response.status_code < 400,
+                "exists": response.status_code < 400 and not missing_body,
                 "content_length": len(response.content),
                 "content_type": response.headers.get("Content-Type", ""),
+                "missing_body": missing_body,
             }
     except Exception:
         return {

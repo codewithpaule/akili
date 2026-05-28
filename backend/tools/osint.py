@@ -10,8 +10,14 @@ from tools.fallbacks import search_with_fallback, serpapi_image_search
 PLATFORM_PATTERNS = {
     "linkedin": r"linkedin\.com/in/[\w\-]+",
     "github": r"github\.com/[\w\-]+",
-    "twitter": r"(twitter|x)\.com/[\w]+",
+    "x": r"(twitter|x)\.com/[\w]+",
     "instagram": r"instagram\.com/[\w\.]+",
+}
+
+STOPWORDS = {
+    "the", "and", "for", "with", "from", "this", "that", "official", "profile",
+    "linkedin", "instagram", "twitter", "com", "www", "http", "https", "news",
+    "latest", "photos", "images", "video", "videos", "about", "home",
 }
 
 
@@ -105,12 +111,68 @@ def _name_terms(name: str) -> list[str]:
     return [p.lower() for p in re.findall(r"[a-zA-Z0-9]+", name) if len(p) > 1]
 
 
+def _keyword_terms(keywords: str) -> list[str]:
+    return [p.lower() for p in re.findall(r"[a-zA-Z0-9]+", keywords or "") if len(p) > 2 and p.lower() not in STOPWORDS]
+
+
+def _compact(text: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", (text or "").lower())
+
+
+def _identity_evidence(name: str, keywords: str, results: list[dict]) -> dict:
+    name_terms = _name_terms(name)
+    key_terms = _keyword_terms(keywords)
+    counts: dict[str, int] = {}
+    supporting = []
+    for item in results[:20]:
+        text = f"{item.get('title', '')} {item.get('snippet', '')}".lower()
+        name_hit = all(t in text for t in name_terms[:2]) if name_terms else False
+        keyword_hits = [t for t in key_terms if t in text]
+        if name_hit:
+            supporting.append({
+                "title": item.get("title", ""),
+                "link": item.get("link", ""),
+                "snippet": item.get("snippet", ""),
+                "keyword_hits": keyword_hits,
+            })
+            for token in re.findall(r"[a-zA-Z][a-zA-Z0-9\-]{2,}", text):
+                token_l = token.lower()
+                if token_l not in STOPWORDS and token_l not in name_terms:
+                    counts[token_l] = counts.get(token_l, 0) + 1
+    majority_terms = [
+        term for term, _ in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:10]
+    ]
+    top = supporting[0] if supporting else {}
+    canonical = name
+    if top.get("title"):
+        canonical = re.split(r"[-|–—]", top["title"], 1)[0].strip() or name
+    return {
+        "canonical_name": canonical,
+        "keywords": key_terms,
+        "majority_terms": majority_terms,
+        "supporting_results": supporting[:8],
+        "support_count": len(supporting),
+    }
+
+
 def _result_matches_name(item: dict, name: str) -> bool:
     text = f"{item.get('title', '')} {item.get('snippet', '')} {item.get('link', '')}".lower()
     terms = _name_terms(name)
     if not terms:
         return False
     return all(t in text for t in terms[:2])
+
+
+def _result_supports_identity(item: dict, name: str, identity: dict, *, require_keyword: bool = True) -> bool:
+    text = f"{item.get('title', '')} {item.get('snippet', '')} {item.get('link', '')}".lower()
+    name_match = _result_matches_name(item, name)
+    keyword_hits = [t for t in identity.get("keywords", []) if t in text]
+    majority_hits = [t for t in identity.get("majority_terms", [])[:6] if t in text]
+    if not name_match:
+        return False
+    if not require_keyword:
+        return True
+    return bool(keyword_hits or majority_hits)
 
 
 def _abs_url(url: str | None) -> str | None:
@@ -132,7 +194,7 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
     platforms = {
         "linkedin": {"found": False, "url": None},
         "github": {"found": False, "url": None},
-        "twitter": {"found": False, "url": None},
+        "x": {"found": False, "url": None},
         "instagram": {"found": False, "url": None},
     }
     social_cards = []
@@ -156,8 +218,8 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
     search_queries = [
         f"{name} {keywords}",
         f'"{name}" {keywords}',
-        f"{name} site:linkedin.com",
-        f"{name} site:twitter.com",
+        f'"{name}" {keywords} site:linkedin.com/in',
+        f'"{name}" {keywords} site:x.com',
         f"{name} {keywords} Nigeria",
     ]
     if is_dev_intent:
@@ -179,6 +241,8 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
                 seen_urls.add(link)
                 unique_results.append(item)
     
+    identity = _identity_evidence(name, keywords, unique_results)
+
     # Process unique results
     for item in unique_results[:30]:
         link = item.get("link", "")
@@ -196,7 +260,7 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
                     if platform == 'github':
                         m = re.search(r'github\.com/([\w\-]+)', link, re.I)
                         if m: entry['handle'] = '@' + m.group(1)
-                    elif platform == 'twitter':
+                    elif platform == 'x':
                         m = re.search(r'(?:twitter|x)\.com/(?:#!\/)?([\w_]+)', link, re.I)
                         if m: entry['handle'] = '@' + m.group(1)
                     elif platform == 'instagram':
@@ -207,12 +271,21 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
                         if m: entry['handle'] = m.group(1)
                 except Exception:
                     pass
-                platforms[platform] = entry
+                existing = platforms.get(platform) or {}
+                existing_url = existing.get("url")
+                existing_items = [r for r in raw_results if existing_url and existing_url.rstrip("/") in (_abs_url(r.get("link", "") or "") or "").rstrip("/")]
+                current_score = sum(1 for r in existing_items if _result_supports_identity(r, name, identity))
+                new_score = 1 if _result_supports_identity(item, name, identity) else 0
+                if not existing.get("found") or new_score >= current_score:
+                    if platform == "x" and entry.get("url"):
+                        entry["url"] = re.sub(r"https?://(?:www\.)?twitter\.com", "https://x.com", entry["url"], flags=re.I)
+                    platforms[platform] = entry
 
-    web_images = await serpapi_image_search(query, 12)
+    image_query = f'{identity.get("canonical_name") or name} {keywords} latest photo'
+    web_images = await serpapi_image_search(image_query, 12)
     img_source = "serpapi" if web_images else "none"
     if not web_images:
-        _, img_source = await search_with_fallback(f"{name} images", 5)
+        _, img_source = await search_with_fallback(f"{identity.get('canonical_name') or name} {keywords} images", 5)
 
     # Detect developer-like signals. GitHub is only accepted when the user's
     # keywords or strong profile evidence indicate a developer/software context.
@@ -228,15 +301,23 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
             if info["url"].rstrip("/") in (_abs_url(r.get("link", "") or "") or "").rstrip("/")
         ]
         name_match = any(_result_matches_name(r, name) for r in matching_items)
+        identity_match = any(_result_supports_identity(r, name, identity) for r in matching_items)
         if platform == "github" and not (name_match and is_dev_intent and is_dev):
             platforms[platform] = {
                 "found": False,
                 "url": None,
                 "rejected_reason": "GitHub was not shown because the search keywords did not establish a developer/software context for this subject.",
             }
+        elif platform in ("linkedin", "x"):
+            if not identity_match:
+                platforms[platform] = {
+                    "found": False,
+                    "url": None,
+                    "rejected_reason": f"{platform.upper()} result did not match the majority identity/keywords strongly enough.",
+                }
         elif platform == "instagram":
             url = info.get("url", "")
-            if re.search(r"instagram\.com/(p|reel|reels|explore|stories)/", url, re.I) or not name_match:
+            if re.search(r"instagram\.com/(p|reel|reels|explore|stories)/", url, re.I) or not identity_match:
                 platforms[platform] = {
                     "found": False,
                     "url": None,
@@ -298,7 +379,7 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
         except Exception:
             continue
 
-    verified_images = await _fetch_verified_profile_images(platforms)
+    verified_images = []
 
     confidence = _confidence_breakdown(platforms, social_cards)
     confirmed_urls = {
@@ -317,6 +398,7 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
         "name": name,
         "keywords": keywords,
         "raw_results": raw_results,
+        "identity_evidence": identity,
         "search_source": "parallel_multi_source",
         "verified_images": verified_images,
         "web_images": web_images,
