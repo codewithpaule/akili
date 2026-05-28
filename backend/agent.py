@@ -697,7 +697,7 @@ def run_agent(
         allowed_set = set(get_available_tools(module))
         available = [t for t in allowed_set if t not in context["tools_used"]]
         if not available:
-                yield _emit("THINK", "All configured deep tools have run — finishing discovery")
+            yield _emit("THINK", "All configured deep tools have run — finishing discovery")
             break
         n_findings = len(context["findings"])
         yield _emit("THINK", f"Reviewing {n_findings} finding(s) — deciding what to try next…")
