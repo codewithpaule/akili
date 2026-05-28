@@ -203,12 +203,14 @@ def _osint_person(target: str, context: dict) -> dict:
         plat_summary = ", ".join(plats)
     except Exception:
         plat_summary = ""
+    canonical = (data.get('identity_evidence') or {}).get('canonical_name') or name
+    summary_name = canonical or name
     return {
         "tool": "osint_person",
         "severity": "INFO",
         "title": "Person OSINT",
         "detail": f"{len(data.get('raw_results', []))} results",
-        "summary": f"Collected public data for {name}" + (f" — {plat_summary}" if plat_summary else ""),
+        "summary": f"Collected public data for {summary_name}" + (f" — {plat_summary}" if plat_summary else ""),
         "raw": data,
         "findings": [],
     }
@@ -685,6 +687,28 @@ def run_agent(
             for f in result.get("findings", []):
                 fs = str(f.get("severity", "INFO")).upper()
                 yield _emit("CRITICAL" if fs == "CRITICAL" else "FOUND", f.get("name", ""))
+            # Stream tool-specific details for better session visibility
+            try:
+                raw = result.get('raw', {}) or {}
+                if result.get('tool') in ('exposed_files', 'exposed'):
+                    for a in raw.get('attempted', [])[:60]:
+                        path = a.get('path') or ''
+                        status = a.get('status') or 0
+                        acc = a.get('accessible')
+                        note = 'confirmed' if acc else 'not found'
+                        yield _emit('TOOL', f"Probing {path} → HTTP {status} ({note})")
+                if result.get('tool') in ('ports', 'port_scanner', 'port_scan'):
+                    for p in raw.get('ports', []):
+                        yield _emit('FOUND', f"Port {p.get('port')} open ({p.get('service')})")
+                if result.get('tool') in ('tech_fingerprint', 'fingerprint'):
+                    techs = raw.get('technologies') or raw.get('tech_stack') or []
+                    for t in techs[:20]:
+                        nm = t.get('name') or ''
+                        ver = t.get('version') or ''
+                        if nm:
+                            yield _emit('TOOL', f"Detected tech: {nm}" + (f" {ver}" if ver else ""))
+            except Exception:
+                pass
         else:
             yield _emit("OK", f"{_tool_label(tool)} — no extra data")
 
@@ -737,6 +761,28 @@ def run_agent(
                 yield _emit("CRITICAL", f"{result.get('title')} — investigating further")
             else:
                 yield _emit("FOUND", result.get("summary", result.get("title", "")))
+            # Stream tool-specific details for better session visibility (follow-up loop)
+            try:
+                raw = result.get('raw', {}) or {}
+                if result.get('tool') in ('exposed_files', 'exposed'):
+                    for a in raw.get('attempted', [])[:60]:
+                        path = a.get('path') or ''
+                        status = a.get('status') or 0
+                        acc = a.get('accessible')
+                        note = 'confirmed' if acc else 'not found'
+                        yield _emit('TOOL', f"Probing {path} → HTTP {status} ({note})")
+                if result.get('tool') in ('ports', 'port_scanner', 'port_scan'):
+                    for p in raw.get('ports', []):
+                        yield _emit('FOUND', f"Port {p.get('port')} open ({p.get('service')})")
+                if result.get('tool') in ('tech_fingerprint', 'fingerprint'):
+                    techs = raw.get('technologies') or raw.get('tech_stack') or []
+                    for t in techs[:20]:
+                        nm = t.get('name') or ''
+                        ver = t.get('version') or ''
+                        if nm:
+                            yield _emit('TOOL', f"Detected tech: {nm}" + (f" {ver}" if ver else ""))
+            except Exception:
+                pass
         else:
             yield _emit("OK", f"{_tool_label(tool)} finished")
 

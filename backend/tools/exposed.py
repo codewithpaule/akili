@@ -341,6 +341,6 @@ def run(url: str, context: dict) -> dict:
         "severity": severity,
         "title": "Exposed files probe",
         "detail": f"Probed {len(PROBES)} paths; confirmed {len(confirmed)} existing",
-        "raw": {"probes": confirmed, "attempted_count": len(attempted)},
+        "raw": {"probes": confirmed, "attempted": attempted, "attempted_count": len(attempted)},
         "findings": findings,
     }
