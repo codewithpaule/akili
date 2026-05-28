@@ -17,6 +17,8 @@ PUBLIC_PATHS = {
     "/api/v1/breaches",
     "/api/v1/breaches/nigeria",
     "/api/v1/public-config",
+    # Allow admin login to be handled by its own IP check (require_admin_source)
+    "/api/v1/admin/login",
     "/api/v1/billing/pricing",
     "/api/v1/plans",
 }
