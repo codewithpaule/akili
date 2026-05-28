@@ -24,6 +24,7 @@ jobs:
       - name: Register scheduler in Redis
         env:
           REDIS_URL: ${{ secrets.REDIS_URL }}
+        continue-on-error: true
         run: |
           python backend/register_scheduler.py
 
