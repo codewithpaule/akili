@@ -15,6 +15,8 @@ TIER_LIMITS = {
     "pro": 500,
     "business": 2000,
     "sandbox": PLAN_LIMITS.get("sandbox", {}).get("hourly", 9999),
+    # Admin unlimited tier: None means no enforced rate limit
+    "admin_unlimited": None,
 }
 
 
@@ -86,12 +88,15 @@ def lookup_api_key(header_value: Optional[str], increment_usage: bool = False) -
             row.requests_today = (row.requests_today or 0) + 1
             row.requests_month = (row.requests_month or 0) + 1
         tier = row.tier or "account"
+        raw_limit = TIER_LIMITS.get("sandbox" if row.is_sandbox else tier, 50)
+        # Use None to represent unlimited
+        limit = None if raw_limit is None else int(raw_limit)
         return {
             "key_id": row.key_id,
             "user_id": row.user_id or "",
             "tier": "sandbox" if row.is_sandbox else tier,
             "is_sandbox": row.is_sandbox,
-            "limit": TIER_LIMITS.get("sandbox" if row.is_sandbox else tier, 50),
+            "limit": limit,
             "requests_today": row.requests_today or 0,
             "requests_month": row.requests_month or 0,
         }
@@ -104,14 +109,22 @@ def resolve_api_key(header_value: Optional[str]) -> Optional[dict]:
 def _key_usage_fields(row: ApiKey) -> dict:
     tier = row.tier or "account"
     sandbox = bool(row.is_sandbox)
-    hourly_limit = TIER_LIMITS["sandbox"] if sandbox else TIER_LIMITS.get(tier, TIER_LIMITS.get("trial", 120))
+    raw_hourly = TIER_LIMITS["sandbox"] if sandbox else TIER_LIMITS.get(tier, TIER_LIMITS.get("trial", 120))
     calls_today = row.requests_today or 0
     calls_month = row.requests_month or 0
+    # If raw_hourly is None treat as unlimited
+    if raw_hourly is None:
+        hourly_limit = None
+        hourly_remaining = None
+    else:
+        hourly_limit = int(raw_hourly)
+        hourly_remaining = max(0, hourly_limit - calls_today)
+
     return {
         "hourly_limit": hourly_limit,
         "api_calls_today": calls_today,
         "api_calls_month": calls_month,
-        "hourly_remaining": max(0, hourly_limit - calls_today),
+        "hourly_remaining": hourly_remaining,
         "last_used_at": row.last_used or 0,
     }
 
@@ -168,3 +181,50 @@ def revoke_key(key_id: str, user_id: Optional[str] = None) -> bool:
             return False
         row.is_active = False
         return True
+
+
+def generate_permanent_admin_key(user_id: str, user: dict, *, name: str = "") -> dict:
+    """Create a permanent, unlimited API key for an admin user.
+
+    This bypasses normal plan limits and sets the key tier to 'admin_unlimited'.
+    Only callable for admin users (role 'admin' or is_admin True).
+    """
+    label = (name or "").strip()[:80]
+    if not label:
+        raise ValueError("API key name is required")
+
+    # Basic admin check from provided user dict
+    role = (user or {}).get("role")
+    is_admin_flag = (user or {}).get("is_admin")
+    if not (role == "admin" or is_admin_flag):
+        raise ValueError("Admin privileges required to create a permanent admin API key")
+
+    prefix = "ak_live_"
+    raw = prefix + secrets.token_urlsafe(32)
+    key_id = str(uuid.uuid4())
+    now = int(time.time())
+
+    with get_db() as db:
+        db.add(ApiKey(
+            key_id=key_id,
+            user_id=user_id,
+            key_name=label,
+            key_hash=_hash_key(raw),
+            key_preview=_preview(raw),
+            tier="admin_unlimited",
+            created_at=now,
+            last_used=0,
+            requests_today=0,
+            requests_month=0,
+            is_sandbox=False,
+            is_active=True,
+        ))
+
+    return {
+        "key_id": key_id,
+        "name": label,
+        "api_key": raw,
+        "tier": "admin_unlimited",
+        "preview": _preview(raw),
+        "message": "Store this key safely — it will not be shown again. This key has unlimited rate limits.",
+    }

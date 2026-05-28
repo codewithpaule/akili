@@ -19,6 +19,14 @@ load_dotenv()
 
 ADMIN_EMAIL = (os.getenv("ADMIN_EMAIL", "") or "").strip().lower()
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "") or ""
+ADMIN_API_KEY = (os.getenv("ADMIN_API_KEY", "") or "").strip()
+
+# helper to hash/preview if provided
+try:
+    from api_keys import _hash_key, _preview
+except Exception:
+    _hash_key = None
+    _preview = None
 
 ALLOWED_MAIL_TAGS = {
     "a", "b", "blockquote", "br", "div", "em", "h1", "h2", "h3", "i",
@@ -55,6 +63,33 @@ def bootstrap_admin_user() -> None:
             role="admin",
             subscription_status="active",
         ))
+
+    # If an ADMIN_API_KEY is configured, insert a matching ApiKey for the admin user
+    if ADMIN_API_KEY and _hash_key and _preview:
+        try:
+            raw = ADMIN_API_KEY
+            key_hash = _hash_key(raw)
+            key_preview = _preview(raw)
+            with get_db() as db:
+                existing = db.query(ApiKey).filter(ApiKey.key_hash == key_hash).first()
+                if not existing:
+                    db.add(ApiKey(
+                        key_id=str(uuid.uuid4()),
+                        user_id=(row.user_id if row else ''),
+                        key_name="Admin default key",
+                        key_hash=key_hash,
+                        key_preview=key_preview,
+                        tier="admin_unlimited",
+                        created_at=now,
+                        last_used=0,
+                        requests_today=0,
+                        requests_month=0,
+                        is_sandbox=False,
+                        is_active=True,
+                    ))
+        except Exception:
+            # don't let key creation block bootstrapping
+            pass
 
 
 def is_admin_user(row: User) -> bool:
