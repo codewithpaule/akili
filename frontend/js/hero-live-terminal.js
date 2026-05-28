@@ -185,6 +185,36 @@
 
   let running = true;
 
+  function renderLineFromKind(kind, text) {
+    const div = document.createElement('div');
+    const cls = (function () {
+      switch ((kind || '').toUpperCase()) {
+        case 'DONE': return 'ok';
+        case 'OK': return 'ok';
+        case 'CRITICAL': return 'bad';
+        case 'FOUND': return 'warn';
+        case 'PLAN': return 'warn';
+        case 'THINK': return 'think';
+        case 'PROGRESS': return 'progress';
+        case 'TOOL': return 'tool';
+        case 'AI': return 'ai';
+        case 'AKILI': return 'akili';
+        default: return '';
+      }
+    })();
+    if (cls) div.className = cls;
+    if (cls === 'think') div.style.color = '#94A3B8';
+    if (cls === 'progress') div.style.color = '#38BDF8';
+    if (cls === 'tool') div.style.color = '#60A5FA';
+    if (cls === 'ai') div.style.color = '#C4B5FD';
+    div.textContent = text;
+    el.appendChild(div);
+    el.scrollTop = el.scrollHeight;
+  }
+
+  // Demo-only mode: do not poll production DB for live scan logs on the homepage.
+
+  // Fallback demo mode when no live scan specified
   function runNext() {
     if (!running) return;
     const mod = pick(MODULES);

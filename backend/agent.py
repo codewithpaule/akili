@@ -13,7 +13,7 @@ from urllib.parse import urlparse
 from dotenv import load_dotenv
 from groq import Groq
 
-from database import create_session, save_scan
+from database import create_session, save_scan, append_scan_log
 from audit_log import log_audit
 from tools import (
     domain_rep,
@@ -656,32 +656,40 @@ def run_agent(
     prof = profile_for_tier(scan_tier)
     if scan_tier == "guest":
         lite = True
-    yield stream_line("AKILI", f"Starting deep {module} assessment… ({prof.get('label', scan_tier)})")
-    yield stream_line("THINK", f"Target: {target[:120]}")
-    yield stream_line("THINK", prof.get("description", "Running security checks…")[:200])
+    def _emit(kind: str, msg: str) -> str:
+        line = stream_line(kind, msg)
+        try:
+            append_scan_log(scan_id, kind, msg)
+        except Exception:
+            pass
+        return line
+
+    yield _emit("AKILI", f"Starting deep {module} assessment… ({prof.get('label', scan_tier)})")
+    yield _emit("THINK", f"Target: {target[:120]}")
+    yield _emit("THINK", prof.get("description", "Running security checks…")[:200])
 
     baselines = baseline_tools(module, scan_tier) or BASELINE_TOOLS.get(module, ["headers"])
     for i, tool in enumerate(baselines, 1):
         label = _tool_label(tool)
-        yield stream_line("PROGRESS", f"Step {i}/{len(baselines)} — now checking {label}…")
+        yield _emit("PROGRESS", f"Step {i}/{len(baselines)} — now checking {label}…")
         if tool == "osint_person":
-            yield stream_line("THINK", "Searching public web & social signals (SerpAPI)…")
-        yield stream_line("TOOL", f"Running {_tool_label(tool)}…")
+            yield _emit("THINK", "Searching public web & social signals (SerpAPI)…")
+        yield _emit("TOOL", f"Running {_tool_label(tool)}…")
         context["scan_id"] = scan_id
         result = run_tool(tool, target, context)
         tool_count += 1
         if result:
             sev = str(result.get("severity", "info")).upper()
-            yield stream_line("OK", f"{_tool_label(tool)} complete")
-            yield stream_line("FOUND" if sev not in ("CRITICAL",) else "CRITICAL", result.get("summary", result.get("title", "")))
+            yield _emit("OK", f"{_tool_label(tool)} complete")
+            yield _emit("FOUND" if sev not in ("CRITICAL",) else "CRITICAL", result.get("summary", result.get("title", "")))
             for f in result.get("findings", []):
                 fs = str(f.get("severity", "INFO")).upper()
-                yield stream_line("CRITICAL" if fs == "CRITICAL" else "FOUND", f.get("name", ""))
+                yield _emit("CRITICAL" if fs == "CRITICAL" else "FOUND", f.get("name", ""))
         else:
-            yield stream_line("OK", f"{_tool_label(tool)} — no extra data")
+            yield _emit("OK", f"{_tool_label(tool)} — no extra data")
 
     if module in SINGLE_PASS_MODULES:
-        yield stream_line("THINK", "OSINT collection complete — generating person report")
+        yield _emit("THINK", "OSINT collection complete — generating person report")
     tier_loops = int(prof.get("max_iterations", 0))
     max_loops = 0 if lite or module in SINGLE_PASS_MODULES else min(MAX_ITERATIONS, tier_loops)
     while context["iteration"] < max_loops:
@@ -689,51 +697,51 @@ def run_agent(
         allowed_set = set(get_available_tools(module))
         available = [t for t in allowed_set if t not in context["tools_used"]]
         if not available:
-            yield stream_line("THINK", "All configured deep tools have run — finishing discovery")
+                yield _emit("THINK", "All configured deep tools have run — finishing discovery")
             break
         n_findings = len(context["findings"])
-        yield stream_line("THINK", f"Reviewing {n_findings} finding(s) — deciding what to try next…")
-        yield stream_line("THINK", "AKILI is thinking…")
+        yield _emit("THINK", f"Reviewing {n_findings} finding(s) — deciding what to try next…")
+        yield _emit("THINK", "AKILI is thinking…")
         prompt = NEXT_ACTION_PROMPT.format(available_tools=available, used_tools=context["tools_used"])
         decision = ask_groq(prompt, json.dumps({"findings": context["findings"][:15]}), scan_tier, expected_schema="next_action")
         if not decision:
             if available:
                 decision = {"tool": available[0], "reason": "Continuing automated audit."}
-                yield stream_line("PLAN", f"Trying {_tool_label(available[0])} — AKILI using fallback plan")
+                yield _emit("PLAN", f"Trying {_tool_label(available[0])} — AKILI using fallback plan")
             else:
-                yield stream_line("THINK", "No more tools available — wrapping up discovery phase")
+                yield _emit("THINK", "No more tools available — wrapping up discovery phase")
                 break
         if decision.get("done"):
-            yield stream_line("THINK", decision.get("reason", "Agent decided the assessment is complete"))
-            yield stream_line("AI", "Discovery complete — preparing report")
+            yield _emit("THINK", decision.get("reason", "Agent decided the assessment is complete"))
+            yield _emit("AI", "Discovery complete — preparing report")
             break
         tool = _normalize_tool(decision.get("tool") or "")
         if not tool or tool in context["tools_used"]:
-            yield stream_line("THINK", "Skipping duplicate or unknown tool — finishing discovery")
+            yield _emit("THINK", "Skipping duplicate or unknown tool — finishing discovery")
             break
         if allowed_set and tool not in allowed_set:
             context["tools_used"].append(tool)
-            yield stream_line("THINK", f"{tool} is not applicable to {module} scans — finishing")
+            yield _emit("THINK", f"{tool} is not applicable to {module} scans — finishing")
             break
         reason = decision.get("reason", "Follow-up check recommended")
         priority = decision.get("priority", "medium")
-        yield stream_line("PLAN", f"Trying {_tool_label(tool)} ({priority}) — {reason}")
-        yield stream_line("PROGRESS", f"Now running {_tool_label(tool)}…")
-        yield stream_line("TOOL", f"Executing {tool}…")
+        yield _emit("PLAN", f"Trying {_tool_label(tool)} ({priority}) — {reason}")
+        yield _emit("PROGRESS", f"Now running {_tool_label(tool)}…")
+        yield _emit("TOOL", f"Executing {tool}…")
         context["scan_id"] = scan_id
         result = run_tool(tool, target, context)
         tool_count += 1
         if result:
-            yield stream_line("OK", f"{_tool_label(tool)} complete")
+            yield _emit("OK", f"{_tool_label(tool)} complete")
             if str(result.get("severity", "")).lower() == "critical":
-                yield stream_line("CRITICAL", f"{result.get('title')} — investigating further")
+                yield _emit("CRITICAL", f"{result.get('title')} — investigating further")
             else:
-                yield stream_line("FOUND", result.get("summary", result.get("title", "")))
+                yield _emit("FOUND", result.get("summary", result.get("title", "")))
         else:
-            yield stream_line("OK", f"{_tool_label(tool)} finished")
+            yield _emit("OK", f"{_tool_label(tool)} finished")
 
-    yield stream_line("THINK", "AKILI synthesizing findings into your report…")
-    yield stream_line("AI", "AKILI writing executive summary…")
+    yield _emit("THINK", "AKILI synthesizing findings into your report…")
+    yield _emit("AI", "AKILI writing executive summary…")
     if module == "person":
         osint_data = context.get("osint") or {}
         ai = ask_groq(PERSON_PROMPT, json.dumps(osint_data, default=str)[:12000], scan_tier, expected_schema="person")
@@ -830,5 +838,5 @@ def run_agent(
         logger.exception("Error evaluating review gate")
 
     save_scan(scan_id, module, target, report, tool_count, duration, user_id=user_id)
-    yield stream_line("DONE", "Report ready")
+    yield _emit("DONE", "Report ready")
     yield f"COMPLETE:{json.dumps(report)}\n"

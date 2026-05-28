@@ -1174,6 +1174,31 @@ async def admin_scan_report(request: Request, scan_id: str, user: dict = Depends
     return data
 
 
+@app.get("/api/v1/scan/{scan_id}/logs")
+@limiter.limit("120/minute")
+async def scan_logs(request: Request, scan_id: str, since: int = 0):
+    """Return recent scan logs (used by frontend to show AI thinking)."""
+    from database import get_report, get_scan_logs
+    # Try to identify user (may be None for public scans)
+    user = None
+    try:
+        user = get_current_user_from_request(request)
+    except Exception:
+        user = None
+
+    report = get_report(scan_id)
+    if report:
+        owner = report.get("user_id", "")
+        if owner:
+            if not user:
+                raise HTTPException(401, "Sign in required")
+            if user.get("user_id") != owner and user.get("role") != "admin":
+                raise HTTPException(403, "Not allowed")
+
+    items = get_scan_logs(scan_id, since)
+    return {"items": items}
+
+
 @app.post("/api/v1/public/scan/website")
 @limiter.limit("8/hour")
 async def public_scan_website(request: Request, body: UrlBody):

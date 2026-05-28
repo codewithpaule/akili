@@ -254,6 +254,18 @@ def migrate_schema():
                 )
             """))
             conn.commit()
+        # Create scan_logs table if it doesn't exist
+        if "scan_logs" not in tables:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS scan_logs (
+                    log_id TEXT PRIMARY KEY,
+                    scan_id TEXT DEFAULT '',
+                    timestamp INTEGER NOT NULL,
+                    kind TEXT DEFAULT '',
+                    message TEXT DEFAULT ''
+                )
+            """))
+            conn.commit()
 
 
 def init_db():
@@ -572,6 +584,16 @@ class LLMCall(Base):
     meta_json = Column(Text, default="{}")
 
 
+class ScanLog(Base):
+    __tablename__ = "scan_logs"
+
+    log_id = Column(String, primary_key=True)
+    scan_id = Column(String, default="")
+    timestamp = Column(Integer, nullable=False)
+    kind = Column(String, default="")
+    message = Column(Text, default="")
+
+
 def save_tech_snapshot(snapshot_id: str, domain: str, scan_id: str, technologies: list):
     with get_db() as db:
         db.add(TechSnapshot(
@@ -772,6 +794,36 @@ def save_llm_call(provider: str, model: str, prompt: str, response: str, parsed:
             ))
         except Exception:
             db.rollback()
+
+
+def append_scan_log(scan_id: str, kind: str, message: str):
+    """Append a scan log message (used by agent streaming)."""
+    with get_db() as db:
+        try:
+            db.add(ScanLog(
+                log_id=secrets.token_urlsafe(12),
+                scan_id=scan_id,
+                timestamp=int(time.time()),
+                kind=(kind or "")[:80],
+                message=(message or "")[:20000],
+            ))
+        except Exception:
+            db.rollback()
+
+
+def get_scan_logs(scan_id: str, since: int = 0, limit: int = 500) -> list[dict]:
+    with get_db() as db:
+        q = db.query(ScanLog).filter(ScanLog.scan_id == scan_id)
+        if since:
+            q = q.filter(ScanLog.timestamp > int(since))
+        rows = q.order_by(ScanLog.timestamp.asc()).limit(limit).all()
+        return [{
+            "log_id": r.log_id,
+            "scan_id": r.scan_id,
+            "timestamp": r.timestamp,
+            "kind": r.kind,
+            "message": r.message,
+        } for r in rows]
 
 
 def list_monitor_alerts(limit: int = 50) -> list[dict]:
