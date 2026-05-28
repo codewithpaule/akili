@@ -397,11 +397,18 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
                 "url": profile_url,
                 "handle": handle,
                 "bio": "",
+                "fetched_profile": None,
             })
         except Exception:
             continue
 
     verified_images = []
+
+    # Fetch top profile pages to extract snippets for better AI vetting
+    try:
+        await _fetch_profile_pages(social_cards)
+    except Exception:
+        pass
 
     confidence = _confidence_breakdown(platforms, social_cards)
     confirmed_urls = {
@@ -441,6 +448,54 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
             "Weak name-only social results are rejected instead of being presented as confirmed profiles.",
         ],
     }
+
+
+async def _fetch_profile_pages(social_cards: list[dict]) -> None:
+    """Fetch profile pages for discovered social cards and attach a short text excerpt.
+
+    Modifies `social_cards` in-place, adding a `fetched_profile` dict with `status`,
+    `text_snippet`, and `meta` (title/description) when available.
+    """
+    import asyncio
+    import httpx
+    async def _fetch(card: dict):
+        url = card.get('url') or card.get('profile_url')
+        if not url:
+            return card
+        try:
+            async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
+                r = await client.get(url, headers={"User-Agent": "AKILI-Platform/1.0"})
+                text = r.text or ""
+                # extract title and meta description
+                title_m = re.search(r"<title>([^<]+)</title>", text[:10000], re.I)
+                desc_m = re.search(r'<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']+)', text[:20000], re.I)
+                og_m = re.search(r'<meta[^>]+property=["\']og:description["\'][^>]+content=["\']([^"\']+)', text[:20000], re.I)
+                snippet = None
+                # prefer visible h1 or first 600 chars of text
+                h1_m = re.search(r"<h1[^>]*>([^<]+)</h1>", text[:20000], re.I)
+                if h1_m:
+                    snippet = h1_m.group(1).strip()
+                else:
+                    # strip tags and collapse whitespace for snippet
+                    plain = re.sub(r"<[^>]+>", " ", text[:20000])
+                    plain = " ".join(plain.split())
+                    snippet = plain[:600]
+                card['fetched_profile'] = {
+                    'status': r.status_code,
+                    'title': title_m.group(1).strip() if title_m else None,
+                    'description': (desc_m.group(1).strip() if desc_m else (og_m.group(1).strip() if og_m else None)),
+                    'text_snippet': snippet,
+                    'url': url,
+                }
+        except Exception:
+            card['fetched_profile'] = {'status': 0, 'text_snippet': None, 'url': url}
+        return card
+
+    tasks = [_fetch(card) for card in social_cards[:8]]
+    try:
+        await asyncio.gather(*tasks)
+    except Exception:
+        pass
 
 
 def run_person_collect(name: str, keywords: str) -> dict[str, Any]:
