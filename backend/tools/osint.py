@@ -5,7 +5,7 @@ from typing import Any
 
 import httpx
 
-from tools.fallbacks import check_email_breach_async, search_with_fallback, serpapi_image_search
+from tools.fallbacks import search_with_fallback, serpapi_image_search
 
 PLATFORM_PATTERNS = {
     "linkedin": r"linkedin\.com/in/[\w\-]+",
@@ -70,7 +70,7 @@ async def _fetch_verified_profile_images(platforms: dict) -> list[dict]:
     return verified
 
 
-def _confidence_breakdown(platforms: dict, breaches: list, social_cards: list) -> dict:
+def _confidence_breakdown(platforms: dict, social_cards: list) -> dict:
     score = 30
     signals = []
     red_flags = []
@@ -92,10 +92,6 @@ def _confidence_breakdown(platforms: dict, breaches: list, social_cards: list) -
         signals.append("Public activity data available (+10)")
     if not platforms.get("github", {}).get("found"):
         signals.append("No verified GitHub/developer profile found (+0)")
-
-    if breaches:
-        score -= 10
-        red_flags.append("Verified breach signal for discovered email (-10)")
 
     return {
         "score": max(0, min(100, score)),
@@ -141,16 +137,31 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
     }
     social_cards = []
     all_urls = []
+    dev_terms = [
+        "developer",
+        "software",
+        "engineer",
+        "programmer",
+        "devops",
+        "frontend",
+        "backend",
+        "fullstack",
+        "tech lead",
+        "github",
+        "open source",
+    ]
+    is_dev_intent = any(t in (keywords or "").lower() for t in dev_terms)
 
     # Run all searches in parallel (multi-source approach)
     search_queries = [
         f"{name} {keywords}",
         f'"{name}" {keywords}',
         f"{name} site:linkedin.com",
-        f"{name} site:github.com",
         f"{name} site:twitter.com",
         f"{name} {keywords} Nigeria",
     ]
+    if is_dev_intent:
+        search_queries.append(f"{name} {keywords} site:github.com")
     
     search_tasks = [search_with_fallback(q, 10) for q in search_queries]
     search_results = await asyncio.gather(*search_tasks, return_exceptions=True)
@@ -203,18 +214,8 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
     if not web_images:
         _, img_source = await search_with_fallback(f"{name} images", 5)
 
-    # Detect developer-like signals in the scraped text and keywords. Only then treat GitHub as a strong identity signal.
-    dev_terms = [
-        "developer",
-        "software",
-        "engineer",
-        "programmer",
-        "devops",
-        "frontend",
-        "backend",
-        "fullstack",
-        "tech lead",
-    ]
+    # Detect developer-like signals. GitHub is only accepted when the user's
+    # keywords or strong profile evidence indicate a developer/software context.
     text_blob = " ".join([r.get("title", "") + " " + r.get("snippet", "") for r in raw_results]).lower() + " " + (keywords or "").lower()
     is_dev = any(t in text_blob for t in dev_terms)
 
@@ -227,11 +228,11 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
             if info["url"].rstrip("/") in (_abs_url(r.get("link", "") or "") or "").rstrip("/")
         ]
         name_match = any(_result_matches_name(r, name) for r in matching_items)
-        if platform == "github" and not (name_match and is_dev):
+        if platform == "github" and not (name_match and is_dev_intent and is_dev):
             platforms[platform] = {
                 "found": False,
                 "url": None,
-                "rejected_reason": "Name-only GitHub result; no developer evidence tied to this subject.",
+                "rejected_reason": "GitHub was not shown because the search keywords did not establish a developer/software context for this subject.",
             }
         elif platform == "instagram":
             url = info.get("url", "")
@@ -242,20 +243,20 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
                     "rejected_reason": "Generic Instagram content, not a confirmed profile.",
                 }
 
-    # Only query the GitHub API for usernames if GitHub-like URLs were found or content looks developer-related.
-    if platforms.get("github", {}).get("found") or is_dev:
+    # Only query the GitHub API when the user's keywords make developer identity relevant.
+    if is_dev_intent and (platforms.get("github", {}).get("found") or is_dev):
         gh_user = _extract_username(name)
         gh_profile = _github_user(gh_user)
         if gh_profile:
             username = gh_profile.get("login") or _extract_username(name)
             gh_text = f"{gh_profile.get('name') or ''} {gh_profile.get('bio') or ''} {username}".lower()
             name_match = all(t in gh_text for t in _name_terms(name)[:2])
-            if name_match or is_dev:
+            if name_match and is_dev:
                 platforms["github"] = {
                     "found": True,
                     "url": _abs_url(gh_profile.get("html_url")),
                     "handle": '@' + username,
-                    "identity_confidence": "strong" if name_match and is_dev else "weak",
+                    "identity_confidence": "strong",
                 }
             else:
                 platforms["github"] = {
@@ -299,30 +300,18 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
 
     verified_images = await _fetch_verified_profile_images(platforms)
 
-    # Find explicit emails in search snippets and check breaches only for those exact emails.
-    found_emails = []
-    for item in raw_results:
-        emails = re.findall(r"[\w.\-]+@[\w.\-]+\.\w+", item.get("snippet", ""))
-        for em in emails:
-            if em not in found_emails:
-                found_emails.append(em)
-
-    breaches = []
-    breach_sources = []
-    if found_emails:
-        for em in found_emails[:3]:
-            res = await check_email_breach_async(em)
-            if res.get("breaches"):
-                breaches.extend(res.get("breaches", []))
-                src = res.get("source") or "unknown"
-                if src not in breach_sources:
-                    breach_sources.append(src)
-
-    # We only expose a breach signal (no email or name PII). The exact list of breach entries is not returned.
-    breach_signal = bool(breaches)
-    breach_count = len(breaches)
-
-    confidence = _confidence_breakdown(platforms, breach_signal and [True] or [], social_cards)
+    confidence = _confidence_breakdown(platforms, social_cards)
+    confirmed_urls = {
+        (info.get("url") or "").rstrip("/")
+        for info in platforms.values()
+        if info and info.get("found") and info.get("url")
+    }
+    display_urls = []
+    for u in all_urls:
+        abs_u = (_abs_url(u) or "").rstrip("/")
+        if re.search(r"github\.com/[\w\-]+", abs_u, re.I) and abs_u not in confirmed_urls:
+            continue
+        display_urls.append(u)
 
     return {
         "name": name,
@@ -335,18 +324,16 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
         "image_source": img_source,
         "platforms": platforms,
         "social_cards": social_cards,
-        # Do not return email or name-linked breach entries. Only expose a privacy-safe signal.
-        "breach_signal": breach_signal,
-        "breach_count": breach_count,
-        "breach_sources": breach_sources,
-        # Backwards compatibility: do not include email/name-linked breach entries.
+        "breach_signal": False,
+        "breach_count": 0,
+        "breach_sources": [],
         "breaches": [],
         "serpapi_configured": bool(os.getenv("SERPAPI_KEY")),
         "confidence_breakdown": confidence,
-        "all_urls": all_urls[:20],
+        "all_urls": display_urls[:20],
         "total_sources": len(unique_results),
         "agentic_notes": [
-            "SerpAPI/search results, platform evidence, profile metadata, images, and breach-safe signals were cross-checked before confidence scoring.",
+            "SerpAPI/search results, platform evidence, profile metadata, and images were cross-checked before confidence scoring.",
             "Weak name-only social results are rejected instead of being presented as confirmed profiles.",
         ],
     }

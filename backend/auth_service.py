@@ -1,6 +1,7 @@
 """User auth — email/password, Google OAuth, JWT sessions."""
 
 import hashlib
+import ipaddress
 import os
 import re
 import secrets
@@ -27,6 +28,7 @@ JWT_ALG = "HS256"
 JWT_EXPIRE_DAYS = 30
 GOOGLE_CLIENT_ID = (os.getenv("GOOGLE_CLIENT_ID", "") or "").strip()
 ADMIN_PIN = (os.getenv("ADMIN_PIN", "") or "").strip()
+ADMIN_ALLOWED_IPS = [p.strip() for p in (os.getenv("ADMIN_ALLOWED_IPS", "") or "").split(",") if p.strip()]
 RESET_TOKEN_HOURS = 1
 EMAIL_VERIFY_HOURS = 48
 
@@ -520,7 +522,38 @@ def require_user(request: Request, user: Optional[dict] = Depends(get_current_us
 from fastapi import Request
 
 
+def _request_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",", 1)[0].strip()
+    real_ip = request.headers.get("x-real-ip", "")
+    if real_ip:
+        return real_ip.strip()
+    return request.client.host if request.client else ""
+
+
+def require_admin_source(request: Request) -> None:
+    if not ADMIN_ALLOWED_IPS:
+        return
+    ip_text = _request_ip(request)
+    try:
+        ip = ipaddress.ip_address(ip_text)
+    except ValueError:
+        raise HTTPException(403, "Admin access restricted")
+    for allowed in ADMIN_ALLOWED_IPS:
+        try:
+            if "/" in allowed:
+                if ip in ipaddress.ip_network(allowed, strict=False):
+                    return
+            elif ip == ipaddress.ip_address(allowed):
+                return
+        except ValueError:
+            continue
+    raise HTTPException(403, "Admin access restricted")
+
+
 def require_admin(request: Request, user: dict = Depends(require_user)) -> dict:
+    require_admin_source(request)
     if not user.get("is_admin"):
         raise HTTPException(403, "Admin access required")
     # Require admin-verified session token (issued by admin_login)

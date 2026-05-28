@@ -35,6 +35,16 @@ class TestTechFingerprint:
         assert "WordPress" in TECH_PATTERNS
         assert "Nginx" in TECH_PATTERNS
 
+    def test_tech_version_patterns_are_flexible(self):
+        """Test version detection from headers and asset URLs."""
+        from tools.tech_fingerprint import detect_version
+
+        html = '<script src="/static/jquery.min.js?ver=3.7.1"></script>'
+        headers = {"server": "nginx/1.24.0", "x-powered-by": "PHP/8.2.12"}
+        assert detect_version("jQuery", html, {}) == "3.7.1"
+        assert detect_version("Nginx", "", headers) == "1.24.0"
+        assert detect_version("PHP", "", headers) == "8.2.12"
+
 
 class TestCVELookup:
     
@@ -63,6 +73,29 @@ class TestLinkCrawler:
         assert len(COMMON_HIDDEN_PATHS) > 0
         assert "/admin" in COMMON_HIDDEN_PATHS
         assert "/.env" in COMMON_HIDDEN_PATHS
+
+
+class TestExposedFiles:
+
+    def test_exposed_probe_catalog_is_deep(self):
+        """Test that exposed-file checks include admin, secrets, backups, and infra paths."""
+        from tools.exposed import PROBES
+
+        paths = {path for path, _ in PROBES}
+        assert len(PROBES) >= 150
+        assert "/admin" in paths
+        assert "/.env.production" in paths
+        assert "/backup.zip" in paths
+        assert "/phpmyadmin" in paths
+        assert "/actuator/env" in paths
+
+    def test_exposed_probe_rejects_custom_200_missing_page(self):
+        """Test that custom 200 error pages are not treated as real files."""
+        from tools.exposed import _looks_like_custom_miss
+
+        hit = {"status": 200, "location": "", "title": "not found", "hash": "abc", "content_length": 1024}
+        miss = {"status": 200, "location": "", "title": "not found", "hash": "abc", "content_length": 1010}
+        assert _looks_like_custom_miss(hit, [miss])
 
 
 class TestSubdomains:

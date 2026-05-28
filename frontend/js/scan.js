@@ -247,10 +247,10 @@
             <h3 style="margin-top:0">No major issues found</h3>
             <p class="label-sm">This guest scan checked SSL and visible headers. Sign in for the deeper AI scan, DNS, ports, history, and legitimacy checks.</p>
           </div>`}
-        ${(report.exposed_files || []).length ? `
+        ${((report.exposed_files || []).filter((p) => p && p.accessible && Number(p.status) === 200)).length ? `
           <div class="card">
-            <h3 style="margin-top:0">Exposed path probes</h3>
-            <ul>${(report.exposed_files || []).slice(0, 12).map((p) => `
+            <h3 style="margin-top:0">Confirmed exposed paths</h3>
+            <ul>${(report.exposed_files || []).filter((p) => p && p.accessible && Number(p.status) === 200).slice(0, 12).map((p) => `
               <li><span class="label-sm">${AKILI.escapeHtml(p.risk || 'INFO')}</span> ${AKILI.escapeHtml(p.path || '')} - HTTP ${AKILI.escapeHtml(String(p.status || 0))}</li>
             `).join('')}</ul>
           </div>` : ''}

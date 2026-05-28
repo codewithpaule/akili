@@ -102,18 +102,29 @@ TECH_PATTERNS = {
 }
 
 
+VERSION = r"(\d+(?:\.\d+){0,3})"
+
 VERSION_PATTERNS = {
-    "WordPress": r'WordPress (\d+\.\d+\.\d+)',
-    "Drupal": r'Drupal (\d+)',
-    "Joomla": r'Joomla! (\d+\.\d+)',
-    "jQuery": r'jquery[/-](\d+\.\d+\.\d+)',
-    "Bootstrap": r'bootstrap[/-](\d+\.\d+\.\d+)',
-    "Vue.js": r'vue[/-](\d+\.\d+\.\d+)',
-    "React": r'react[/-](\d+\.\d+\.\d+)',
-    "Angular": r'angular[/-](\d+\.\d+\.\d+)',
-    "Nginx": r'nginx/(\d+\.\d+\.\d+)',
-    "Apache": r'Apache/(\d+\.\d+\.\d+)',
+    "WordPress": [rf"WordPress\s+{VERSION}", rf"wp-(?:includes|content).*?[?&]ver={VERSION}"],
+    "Drupal": [rf"Drupal\s+{VERSION}", rf"drupal.*?[?&]v={VERSION}"],
+    "Joomla": [rf"Joomla!?\s+{VERSION}"],
+    "jQuery": [rf"jquery(?:\.min)?\.js(?:\?ver=|[?&]v=|/|-)?{VERSION}", rf"jquery@{VERSION}"],
+    "Bootstrap": [rf"bootstrap(?:\.bundle|\.min)?\.(?:js|css)(?:\?ver=|[?&]v=|/|-)?{VERSION}", rf"bootstrap@{VERSION}"],
+    "Vue.js": [rf"vue(?:\.runtime|\.global|\.min)?\.js(?:\?ver=|[?&]v=|/|-)?{VERSION}", rf"vue@{VERSION}"],
+    "React": [rf"react(?:\.production|\.development|\.min)?\.js(?:\?ver=|[?&]v=|/|-)?{VERSION}", rf"react@{VERSION}"],
+    "Angular": [rf"angular(?:\.min)?\.js(?:\?ver=|[?&]v=|/|-)?{VERSION}", rf"ng-version=[\"']{VERSION}"],
+    "Nginx": [rf"nginx/{VERSION}"],
+    "Apache": [rf"Apache/{VERSION}"],
+    "PHP": [rf"PHP/{VERSION}", rf"php/{VERSION}"],
+    "Express": [rf"Express/{VERSION}", rf"express@{VERSION}"],
 }
+
+
+def _headers_get(headers: Dict[str, str], name: str) -> str:
+    for k, v in headers.items():
+        if k.lower() == name.lower():
+            return v
+    return ""
 
 
 async def fetch_html(url: str) -> str:
@@ -158,22 +169,22 @@ def detect_technologies(html: str, headers: Dict[str, str]) -> List[Dict[str, An
                 break
     
     # Detect from headers specifically
-    server = headers.get("Server", "")
-    x_powered_by = headers.get("X-Powered-By", "")
+    server = _headers_get(headers, "Server")
+    x_powered_by = _headers_get(headers, "X-Powered-By")
     
     if server:
         if "nginx" in server.lower():
             if not any(d["name"] == "Nginx" for d in detected):
                 detected.append({
                     "name": "Nginx",
-                    "version": extract_version(server, r'nginx/(\d+\.\d+\.\d+)'),
+                    "version": extract_version(server, rf'nginx/{VERSION}'),
                     "confidence": "high",
                 })
         elif "apache" in server.lower():
             if not any(d["name"] == "Apache" for d in detected):
                 detected.append({
                     "name": "Apache",
-                    "version": extract_version(server, r'Apache/(\d+\.\d+\.\d+)'),
+                    "version": extract_version(server, rf'Apache/{VERSION}'),
                     "confidence": "high",
                 })
     
@@ -182,7 +193,7 @@ def detect_technologies(html: str, headers: Dict[str, str]) -> List[Dict[str, An
             if not any(d["name"] == "PHP" for d in detected):
                 detected.append({
                     "name": "PHP",
-                    "version": extract_version(x_powered_by, r'PHP/(\d+\.\d+\.\d+)'),
+                    "version": extract_version(x_powered_by, rf'PHP/{VERSION}'),
                     "confidence": "high",
                 })
         elif "asp" in x_powered_by.lower():
@@ -199,16 +210,15 @@ def detect_technologies(html: str, headers: Dict[str, str]) -> List[Dict[str, An
 def detect_version(tech: str, html: str, headers: Dict[str, str]) -> str:
     """Detect version of a specific technology."""
     if tech in VERSION_PATTERNS:
-        pattern = VERSION_PATTERNS[tech]
-        match = re.search(pattern, html, re.IGNORECASE)
-        if match:
-            return match.group(1)
-        
-        # Also check headers
-        headers_str = str(headers)
-        match = re.search(pattern, headers_str, re.IGNORECASE)
-        if match:
-            return match.group(1)
+        for pattern in VERSION_PATTERNS[tech]:
+            match = re.search(pattern, html, re.IGNORECASE)
+            if match:
+                return match.group(1)
+
+            headers_str = str(headers)
+            match = re.search(pattern, headers_str, re.IGNORECASE)
+            if match:
+                return match.group(1)
     
     return None
 
@@ -252,28 +262,28 @@ async def fingerprint_technologies(url: str) -> Dict[str, Any]:
     for src in script_sources:
         src_lower = src.lower()
         if "jquery" in src_lower and not any(d["name"] == "jQuery" for d in technologies):
-            version = extract_version(src, r'jquery[/-](\d+\.\d+\.\d+)')
+            version = detect_version("jQuery", src, {})
             technologies.append({
                 "name": "jQuery",
                 "version": version,
                 "confidence": "medium",
             })
         elif "bootstrap" in src_lower and not any(d["name"] == "Bootstrap" for d in technologies):
-            version = extract_version(src, r'bootstrap[/-](\d+\.\d+\.\d+)')
+            version = detect_version("Bootstrap", src, {})
             technologies.append({
                 "name": "Bootstrap",
                 "version": version,
                 "confidence": "medium",
             })
         elif "react" in src_lower and not any(d["name"] == "React" for d in technologies):
-            version = extract_version(src, r'react[/-](\d+\.\d+\.\d+)')
+            version = detect_version("React", src, {})
             technologies.append({
                 "name": "React",
                 "version": version,
                 "confidence": "medium",
             })
         elif "vue" in src_lower and not any(d["name"] == "Vue.js" for d in technologies):
-            version = extract_version(src, r'vue[/-](\d+\.\d+\.\d+)')
+            version = detect_version("Vue.js", src, {})
             technologies.append({
                 "name": "Vue.js",
                 "version": version,
@@ -284,8 +294,8 @@ async def fingerprint_technologies(url: str) -> Dict[str, Any]:
         "url": url,
         "hostname": hostname,
         "technologies": technologies,
-        "server": headers.get("Server", ""),
-        "powered_by": headers.get("X-Powered-By", ""),
+        "server": _headers_get(headers, "Server"),
+        "powered_by": _headers_get(headers, "X-Powered-By"),
         "total_technologies": len(technologies),
     }
 

@@ -29,6 +29,7 @@ from auth_service import (
     reset_password_with_token,
     verify_email_token,
     require_admin,
+    require_admin_source,
     require_user,
     upgrade_user_premium,
 )
@@ -98,6 +99,11 @@ SECURITY_HEADERS = {
     "Permissions-Policy": "geolocation=(), camera=()",
 }
 
+PRIVATE_ROBOT_PATHS = (
+    "/api/v1/admin",
+    "/api/v1/secure-admin",
+)
+
 
 class BodySizeLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
@@ -113,6 +119,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         for k, v in SECURITY_HEADERS.items():
             response.headers[k] = v
+        if any(request.url.path.startswith(path) for path in PRIVATE_ROBOT_PATHS):
+            response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive"
+            response.headers["Cache-Control"] = "no-store"
         tier, limit, _ = get_tier_from_request(request)
         remaining = max(0, limit - 1)
         for k, v in rate_limit_headers(tier, limit, remaining).items():
@@ -682,6 +691,7 @@ async def auth_scan_count(request: Request, user: dict = Depends(require_user)):
 async def admin_auth_login(request: Request, body: AdminLoginBody):
     from audit_log import log_from_request
     _require_json(request)
+    require_admin_source(request)
     out = admin_login(body.email, body.password, body.admin_pin)
     log_from_request(request, "admin.login", admin_user=out.get("user"), detail="Admin signed in")
     return out

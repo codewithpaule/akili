@@ -270,6 +270,7 @@ def _build_website_ai_payload(context: dict) -> dict:
         "whois": {},
         "dns_count": len(context.get("dns_records") or []),
         "technologies": [],
+        "confirmed_exposed_paths": [],
         "open_ports": [],
         "tool_findings": context.get("findings", [])[:20],
     }
@@ -294,6 +295,17 @@ def _build_website_ai_payload(context: dict) -> dict:
                 {"name": t.get("name"), "version": t.get("version")}
                 for t in (raw.get("technologies") or [])[:15]
             ]
+        if tool == "tech_fingerprint":
+            detected = [
+                {"name": t.get("name"), "version": t.get("version"), "confidence": t.get("confidence")}
+                for t in (raw.get("technologies") or [])[:20]
+            ]
+            if detected:
+                payload["technologies"] = detected
+            payload["server"] = raw.get("server", "")
+            payload["powered_by"] = raw.get("powered_by", "")
+        if tool == "exposed_files":
+            payload["confirmed_exposed_paths"] = raw.get("probes", [])[:30]
         if tool == "ports":
             payload["open_ports"] = raw.get("ports", [])[:15]
     if host and (host.endswith(".edu.ng") or ".edu." in host or host.endswith(".edu")):
@@ -528,6 +540,11 @@ def _merge_website_report(context: dict, ai: dict) -> dict:
                 report["tech_stack"] = techs
             report["tech_changes"] = raw.get("tech_changes", context.get("tech_changes", []))
             report["cve_data_source"] = raw.get("cve_data_source", "cve.circl.lu")
+        if tool == "tech_fingerprint":
+            techs = raw.get("technologies") or []
+            if techs:
+                report["tech_stack"] = [_normalize_tech_hint(t) for t in techs]
+                report["cve_data_source"] = report.get("cve_data_source", "deep-fingerprint")
         if tool in ("whois_check", "whois", "dns"):
             if raw.get("dns"):
                 report["dns"] = raw["dns"]
