@@ -3,6 +3,8 @@ import json
 import logging
 import os
 import httpx
+import socket
+import ipaddress
 import re
 import time
 import uuid
@@ -687,9 +689,36 @@ def run_agent(
             target_host = urlparse(target).hostname or ''
             if target_host and host == target_host:
                 return True
-            # allowlist via env
-            if AGENT_ALLOWED_HOSTS and host in AGENT_ALLOWED_HOSTS:
-                return True
+            # allowlist via env: support exact matches and suffix matches ('.example.com')
+            if AGENT_ALLOWED_HOSTS:
+                for allowed in AGENT_ALLOWED_HOSTS:
+                    if not allowed:
+                        continue
+                    a = allowed.lower()
+                    if a.startswith('.'):
+                        # suffix match
+                        if host.endswith(a):
+                            # proceed to IP checks below
+                            break
+                    if host == a:
+                        break
+                else:
+                    # no allowlist entry matched
+                    return False
+            # Resolve host and block private/internal IP ranges to mitigate SSRF
+            try:
+                infos = socket.getaddrinfo(host, None)
+                for info in infos:
+                    addr = info[4][0]
+                    try:
+                        ip = ipaddress.ip_address(addr)
+                        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+                            return False
+                    except Exception:
+                        continue
+            except Exception:
+                # If DNS resolution fails, be conservative and disallow
+                return False
             return False
         except Exception:
             return False

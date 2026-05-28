@@ -796,6 +796,31 @@
       appendTerminal('[TOOL] Running lightweight public checks', thisScanId);
     }
 
+    // If authenticated (not a public scan), check daily scan quota and warn if near limit.
+    try {
+      if (!cfg_now.public && typeof AKILI.apiFetch === 'function') {
+        const quota = await AKILI.apiFetch('/api/v1/auth/scan-count').then((r) => r.json()).catch(() => null);
+        if (quota && typeof quota.remaining === 'number') {
+          // If only 1 remaining, prompt user before consuming the last allowed scan
+          if (quota.remaining <= 1) {
+            const ok = confirm(`You have ${quota.remaining}/${quota.limit} scans remaining today. Continue and consume one scan?`);
+            if (!ok) {
+              // user cancelled — cleanup state
+              sessionStore.delete(thisScanId);
+              renderSessionList();
+              btn.disabled = false;
+              btn.textContent = cfg_now.buttonLabel || 'SCAN';
+              showResultsLoading(false);
+              document.body.classList.remove('akili-scan-active');
+              return;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      // ignore quota check failures and proceed with scan
+    }
+
     const ep = currentEndpoint();
     const cfg = currentCfg();
     const url = sandbox
