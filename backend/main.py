@@ -64,6 +64,7 @@ from database import (
     reserve_scan_slot,
     consume_reservation,
 )
+import database
 from tools.auth_scan import run_auth_scan
 from tools.api_scanner import scan_api
 from tools.verify_domain import check_txt_record, generate_token
@@ -723,10 +724,22 @@ async def auth_scan_count(request: Request, user: dict = Depends(require_user)):
     """Get daily scan count for the authenticated user."""
     from database import get_daily_scan_count, get_midnight_utc
     count = get_daily_scan_count(user.get("usage_identity") or user["user_id"])
+    # Determine effective limit (per-user override if present)
+    try:
+        from database import get_db, User
+        from plans import ACCOUNT_DAILY_SCAN_LIMIT
+        with get_db() as db:
+            u = db.query(User).filter(User.user_id == (user.get("usage_identity") or user["user_id"])).first()
+            if u and u.daily_scan_limit:
+                limit = int(u.daily_scan_limit)
+            else:
+                limit = ACCOUNT_DAILY_SCAN_LIMIT
+    except Exception:
+        limit = 5
     return {
         "used": count,
-        "limit": 5,
-        "remaining": 5 - count,
+        "limit": limit,
+        "remaining": max(0, limit - count),
         "resets_at": get_midnight_utc()
     }
 
@@ -742,8 +755,17 @@ async def reserve_scan(request: Request, user: dict = Depends(require_user)):
         out = reserve_scan_slot(user.get('usage_identity') or user.get('user_id'))
         return out
     except Exception as e:
+        # Convert detailed HTTPExceptions about daily limits into a simple client message
         from fastapi import HTTPException
-        raise HTTPException(400, str(e))
+        msg = str(e)
+        try:
+            # If it's a nested HTTPException from the DB helper, inspect detail
+            if hasattr(e, 'status_code') and getattr(e, 'status_code') == 429:
+                # Simple message for UI
+                raise HTTPException(status_code=429, detail={"error": "daily_limit_reached", "message": "Daily scan limit reached. Try again after reset."})
+        except Exception:
+            pass
+        raise HTTPException(400, "Failed to reserve scan slot")
 
 
 # --- Admin (requires role=admin) ---
@@ -776,6 +798,29 @@ async def admin_verify_otp_route(request: Request, body: AdminLoginBody):
 @limiter.limit("120/minute")
 async def admin_me(request: Request, user: dict = Depends(require_admin)):
     return {"user": user}
+
+
+@app.post("/api/v1/admin/user/{user_id}/daily-limit")
+@limiter.limit("30/minute")
+async def admin_set_user_daily_limit(request: Request, user_id: str, body: dict, admin: dict = Depends(require_admin)):
+    """Set or clear a per-user daily scan limit. Body: {"limit": 10} or {"limit": null} to clear."""
+    _require_json(request)
+    try:
+        limit = body.get("limit", None)
+        from database import get_db
+        with get_db() as db:
+            u = db.query(database.User).filter(database.User.user_id == user_id).first()
+            if not u:
+                raise HTTPException(404, "User not found")
+            if limit is None:
+                u.daily_scan_limit = None
+            else:
+                u.daily_scan_limit = int(limit)
+        return {"user_id": user_id, "daily_limit": u.daily_scan_limit}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, "Failed to set daily limit")
 
 
 @app.get("/api/v1/admin/dashboard")

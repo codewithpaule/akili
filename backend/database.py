@@ -89,6 +89,7 @@ class User(Base):
     renewal_reminder_at = Column(Integer, default=0)
     email_verified = Column(Boolean, default=False)
     email_verify_hash = Column(String, default="")
+    daily_scan_limit = Column(Integer, nullable=True)
 
 
 class AuditLog(Base):
@@ -255,6 +256,7 @@ def migrate_schema():
         add_col("users", "email_verify_hash", "VARCHAR DEFAULT ''")
         add_col("users", "admin_otp_hash", "VARCHAR DEFAULT ''")
         add_col("users", "admin_otp_expires", "INTEGER DEFAULT 0")
+        add_col("users", "daily_scan_limit", "INTEGER DEFAULT NULL")
         
         # Create scan_usage table if it doesn't exist
         if "scan_usage" not in tables:
@@ -966,17 +968,29 @@ def check_and_increment_scan_limit(user_id: str) -> int:
         
         from plans import ACCOUNT_DAILY_SCAN_LIMIT
 
-        if count >= ACCOUNT_DAILY_SCAN_LIMIT:
-            raise HTTPException(
-                status_code=429,
-                detail={
-                    "error": "daily_limit_reached",
-                    "message": f"{ACCOUNT_DAILY_SCAN_LIMIT} daily account scans used. Resets at midnight UTC.",
-                    "used": count,
-                    "limit": ACCOUNT_DAILY_SCAN_LIMIT,
-                    "resets_at": get_midnight_utc()
-                }
-            )
+        # Prefer a per-user override if configured
+        user_limit = None
+        try:
+            with get_db() as db:
+                u = db.query(User).filter(User.user_id == user_id).first()
+                if u and u.daily_scan_limit:
+                    user_limit = int(u.daily_scan_limit)
+        except Exception:
+            user_limit = None
+
+        effective_limit = user_limit if user_limit is not None else ACCOUNT_DAILY_SCAN_LIMIT
+
+        if count >= effective_limit:
+                raise HTTPException(
+                    status_code=429,
+                    detail={
+                        "error": "daily_limit_reached",
+                        "message": f"{effective_limit} daily account scans used. Resets at midnight UTC.",
+                        "used": count,
+                        "limit": effective_limit,
+                        "resets_at": get_midnight_utc()
+                    }
+                )
         
         if usage:
             usage.scan_count = count + 1
