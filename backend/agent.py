@@ -203,6 +203,26 @@ def _osint_person(target: str, context: dict) -> dict:
     name, kw = parts[0].strip(), parts[1].strip() if len(parts) > 1 else ""
     data = osint.run_person_collect(name, kw)
     context["osint"] = data
+    # Vet results with AI to produce a concise validated profile summary
+    try:
+        payload = json.dumps(data)
+        vet = ask_groq(PERSON_PROMPT, payload)
+        # If vet returns structured dict, merge key fields
+        if isinstance(vet, dict):
+            data["ai_profile"] = vet
+            # Promote ai_summary to top-level for quick UI display
+            ai_sum = vet.get("ai_summary") or vet.get("profile_narrative") or ""
+            if ai_sum:
+                data["ai_summary"] = ai_sum
+            # Normalize confidence
+            try:
+                conf = int(vet.get("confidence") or vet.get("confidence", 0))
+                data["confidence"] = max(0, min(100, conf))
+            except Exception:
+                pass
+    except Exception:
+        # Non-fatal: keep raw data if vetting fails
+        pass
     # Build a short platforms summary for streaming output (easier verification)
     try:
         plats = []
