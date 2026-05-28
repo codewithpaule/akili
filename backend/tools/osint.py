@@ -458,10 +458,22 @@ async def _fetch_profile_pages(social_cards: list[dict]) -> None:
     """
     import asyncio
     import httpx
+    from agentic_policy import is_allowed_target, extract_domain
+    from tools.crawl_utils import rate_limit_domain
     async def _fetch(card: dict):
         url = card.get('url') or card.get('profile_url')
         if not url:
             return card
+        # Enforce agentic policy and per-domain rate limits
+        try:
+            if not is_allowed_target(url):
+                card['fetched_profile'] = {'status': 0, 'text_snippet': None, 'url': url, 'blocked': True}
+                return card
+            domain = extract_domain(url) or ''
+            if domain:
+                await rate_limit_domain(domain, min_interval=0.6)
+        except Exception:
+            pass
         try:
             async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
                 r = await client.get(url, headers={"User-Agent": "AKILI-Platform/1.0"})

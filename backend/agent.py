@@ -223,6 +223,29 @@ def _osint_person(target: str, context: dict) -> dict:
     except Exception:
         # Non-fatal: keep raw data if vetting fails
         pass
+    # Redact obvious PII before persisting/returning to UI
+    try:
+        from utils.redact import redact_text
+        data['raw_results'] = [
+            {**r, 'snippet': redact_text(r.get('snippet') or '')} for r in data.get('raw_results', [])
+        ]
+    except Exception:
+        pass
+    # If confidence is low or flagged, enqueue for human review
+    try:
+        conf = int(data.get('confidence') or 0)
+        issues = (data.get('confidence_breakdown') or {}).get('red_flags') or []
+        if conf < 60 or len(issues) > 0:
+            from database import get_db, ReviewQueue
+            with get_db() as db:
+                db.add(ReviewQueue(
+                    scan_id=context.get('scan_id') or '',
+                    created_at=int(time.time()),
+                    status='pending',
+                    notes=f"auto-enqueue: confidence={conf} issues={len(issues)}",
+                ))
+    except Exception:
+        pass
     # Build a short platforms summary for streaming output (easier verification)
     try:
         plats = []

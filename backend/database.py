@@ -206,6 +206,17 @@ class Reservation(Base):
     expires_at = Column(Integer, default=0)
 
 
+class ReviewQueue(Base):
+    __tablename__ = "review_queue"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    scan_id = Column(String, default="")
+    created_at = Column(Integer, nullable=False)
+    status = Column(String, default="pending")
+    notes = Column(Text, default="")
+    admin_user = Column(String, default="")
+
+
 def _table_columns(conn, table: str) -> set[str]:
     from sqlalchemy import inspect
 
@@ -278,6 +289,19 @@ def migrate_schema():
                     timestamp INTEGER NOT NULL,
                     kind TEXT DEFAULT '',
                     message TEXT DEFAULT ''
+                )
+            """))
+            conn.commit()
+        # Create review_queue table if it doesn't exist
+        if "review_queue" not in tables:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS review_queue (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    scan_id TEXT DEFAULT '',
+                    created_at INTEGER NOT NULL,
+                    status VARCHAR DEFAULT 'pending',
+                    notes TEXT DEFAULT '',
+                    admin_user TEXT DEFAULT ''
                 )
             """))
             conn.commit()

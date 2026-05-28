@@ -1044,6 +1044,42 @@ async def admin_review_scans(request: Request, page: int = 1, limit: int = 30, u
     return list_flagged_scans(page=page, limit=limit)
 
 
+@app.get("/api/v1/admin/review/queue")
+@limiter.limit("60/minute")
+async def admin_review_queue(request: Request, page: int = 1, limit: int = 50, user: dict = Depends(require_admin)):
+    from database import get_db, ReviewQueue
+    page = max(1, page)
+    limit = min(max(1, limit), 200)
+    with get_db() as db:
+        total = db.query(ReviewQueue).count()
+        rows = db.query(ReviewQueue).order_by(ReviewQueue.created_at.asc()).offset((page-1)*limit).limit(limit).all()
+        items = [{
+            'id': r.id,
+            'scan_id': r.scan_id,
+            'created_at': r.created_at,
+            'status': r.status,
+            'notes': r.notes,
+            'admin_user': r.admin_user,
+        } for r in rows]
+    return {'items': items, 'total': total, 'page': page, 'limit': limit}
+
+
+@app.post("/api/v1/admin/review/queue/{item_id}/resolve")
+@limiter.limit("30/minute")
+async def admin_review_resolve(request: Request, item_id: int, body: dict = {}, user: dict = Depends(require_admin)):
+    from database import get_db, ReviewQueue
+    note = (body.get('note') or '')[:1000]
+    action = (body.get('action') or 'dismiss')
+    with get_db() as db:
+        row = db.query(ReviewQueue).filter(ReviewQueue.id == item_id).first()
+        if not row:
+            raise HTTPException(404, 'Review item not found')
+        row.status = 'resolved'
+        row.admin_user = user.get('user_id')
+        row.notes = (row.notes or '') + f"\nresolved_by={user.get('user_id')} action={action} note={note}"
+    return {'resolved': True, 'id': item_id}
+
+
 @app.get("/api/v1/admin/review/llm-calls")
 @limiter.limit("120/minute")
 async def admin_review_llm_calls(request: Request, page: int = 1, limit: int = 50, scan_id: Optional[str] = None, user: dict = Depends(require_admin)):
