@@ -135,3 +135,9 @@ def send_email_verification(email: str, name: str, verify_token: str) -> None:
     link = f"{FRONTEND_URL}/verify-email.html?token={verify_token}"
     subject, html = email_verify_email(name, FRONTEND_URL, link)
     send_email_async(email, subject, html, f"Verify email: {link}")
+
+
+def send_admin_otp(email: str, name: str, otp: str, minutes: int = 10) -> None:
+    from email_templates import admin_otp_email
+    subject, html = admin_otp_email(name, FRONTEND_URL, otp, minutes)
+    send_email_async(email, subject, html, f"Your admin OTP: {otp} (valid {minutes} minutes)")

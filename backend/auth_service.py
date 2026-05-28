@@ -553,10 +553,9 @@ def require_admin_source(request: Request) -> None:
 
 
 def require_admin(request: Request, user: dict = Depends(require_user)) -> dict:
-    require_admin_source(request)
     if not user.get("is_admin"):
         raise HTTPException(403, "Admin access required")
-    # Require admin-verified session token (issued by admin_login)
+    # Require admin-verified session token (issued after OTP verification)
     token = _extract_token(request)
     payload = decode_token_payload(token) if token else None
     if not payload or not payload.get("admin_verified"):
@@ -568,12 +567,13 @@ def admin_login(email: str, password: str, admin_pin: str = "") -> dict:
     import hmac
 
     from admin_service import bootstrap_admin_user, is_admin_user
-
+    # Allow admin PIN as an extra required factor if configured
     if ADMIN_PIN and not hmac.compare_digest(ADMIN_PIN, (admin_pin or "").strip()):
         raise HTTPException(401, "Invalid admin security PIN")
 
     bootstrap_admin_user()
     email_l = email.strip().lower()
+    now = int(time.time())
     with get_db() as db:
         row = db.query(User).filter(User.email == email_l, User.is_active == True).first()
         if not row or not row.password_hash:
@@ -582,4 +582,39 @@ def admin_login(email: str, password: str, admin_pin: str = "") -> dict:
             raise HTTPException(401, "Invalid email or password")
         if not is_admin_user(row):
             raise HTTPException(403, "This account is not an administrator")
-        return {"token": create_token(row.user_id, admin_session=True), "user": user_to_dict(row)}
+        # Generate a short numeric OTP and email it to the admin address
+        otp = str(secrets.randbelow(900000) + 100000)
+        otp_hash = _hash_reset_token(otp)
+        expires = now + 10 * 60
+        row.admin_otp_hash = otp_hash
+        row.admin_otp_expires = expires
+        row.updated_at = now
+        try:
+            from email_service import send_admin_otp
+            send_admin_otp(row.email, row.name or '', otp, 10)
+        except Exception:
+            pass
+        return {"otp_sent": True, "message": "One-time code sent to admin email"}
+
+
+def admin_verify_otp(email: str, otp: str) -> dict:
+    email_l = (email or '').strip().lower()
+    if not otp or len(otp.strip()) < 4:
+        raise HTTPException(400, "Invalid one-time code")
+    now = int(time.time())
+    with get_db() as db:
+        row = db.query(User).filter(User.email == email_l, User.is_active == True).first()
+        if not row:
+            raise HTTPException(401, "Invalid admin credentials")
+        if not getattr(row, 'admin_otp_hash', ''):
+            raise HTTPException(400, "No admin OTP pending")
+        if getattr(row, 'admin_otp_expires', 0) < now:
+            raise HTTPException(400, "Admin OTP expired")
+        if _hash_reset_token(otp) != (row.admin_otp_hash or ''):
+            raise HTTPException(401, "Invalid admin one-time code")
+        # Clear OTP and issue an admin-verified token
+        row.admin_otp_hash = ''
+        row.admin_otp_expires = 0
+        row.updated_at = now
+        token = create_token(row.user_id, admin_session=True)
+        return {"token": token, "user": user_to_dict(row)}

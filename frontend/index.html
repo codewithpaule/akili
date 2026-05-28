@@ -280,9 +280,14 @@
       
       try {
         const baseUrl = (window.AKILI_CONFIG && AKILI_CONFIG.API_BASE) || 'http://localhost:8001';
-        const response = await fetch(`${baseUrl}/api/v1/public/scan/email`, {
+        const token = localStorage.getItem('akili_token') || '';
+        const useFull = Boolean(token && token !== 'sandbox_mock_token');
+        const url = useFull ? `${baseUrl}/api/v1/scan/email` : `${baseUrl}/api/v1/public/scan/email`;
+        const headers = { 'Content-Type': 'application/json' };
+        if (useFull) headers['Authorization'] = `Bearer ${token}`;
+        const response = await fetch(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({ email })
         });
         
@@ -343,9 +348,14 @@
       
       try {
         const baseUrl = (window.AKILI_CONFIG && AKILI_CONFIG.API_BASE) || 'http://localhost:8001';
-        const response = await fetch(`${baseUrl}/api/v1/public/scan/website`, {
+        const token = localStorage.getItem('akili_token') || '';
+        const useFull = Boolean(token && token !== 'sandbox_mock_token');
+        const endpoint = useFull ? `${baseUrl}/api/v1/scan/website` : `${baseUrl}/api/v1/public/scan/website`;
+        const headers = { 'Content-Type': 'application/json' };
+        if (useFull) headers['Authorization'] = `Bearer ${token}`;
+        const response = await fetch(endpoint, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({ url })
         });
         

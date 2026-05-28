@@ -79,9 +79,12 @@
             accepted_terms: true,
           }),
         });
-        AKILI_AUTH.setSession(data.token, data.user);
-        AKILI.showToast('Welcome to AKILI!', 'success');
-        goAfterSignup();
+        // Do not create a session until email is verified. Show verification instructions.
+        AKILI.showToast('Check your email for a verification link before signing in', 'info');
+        const card = document.querySelector('.auth-card');
+        if (card) {
+          card.innerHTML = `<h2>Verify your email</h2><p class="label-sm">We sent a verification link to <strong>${AKILI.escapeHtml(document.getElementById('email').value)}</strong>. Click the link in that email to confirm your address before signing in.</p><p style="margin-top:1rem"><a href="login.html" class="btn btn-outline">Back to sign in</a></p>`;
+        }
       } catch (err) { AKILI.showToast(err.message, 'error'); }
     };
     AKILI_AUTH.waitForGoogleButton('google-btn', goAfterSignup);

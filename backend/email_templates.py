@@ -143,3 +143,15 @@ def password_reset_email(name: str, frontend_url: str, reset_link: str) -> tuple
         preheader="Reset your AKILI password",
     )
     return "AKILI — password reset", body.replace("{{frontend_url}}", frontend_url.rstrip("/"))
+
+
+  def admin_otp_email(name: str, frontend_url: str, otp: str, minutes: int = 10) -> tuple[str, str]:
+    body = _layout(
+      f"""<h1 style=\"margin:0 0 12px;font-size:22px;color:#0f172a;\">Admin sign-in attempt</h1>
+      <p>Hi {name or 'Administrator'}, an administrative sign-in was requested for your account.</p>
+      <p style=\"font-size:20px;font-weight:700;letter-spacing:0.06em;\">{otp}</p>
+      <p style=\"font-size:13px;color:#64748b;\">Enter this one-time code to complete the admin sign-in. The code expires in {minutes} minutes.</p>
+      """,
+      preheader="Administrator sign-in code",
+    )
+    return "AKILI — admin sign-in code", body.replace("{{frontend_url}}", frontend_url.rstrip("/"))

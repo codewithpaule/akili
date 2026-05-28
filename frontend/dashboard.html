@@ -266,7 +266,9 @@
 
     renderSidebarMenu('sidebar-scans', SCAN_MODULES);
     renderSidebarMenu('sidebar-intel', INTEL_MODULES);
-    renderSidebarMenu('sidebar-tools', [...QUICK_MODULES, ...TOOL_MODULES]);
+    // Hide guest quick-scan entry when user is authenticated
+    const toolsToShow = (u && u.id) ? [...QUICK_MODULES.filter(m => m.href !== 'quick-scan.html'), ...TOOL_MODULES] : [...QUICK_MODULES, ...TOOL_MODULES];
+    renderSidebarMenu('sidebar-tools', toolsToShow);
 
     function planBadgeClass(plan) {
       if (plan === 'premium') return 'plan-premium';

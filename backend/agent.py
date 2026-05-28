@@ -2,6 +2,7 @@ import inspect
 import json
 import logging
 import os
+import httpx
 import re
 import time
 import uuid
@@ -40,6 +41,16 @@ logger = logging.getLogger("akili.agent")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 MAX_ITERATIONS = 12
+# Support an "unlimited" mode for MAX_AGENT_ACTIONS via env values like '*', 'unlimited', '0', or empty
+_raw_max_actions = (os.getenv("MAX_AGENT_ACTIONS", "6") or "").strip()
+if _raw_max_actions.lower() in ("", "*", "unlimited", "0", "none"):
+    MAX_AGENT_ACTIONS = None
+else:
+    try:
+        MAX_AGENT_ACTIONS = int(_raw_max_actions)
+    except Exception:
+        MAX_AGENT_ACTIONS = 6
+AGENT_ALLOWED_HOSTS = [h.strip().lower() for h in os.getenv("AGENT_ALLOWED_HOSTS", "").split(",") if h.strip()]
 
 # Simple in-memory cache for expensive operations
 _tool_cache = {}
@@ -666,6 +677,23 @@ def run_agent(
             pass
         return line
 
+    def _allowed_open_url(url: str) -> bool:
+        try:
+            p = urlparse(url)
+            host = (p.hostname or '').lower()
+            if not host:
+                return False
+            # allow if matches target host
+            target_host = urlparse(target).hostname or ''
+            if target_host and host == target_host:
+                return True
+            # allowlist via env
+            if AGENT_ALLOWED_HOSTS and host in AGENT_ALLOWED_HOSTS:
+                return True
+            return False
+        except Exception:
+            return False
+
     yield _emit("AKILI", f"Starting deep {module} assessment… ({prof.get('label', scan_tier)})")
     yield _emit("THINK", f"Target: {target[:120]}")
     yield _emit("THINK", prof.get("description", "Running security checks…")[:200])
@@ -735,6 +763,58 @@ def run_agent(
             else:
                 yield _emit("THINK", "No more tools available — wrapping up discovery phase")
                 break
+        # Support agentic actions from the LLM: list of actions to run (open_page, run_tool)
+        if isinstance(decision, dict) and decision.get('actions'):
+            acts = decision.get('actions') or []
+            context.setdefault('action_count', 0)
+            for act in acts:
+                typ = (act.get('type') or '').lower()
+                if typ in ('open_page', 'openurl', 'open_url'):
+                    url = act.get('url') or act.get('target') or ''
+                    if not url:
+                        continue
+                    # Enforce per-scan action limits
+                    if MAX_AGENT_ACTIONS is not None and context.get('action_count', 0) >= MAX_AGENT_ACTIONS:
+                        yield _emit('THINK', 'Agent action limit reached; skipping open_page')
+                        continue
+                    # Validate URL against allowlist (target-host or configured hosts)
+                    if not _allowed_open_url(url):
+                        yield _emit('THINK', f"Refusing to open external page: {url}")
+                        continue
+                    yield _emit('TOOL', f"AI requested opening page: {url}")
+                    try:
+                        with httpx.Client(timeout=8.0, follow_redirects=True) as client:
+                            resp = client.get(url, headers={"User-Agent": "AKILI-Agent/1.0"})
+                            snippet = (resp.text or '')[:4096]
+                            context.setdefault('open_pages', []).append({'url': url, 'status': resp.status_code, 'text_snippet': snippet})
+                            context['action_count'] = context.get('action_count', 0) + 1
+                            yield _emit('TOOL', f"Opened {url} → HTTP {resp.status_code}")
+                    except Exception as e:
+                        yield _emit('TOOL', f"Failed to open {url}: {str(e)[:160]}")
+                if typ in ('run_tool', 'scan', 'execute'):
+                    toolname = _normalize_tool(act.get('tool') or act.get('name') or '')
+                    ttarget = act.get('target') or target
+                    if not toolname:
+                        continue
+                    # Enforce per-scan action limits and tool allowlist
+                    if MAX_AGENT_ACTIONS is not None and context.get('action_count', 0) >= MAX_AGENT_ACTIONS:
+                        yield _emit('THINK', 'Agent action limit reached; skipping run_tool')
+                        continue
+                    allowed_tools = set(get_available_tools(context.get('module', '')))
+                    if allowed_tools and toolname not in allowed_tools:
+                        yield _emit('THINK', f"Requested tool {toolname} not permitted for this module")
+                        continue
+                    yield _emit('PLAN', f"AI requested running tool {toolname} on {ttarget}")
+                    r = run_tool(toolname, ttarget, context)
+                    if r:
+                        context['action_count'] = context.get('action_count', 0) + 1
+                        yield _emit('OK', f"{_tool_label(toolname)} complete (AI requested)")
+                        sev = str(r.get('severity', '')).upper()
+                        yield _emit('FOUND' if sev not in ('CRITICAL',) else 'CRITICAL', r.get('summary', r.get('title', '')))
+                        for f in r.get('findings', []):
+                            fs = str(f.get('severity', 'INFO')).upper()
+                            yield _emit('CRITICAL' if fs == 'CRITICAL' else 'FOUND', f.get('name', ''))
+            # after running actions, continue the normal decision handling
         if decision.get("done"):
             yield _emit("THINK", decision.get("reason", "Agent decided the assessment is complete"))
             yield _emit("AI", "Discovery complete — preparing report")

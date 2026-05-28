@@ -29,7 +29,7 @@ from auth_service import (
     reset_password_with_token,
     verify_email_token,
     require_admin,
-    require_admin_source,
+    admin_verify_otp,
     require_user,
     upgrade_user_premium,
 )
@@ -59,6 +59,7 @@ from database import (
     upsert_finding_status,
     save_phone_query,
     log_phone_query,
+    increment_usage,
 )
 from tools.auth_scan import run_auth_scan
 from tools.api_scanner import scan_api
@@ -407,6 +408,16 @@ class AuthScanBody(BaseModel):
 
 
 def _stream_agent(module: str, target: str, scan_id: str, user_id: str = "", scan_tier: str = "trial"):
+    # Record usage counters for authenticated users
+    try:
+        if user_id:
+            try:
+                increment_usage(user_id, module)
+            except Exception:
+                logger.debug('Failed to increment usage counter')
+    except Exception:
+        pass
+
     async def gen():
         for chunk in run_agent(module, target, scan_id, user_id=user_id, scan_tier=scan_tier):
             yield chunk
@@ -691,9 +702,21 @@ async def auth_scan_count(request: Request, user: dict = Depends(require_user)):
 async def admin_auth_login(request: Request, body: AdminLoginBody):
     from audit_log import log_from_request
     _require_json(request)
-    require_admin_source(request)
+    # Start admin login: send one-time code to admin email (OTP)
     out = admin_login(body.email, body.password, body.admin_pin)
-    log_from_request(request, "admin.login", admin_user=out.get("user"), detail="Admin signed in")
+    log_from_request(request, "admin.login.request", detail=f"Admin OTP requested for {body.email}")
+    return out
+
+
+
+@app.post("/api/v1/admin/verify-otp")
+@limiter.limit("30/hour")
+async def admin_verify_otp_route(request: Request, body: AdminLoginBody):
+    """Verify admin one-time code and return an admin-verified session token."""
+    from audit_log import log_from_request
+    _require_json(request)
+    out = admin_verify_otp(body.email, body.admin_pin or '')
+    log_from_request(request, "admin.login.verify", admin_user=out.get("user"), detail=f"Admin OTP verified for {body.email}")
     return out
 
 

@@ -144,15 +144,37 @@ def _identity_evidence(name: str, keywords: str, results: list[dict]) -> dict:
     ]
     top = supporting[0] if supporting else {}
     canonical = name
+    primary_profile = None
     if top.get("title"):
         canonical = re.split(r"[-|–—]", top["title"], 1)[0].strip() or name
+    # Try to find a primary profile URL from supporting results (prefer LinkedIn/GitHub/X)
+    for sup in supporting:
+        link = sup.get("link", "")
+        if re.search(r"linkedin\.com/in/|linkedin\.com/pub/", link, re.I):
+            primary_profile = {"platform": "linkedin", "url": link}
+            break
+        if re.search(r"github\.com/", link, re.I) and is_likely_dev(keywords):
+            primary_profile = {"platform": "github", "url": link}
+            break
+        if re.search(r"(?:twitter|x)\.com/", link, re.I):
+            primary_profile = {"platform": "x", "url": link}
+            break
     return {
         "canonical_name": canonical,
+        "primary_profile": primary_profile,
         "keywords": key_terms,
         "majority_terms": majority_terms,
         "supporting_results": supporting[:8],
         "support_count": len(supporting),
     }
+
+
+def is_likely_dev(keywords: str) -> bool:
+    if not keywords:
+        return False
+    dev_terms = ("developer", "engineer", "github", "open source", "programmer", "software")
+    k = (keywords or "").lower()
+    return any(t in k for t in dev_terms)
 
 
 def _result_matches_name(item: dict, name: str) -> bool:

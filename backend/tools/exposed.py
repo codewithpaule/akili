@@ -1,6 +1,7 @@
 import hashlib
 import re
 import uuid
+import difflib
 from urllib.parse import urljoin, urlparse
 
 import httpx
@@ -241,15 +242,28 @@ def _looks_like_custom_miss(hit: dict, misses: list[dict]) -> bool:
     if not misses:
         return False
     for miss in misses:
-        if hit["status"] != miss["status"]:
+        try:
+            if hit["status"] != miss["status"]:
+                continue
+            if hit.get("location") and hit.get("location") == miss.get("location"):
+                return True
+            same_title = hit.get("title") and hit.get("title") == miss.get("title")
+            same_hash = hit.get("hash") == miss.get("hash")
+            similar_length = abs(hit.get("content_length", 0) - miss.get("content_length", 0)) <= 80
+            if same_hash or (same_title and similar_length):
+                return True
+            # Fallback: check textual similarity between hit and miss bodies
+            h_txt = (hit.get("text") or "").strip()
+            m_txt = (miss.get("text") or "").strip()
+            if h_txt and m_txt:
+                try:
+                    ratio = difflib.SequenceMatcher(None, h_txt[:2048], m_txt[:2048]).ratio()
+                    if ratio > 0.85:
+                        return True
+                except Exception:
+                    pass
+        except Exception:
             continue
-        if hit.get("location") and hit.get("location") == miss.get("location"):
-            return True
-        same_title = hit.get("title") and hit.get("title") == miss.get("title")
-        same_hash = hit.get("hash") == miss.get("hash")
-        similar_length = abs(hit.get("content_length", 0) - miss.get("content_length", 0)) <= 80
-        if same_hash or (same_title and similar_length):
-            return True
     return False
 
 

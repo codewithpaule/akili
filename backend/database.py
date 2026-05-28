@@ -242,6 +242,8 @@ def migrate_schema():
         add_col("users", "renewal_reminder_at", "INTEGER DEFAULT 0")
         add_col("users", "email_verified", "BOOLEAN DEFAULT 0")
         add_col("users", "email_verify_hash", "VARCHAR DEFAULT ''")
+        add_col("users", "admin_otp_hash", "VARCHAR DEFAULT ''")
+        add_col("users", "admin_otp_expires", "INTEGER DEFAULT 0")
         
         # Create scan_usage table if it doesn't exist
         if "scan_usage" not in tables:
@@ -798,6 +800,11 @@ def save_llm_call(provider: str, model: str, prompt: str, response: str, parsed:
 
 def append_scan_log(scan_id: str, kind: str, message: str):
     """Append a scan log message (used by agent streaming)."""
+    try:
+        import logging
+        logging.getLogger('akili.db').debug('append_scan_log %s %s', scan_id, (kind or '')[:40])
+    except Exception:
+        pass
     with get_db() as db:
         try:
             db.add(ScanLog(

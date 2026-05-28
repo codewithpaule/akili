@@ -118,6 +118,7 @@
     }
     if (s.status === 'running') {
       showResultsLoading(true);
+      startPollingScanLogs(scanId);
     } else if (s.report) {
       showResultsLoading(false);
       renderResults(s.report, scanId);
@@ -194,6 +195,79 @@
       }
     });
     terminal.scrollTop = terminal.scrollHeight;
+  }
+
+  // Poll persisted scan logs from the API and merge into session store.
+  const pollers = new Map();
+  async function fetchScanLogsOnce(scanId, since) {
+    try {
+      const url = `${AKILI.API()}/api/v1/scan/${encodeURIComponent(scanId)}/logs` + (since ? `?since=${encodeURIComponent(String(since))}` : '');
+      const res = await fetch(url, { headers: scanHeaders() });
+      if (!res.ok) return null;
+      return await res.json().catch(() => null);
+    } catch (e) { return null; }
+  }
+
+  function startPollingScanLogs(scanId, intervalMs = 2000) {
+    if (!scanId || pollers.has(scanId)) return;
+    let stopped = false;
+    let lastTs = 0;
+    const tick = async () => {
+      if (stopped) return;
+      const data = await fetchScanLogsOnce(scanId, lastTs);
+      if (!data || !Array.isArray(data.items)) return;
+      const items = data.items || [];
+      if (!items.length) return;
+      const session = sessionStore.get(scanId) || {
+        id: scanId,
+        targetLabel: scanId,
+        status: 'running',
+        started: Date.now(),
+        lines: [],
+        report: null,
+      };
+      const existing = new Set(session.lines || []);
+      let status = 'running';
+      items.forEach((it) => {
+        if (!it) return;
+        lastTs = Math.max(lastTs || 0, it.timestamp || 0);
+        const kind = (it.kind || '').toUpperCase() || '';
+        const msg = (it.message || '') + '';
+        const line = kind ? `[${kind}] ${msg}` : msg;
+        if (!existing.has(line)) {
+          session.lines.push(line);
+          existing.add(line);
+        }
+        if (kind === 'DONE') status = 'done';
+      });
+      // If report present in latest item(s), try to parse JSON from COMPLETE: payload
+      const lastItem = items[items.length - 1] || {};
+      if (lastItem.message && typeof lastItem.message === 'string' && lastItem.message.startsWith('COMPLETE:')) {
+        try { session.report = JSON.parse(lastItem.message.slice(9)); } catch (_) {}
+        status = 'done';
+      }
+      session.status = status;
+      sessionStore.set(scanId, session);
+      renderSessionList();
+      if (activeScanId === scanId) {
+        terminal.innerHTML = '';
+        ensureTerminalHeader();
+        session.lines.forEach((line) => appendTerminal(line, scanId));
+        if (session.status === 'done' && session.report) renderResults(session.report, scanId);
+      }
+      if (session.status !== 'running') stopPollingScanLogs(scanId);
+    };
+    const id = setInterval(tick, intervalMs);
+    pollers.set(scanId, { id, stop: () => { stopped = true; clearInterval(id); } });
+    // run immediately
+    tick();
+  }
+
+  function stopPollingScanLogs(scanId) {
+    const p = pollers.get(scanId);
+    if (!p) return;
+    try { p.stop(); } catch (_) {}
+    pollers.delete(scanId);
   }
 
   function severityBorder(findings) {
@@ -642,6 +716,21 @@
         resultsEl.appendChild(view);
       }
     }
+    // If backend assigned a persistent scan_id, mirror local session lines into it
+    try {
+      if (report.scan_id && report.scan_id !== scanId) {
+        const sid = report.scan_id;
+        const existing = sessionStore.get(sid) || { id: sid, targetLabel: report.target || sid, status: 'done', started: Date.now(), lines: [], report: report };
+        // copy current session lines into persisted session if missing
+        if (session && Array.isArray(session.lines)) {
+          const sset = new Set(existing.lines || []);
+          session.lines.forEach((l) => { if (!sset.has(l)) existing.lines.push(l); });
+        }
+        existing.report = report;
+        existing.status = 'done';
+        sessionStore.set(sid, existing);
+      }
+    } catch (e) {}
     document.body.classList.remove('akili-scan-active');
     if (typeof lucide !== 'undefined') lucide.createIcons();
     if (typeof AKILI.refreshHealth === 'function') AKILI.refreshHealth();
