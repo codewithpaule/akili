@@ -995,10 +995,9 @@ def check_and_increment_scan_limit(user_id: str) -> int:
         # Prefer a per-user override if configured
         user_limit = None
         try:
-            with get_db() as db:
-                u = db.query(User).filter(User.user_id == user_id).first()
-                if u and u.daily_scan_limit:
-                    user_limit = int(u.daily_scan_limit)
+            u = db.query(User).filter(User.user_id == user_id).first()
+            if u and u.daily_scan_limit:
+                user_limit = int(u.daily_scan_limit)
         except Exception:
             user_limit = None
 

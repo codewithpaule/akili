@@ -179,6 +179,9 @@
   }
 
   function appendTerminal(text, scanId) {
+    if (currentModule() === 'person' && /\d+\s+results\b/i.test(text)) {
+      return;
+    }
     if (!terminal || scanId !== activeScanId) return;
     terminal.classList.remove('hidden');
     const session = sessionStore.get(scanId);
@@ -534,6 +537,18 @@
     };
     const pn = document.getElementById('person-name');
     if (pn) pn.textContent = report.name || 'Subject';
+    const overviewBlock = document.getElementById('person-overview-block');
+    const overviewEl = document.getElementById('person-overview');
+    const overview = report.person_overview || report.profile_narrative || '';
+    if (overviewBlock && overviewEl) {
+      if (overview) {
+        overviewBlock.style.display = '';
+        overviewEl.textContent = overview;
+      } else {
+        overviewBlock.style.display = 'none';
+        overviewEl.textContent = '';
+      }
+    }
     const conf = report.confidence ?? report.score ?? 0;
     const cv = document.getElementById('confidence-value');
     if (cv) cv.textContent = `${conf}%`;
@@ -584,8 +599,8 @@
         const scBlock = document.getElementById('social-cards-block');
         const scList = document.getElementById('social-cards-list');
         let cards = report.social_cards || [];
-        // Fallback: if no social_cards from backend, infer from discovered URLs
-        if ((!cards || cards.length === 0) && Array.isArray(report.all_urls) && report.all_urls.length) {
+        // Only show AI-verified handles — no URL inference fallback (reduces wrong-person links)
+        if (false && (!cards || cards.length === 0) && Array.isArray(report.all_urls) && report.all_urls.length) {
           const inferHandle = (url, platform) => {
             try {
               if (platform === 'github') { const m = url.match(/github\.com\/([\w\-]+)/i); if (m) return '@' + m[1]; }

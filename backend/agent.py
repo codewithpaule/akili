@@ -40,7 +40,7 @@ load_dotenv()
 logger = logging.getLogger("akili.agent")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-MAX_ITERATIONS = 12
+MAX_ITERATIONS = int(os.getenv("MAX_ITERATIONS", "18") or 18)
 # Support an "unlimited" mode for MAX_AGENT_ACTIONS via env values like '*', 'unlimited', '0', or empty
 _raw_max_actions = (os.getenv("MAX_AGENT_ACTIONS", "6") or "").strip()
 if _raw_max_actions.lower() in ("", "*", "unlimited", "0", "none"):
@@ -121,7 +121,18 @@ TOOL_MAP = {
 }
 
 # Modules that only run baseline tools — no follow-up AI tool picker (avoids nmap on names)
-SINGLE_PASS_MODULES = frozenset({"person", "email", "domain", "subdomains"})
+SINGLE_PASS_MODULES = frozenset({"email", "domain", "subdomains"})
+
+PERSON_NEXT_ACTION_PROMPT = """You are AKILI verifying a person investigation. Read evidence and decide the next step.
+Available actions: run osint_person again is NOT allowed. You may open specific profile URLs to read more public page content.
+
+Already opened pages: {open_pages}
+Verified so far: {verified_count} profile(s)
+
+Respond ONLY in JSON:
+{{"actions":[{{"type":"open_page","url":"https://..."}}], "done":false, "reason":"why"}}
+Or when complete: {{"done":true, "reason":"profiles verified"}}
+Open at most 1 new profile URL per step. Only linkedin.com, github.com, x.com, twitter.com, instagram.com URLs."""
 
 TOOL_ALIASES = {
     "nmap": "ports",
@@ -174,11 +185,12 @@ EMAIL_PROMPT = """You are a cybersecurity analyst. From email scan JSON (breache
 If breaches array is non-empty, state clearly the email was found in data breaches."""
 
 PERSON_PROMPT = """
-You are a professional due diligence analyst. From public OSINT only, produce strict JSON output with the following fields:
+You are a professional due diligence analyst. From public OSINT only, produce strict JSON:
 
 {
     "name": "",
     "confidence": 0,
+    "person_overview": "2-4 sentence overview of who this person appears to be",
     "platforms": {},
     "trust_signals": [],
     "red_flags": [],
@@ -191,12 +203,13 @@ You are a professional due diligence analyst. From public OSINT only, produce st
 }
 
 Rules:
-- Use ONLY the supplied evidence (identity_evidence, platforms, social_cards, fetched_profile snippets, images). Do NOT invent facts.
-- For each accepted platform, include matching evidence strings under platforms[PLATFORM].evidence.
-- If multiple distinct identities are present (ambiguous name), set overall_assessment to "insufficient data" and confidence <= 40.
-- If majority of platforms corroborate the same identity and snippets match name/keywords, set overall_assessment to "proceed" and confidence >= 70.
-- If some evidence exists but cross-platform identity is weak, set overall_assessment to "verify further" and confidence between 40 and 70.
-- Always return valid JSON only. Do not include explanatory text outside JSON.
+- Use ONLY supplied evidence (person_overview, identity_evidence, AI-verified platforms, social_cards, fetched_profile snippets).
+- Prefer person_overview from evidence when present; refine it, do not contradict verified profiles.
+- Only list social platforms marked found/ai_verified in evidence — never invent handles or URLs.
+- If multiple distinct identities (ambiguous name), overall_assessment "insufficient data", confidence <= 40.
+- If verified profiles corroborate one identity, overall_assessment "proceed", confidence >= 70.
+- If weak evidence, overall_assessment "verify further", confidence 40-70.
+- Return valid JSON only.
 """
 
 
@@ -233,12 +246,13 @@ def _osint_person(target: str, context: dict) -> dict:
         plat_summary = ""
     canonical = (data.get('identity_evidence') or {}).get('canonical_name') or name
     summary_name = canonical or name
+    overview = (data.get("person_overview") or "")[:120]
     return {
         "tool": "osint_person",
         "severity": "INFO",
         "title": "Person OSINT",
-        "detail": f"{len(data.get('raw_results', []))} results",
-        "summary": f"Collected public data for {summary_name}" + (f" — {plat_summary}" if plat_summary else ""),
+        "detail": overview or "AI profile investigation complete",
+        "summary": f"Verified public profiles for {summary_name}" + (f" — {plat_summary}" if plat_summary else ""),
         "raw": data,
         "findings": [],
     }
@@ -425,7 +439,7 @@ TOOL_LABELS = {
     "org_scan": "organization footprint",
     "email_intel": "email reputation",
     "domain_rep": "domain reputation",
-    "osint_person": "person OSINT (web search)",
+    "osint_person": "person OSINT (AI-led)",
     "dns": "DNS records",
 }
 
@@ -673,6 +687,7 @@ def run_agent(
         "module": module,
         "target": target,
         "scan_id": scan_id,
+        "scan_tier": scan_tier,
         "findings": [],
         "tools_used": [],
         "tool_results": [],
@@ -700,11 +715,13 @@ def run_agent(
             host = (p.hostname or '').lower()
             if not host:
                 return False
-            # allow if matches target host
+            if module == "person":
+                from tools.person_agent import is_social_profile_url
+                if is_social_profile_url(url):
+                    return True
             target_host = urlparse(target).hostname or ''
             if target_host and host == target_host:
                 return True
-            # allowlist via env
             if AGENT_ALLOWED_HOSTS and host in AGENT_ALLOWED_HOSTS:
                 return True
             return False
@@ -720,7 +737,7 @@ def run_agent(
         label = _tool_label(tool)
         yield _emit("PROGRESS", f"Step {i}/{len(baselines)} — now checking {label}…")
         if tool == "osint_person":
-            yield _emit("THINK", "Searching public web & social signals (SerpAPI)…")
+            yield _emit("THINK", "AI planning investigation & verifying profile pages…")
         yield _emit("TOOL", f"Running {_tool_label(tool)}…")
         context["scan_id"] = scan_id
         result = run_tool(tool, target, context)
@@ -758,9 +775,12 @@ def run_agent(
             yield _emit("OK", f"{_tool_label(tool)} — no extra data")
 
     if module in SINGLE_PASS_MODULES:
-        yield _emit("THINK", "OSINT collection complete — generating person report")
+        yield _emit("THINK", "OSINT collection complete — generating report")
+    elif module == "person":
+        yield _emit("THINK", "Profile verification complete — AI may open more pages if needed")
     tier_loops = int(prof.get("max_iterations", 0))
-    max_loops = 0 if lite or module in SINGLE_PASS_MODULES else min(MAX_ITERATIONS, tier_loops)
+    person_loops = 3 if module == "person" and not lite else 0
+    max_loops = person_loops if module == "person" else (0 if lite or module in SINGLE_PASS_MODULES else min(MAX_ITERATIONS, tier_loops))
     while context["iteration"] < max_loops:
         context["iteration"] += 1
         allowed_set = set(get_available_tools(module))
@@ -771,8 +791,17 @@ def run_agent(
         n_findings = len(context["findings"])
         yield _emit("THINK", f"Reviewing {n_findings} finding(s) — deciding what to try next…")
         yield _emit("THINK", "AKILI is thinking…")
-        prompt = NEXT_ACTION_PROMPT.format(available_tools=available, used_tools=context["tools_used"])
-        decision = ask_groq(prompt, json.dumps({"findings": context["findings"][:15]}), scan_tier, expected_schema="next_action")
+        if module == "person":
+            osint_data = context.get("osint") or {}
+            verified = sum(1 for p in (osint_data.get("platforms") or {}).values() if p and p.get("found"))
+            prompt = PERSON_NEXT_ACTION_PROMPT.format(
+                open_pages=[p.get("url") for p in context.get("open_pages", [])][:8],
+                verified_count=verified,
+            )
+            decision = ask_groq(prompt, json.dumps({"osint": osint_data}, default=str)[:8000], scan_tier, expected_schema="next_action")
+        else:
+            prompt = NEXT_ACTION_PROMPT.format(available_tools=available, used_tools=context["tools_used"])
+            decision = ask_groq(prompt, json.dumps({"findings": context["findings"][:15]}), scan_tier, expected_schema="next_action")
         if not decision:
             if available:
                 decision = {"tool": available[0], "reason": "Continuing automated audit."}
@@ -926,6 +955,8 @@ def run_agent(
             "confidence_breakdown": cb,
             "search_source": osint_data.get("search_source", ""),
             "agentic_notes": osint_data.get("agentic_notes", []),
+            "person_overview": ai.get("person_overview") or osint_data.get("person_overview", ""),
+            "identity_notes": osint_data.get("identity_notes", ""),
         }
     elif module == "email":
         raw = _email_intel_from_context(context)

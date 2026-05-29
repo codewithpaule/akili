@@ -6,6 +6,7 @@ from typing import Any
 import httpx
 
 from tools.fallbacks import search_with_fallback, serpapi_image_search
+from tools import person_agent
 
 PLATFORM_PATTERNS = {
     "linkedin": r"linkedin\.com/in/[\w\-]+",
@@ -210,8 +211,70 @@ def _abs_url(url: str | None) -> str | None:
     return f"https://{u.lstrip('/')}"
 
 
+def _platform_from_url(url: str) -> str | None:
+    for platform, pattern in PLATFORM_PATTERNS.items():
+        if re.search(pattern, url, re.I):
+            return platform
+    return None
+
+
+def _handle_from_url(url: str, platform: str) -> str | None:
+    try:
+        if platform == "github":
+            m = re.search(r"github\.com/([\w\-]+)", url, re.I)
+            return f"@{m.group(1)}" if m else None
+        if platform == "x":
+            m = re.search(r"(?:twitter|x)\.com/(?:#!\/)?([\w_]+)", url, re.I)
+            return f"@{m.group(1)}" if m else None
+        if platform == "instagram":
+            m = re.search(r"instagram\.com/([\w\.]+)", url, re.I)
+            return f"@{m.group(1)}" if m else None
+        if platform == "linkedin":
+            m = re.search(r"linkedin\.com/(?:in|pub)/([\w\-]+)", url, re.I)
+            return m.group(1) if m else None
+    except Exception:
+        pass
+    return None
+
+
+def _apply_verified_profiles(
+    platforms: dict,
+    social_cards: list,
+    verified: list[dict],
+) -> None:
+    for vp in verified:
+        platform = (vp.get("platform") or "").lower()
+        if platform == "twitter":
+            platform = "x"
+        url = _abs_url(vp.get("url") or "")
+        if not platform or not url:
+            continue
+        handle = vp.get("handle") or _handle_from_url(url, platform)
+        if platform == "x":
+            url = re.sub(r"https?://(?:www\.)?twitter\.com", "https://x.com", url, flags=re.I)
+        platforms[platform] = {
+            "found": True,
+            "url": url,
+            "handle": handle,
+            "identity_confidence": vp.get("confidence", "medium"),
+            "evidence": vp.get("evidence") or [],
+            "ai_verified": True,
+        }
+        card = {
+            "platform": platform,
+            "profile_url": url,
+            "url": url,
+            "handle": handle,
+            "bio": vp.get("bio_snippet") or "",
+            "display_name": vp.get("display_name_on_profile") or "",
+            "ai_verified": True,
+            "confidence": vp.get("confidence", "medium"),
+        }
+        if not any((c.get("profile_url") or c.get("url")) == url for c in social_cards):
+            social_cards.append(card)
+
+
 async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
-    query = f"{name} {keywords}".strip()
     raw_results = []
     platforms = {
         "linkedin": {"found": False, "url": None},
@@ -221,196 +284,99 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
     }
     social_cards = []
     all_urls = []
+    agentic_notes = []
     dev_terms = [
-        "developer",
-        "software",
-        "engineer",
-        "programmer",
-        "devops",
-        "frontend",
-        "backend",
-        "fullstack",
-        "tech lead",
-        "github",
-        "open source",
+        "developer", "software", "engineer", "programmer", "devops",
+        "frontend", "backend", "fullstack", "tech lead", "github", "open source",
     ]
     is_dev_intent = any(t in (keywords or "").lower() for t in dev_terms)
 
-    # Run all searches in parallel (multi-source approach)
-    search_queries = [
-        f"{name} {keywords}",
-        f'"{name}" {keywords}',
-        f'"{name}" {keywords} site:linkedin.com/in',
-        f'"{name}" {keywords} site:x.com',
-        f"{name} {keywords} Nigeria",
-    ]
-    if is_dev_intent:
-        search_queries.append(f"{name} {keywords} site:github.com")
-    
-    search_tasks = [search_with_fallback(q, 10) for q in search_queries]
-    search_results = await asyncio.gather(*search_tasks, return_exceptions=True)
-    
-    # Flatten and deduplicate results
-    seen_urls = set()
+    # AI plans the investigation (profile URLs to check, username variants)
+    plan = person_agent.plan_investigation(name, keywords)
+    agentic_notes.append(plan.get("investigation_summary") or "AI planned profile verification")
+    candidates = plan.get("candidates") or []
+
+    # Fetch each candidate profile page for content-based verification
+    for c in candidates:
+        c.setdefault("url", c.get("profile_url"))
+    await _fetch_profile_pages(candidates)
+
+    verification = person_agent.verify_profiles(name, keywords, candidates)
+    verified_list = verification.get("verified_profiles") or []
+    person_overview = verification.get("person_overview") or ""
+    identity_notes = verification.get("identity_notes") or ""
+    _apply_verified_profiles(platforms, social_cards, verified_list)
+
+    # Fallback: only if AI found no profiles, run up to 2 AI-suggested search queries
     unique_results = []
-    for result_set in search_results:
-        if isinstance(result_set, Exception):
-            continue
-        web_results, _ = result_set
-        for item in web_results:
+    if not verified_list:
+        queries = (plan.get("verification_queries") or [])[:2]
+        if not queries:
+            queries = [f'"{name}" {keywords} site:linkedin.com/in'.strip()]
+        search_tasks = [search_with_fallback(q, 8) for q in queries]
+        search_results = await asyncio.gather(*search_tasks, return_exceptions=True)
+        seen_urls: set[str] = set()
+        for result_set in search_results:
+            if isinstance(result_set, Exception):
+                continue
+            web_results, _ = result_set
+            for item in web_results:
+                link = item.get("link", "")
+                if link and link not in seen_urls:
+                    seen_urls.add(link)
+                    unique_results.append(item)
+        agentic_notes.append("Supplemental search used after direct profile checks found no match")
+
+        identity = _identity_evidence(name, keywords, unique_results)
+        fallback_candidates = []
+        for item in unique_results[:15]:
             link = item.get("link", "")
-            if link and link not in seen_urls:
-                seen_urls.add(link)
-                unique_results.append(item)
-    
-    identity = _identity_evidence(name, keywords, unique_results)
+            raw_results.append({"title": item.get("title", ""), "link": link, "snippet": item.get("snippet", "")})
+            all_urls.append(link)
+            plat = _platform_from_url(link)
+            if plat and _result_supports_identity(item, name, identity):
+                fallback_candidates.append({
+                    "platform": plat,
+                    "url": _abs_url(link),
+                    "reason": "search fallback",
+                })
+        if fallback_candidates:
+            await _fetch_profile_pages(fallback_candidates)
+            verification2 = person_agent.verify_profiles(name, keywords, fallback_candidates)
+            _apply_verified_profiles(platforms, social_cards, verification2.get("verified_profiles") or [])
+            person_overview = person_overview or verification2.get("person_overview") or ""
+            identity_notes = identity_notes or verification2.get("identity_notes") or ""
+    else:
+        identity = _identity_evidence(name, keywords, [])
+        for vp in verified_list:
+            u = vp.get("url")
+            if u:
+                all_urls.append(u)
 
-    # Process unique results
-    for item in unique_results[:30]:
-        link = item.get("link", "")
-        raw_results.append({
-            "title": item.get("title", ""),
-            "link": link,
-            "snippet": item.get("snippet", ""),
-        })
-        all_urls.append(link)
-        for platform, pattern in PLATFORM_PATTERNS.items():
-            if re.search(pattern, link, re.I):
-                entry = {"found": True, "url": _abs_url(link)}
-                # try to extract a canonical handle/username from the URL
-                try:
-                    if platform == 'github':
-                        m = re.search(r'github\.com/([\w\-]+)', link, re.I)
-                        if m: entry['handle'] = '@' + m.group(1)
-                    elif platform == 'x':
-                        m = re.search(r'(?:twitter|x)\.com/(?:#!\/)?([\w_]+)', link, re.I)
-                        if m: entry['handle'] = '@' + m.group(1)
-                    elif platform == 'instagram':
-                        m = re.search(r'instagram\.com/([\w\.]+)', link, re.I)
-                        if m: entry['handle'] = '@' + m.group(1)
-                    elif platform == 'linkedin':
-                        m = re.search(r'linkedin\.com\/(?:in|pub)\/([\w\-]+)', link, re.I)
-                        if m: entry['handle'] = m.group(1)
-                except Exception:
-                    pass
-                existing = platforms.get(platform) or {}
-                existing_url = existing.get("url")
-                existing_items = [r for r in raw_results if existing_url and existing_url.rstrip("/") in (_abs_url(r.get("link", "") or "") or "").rstrip("/")]
-                current_score = sum(1 for r in existing_items if _result_supports_identity(r, name, identity))
-                new_score = 1 if _result_supports_identity(item, name, identity) else 0
-                if not existing.get("found") or new_score >= current_score:
-                    if platform == "x" and entry.get("url"):
-                        entry["url"] = re.sub(r"https?://(?:www\.)?twitter\.com", "https://x.com", entry["url"], flags=re.I)
-                    platforms[platform] = entry
+    # GitHub API enrichment for verified dev profiles
+    gh = platforms.get("github") or {}
+    if is_dev_intent and gh.get("found") and gh.get("url"):
+        m = re.search(r"github\.com/([\w\-]+)", gh["url"], re.I)
+        if m:
+            gh_profile = _github_user(m.group(1))
+            if gh_profile:
+                for card in social_cards:
+                    if card.get("platform") == "github":
+                        card.update({
+                            "bio": gh_profile.get("bio") or card.get("bio", ""),
+                            "join_date": (gh_profile.get("created_at") or "")[:10],
+                            "repo_count": gh_profile.get("public_repos", 0),
+                            "followers": gh_profile.get("followers", 0),
+                        })
 
-    image_query = f'{identity.get("canonical_name") or name} {keywords} latest photo'
+    image_query = f"{name} {keywords} photo".strip()
     web_images = await serpapi_image_search(image_query, 12)
-    img_source = "serpapi" if web_images else "none"
-    if not web_images:
-        _, img_source = await search_with_fallback(f"{identity.get('canonical_name') or name} {keywords} images", 5)
-
-    # Detect developer-like signals. GitHub is only accepted when the user's
-    # keywords or strong profile evidence indicate a developer/software context.
-    text_blob = " ".join([r.get("title", "") + " " + r.get("snippet", "") for r in raw_results]).lower() + " " + (keywords or "").lower()
-    is_dev = any(t in text_blob for t in dev_terms)
-
-    for platform in list(platforms.keys()):
-        info = platforms.get(platform) or {}
-        if not info.get("found") or not info.get("url"):
-            continue
-        matching_items = [
-            r for r in raw_results
-            if info["url"].rstrip("/") in (_abs_url(r.get("link", "") or "") or "").rstrip("/")
-        ]
-        name_match = any(_result_matches_name(r, name) for r in matching_items)
-        identity_match = any(_result_supports_identity(r, name, identity) for r in matching_items)
-        if platform == "github" and not (name_match and is_dev_intent and is_dev):
-            platforms[platform] = {
-                "found": False,
-                "url": None,
-                "rejected_reason": "GitHub was not shown because the search keywords did not establish a developer/software context for this subject.",
-            }
-        elif platform in ("linkedin", "x"):
-            if not identity_match:
-                platforms[platform] = {
-                    "found": False,
-                    "url": None,
-                    "rejected_reason": f"{platform.upper()} result did not match the majority identity/keywords strongly enough.",
-                }
-        elif platform == "instagram":
-            url = info.get("url", "")
-            if re.search(r"instagram\.com/(p|reel|reels|explore|stories)/", url, re.I) or not identity_match:
-                platforms[platform] = {
-                    "found": False,
-                    "url": None,
-                    "rejected_reason": "Generic Instagram content, not a confirmed profile.",
-                }
-
-    # Only query the GitHub API when the user's keywords make developer identity relevant.
-    if is_dev_intent and (platforms.get("github", {}).get("found") or is_dev):
-        gh_user = _extract_username(name)
-        gh_profile = _github_user(gh_user)
-        if gh_profile:
-            username = gh_profile.get("login") or _extract_username(name)
-            gh_text = f"{gh_profile.get('name') or ''} {gh_profile.get('bio') or ''} {username}".lower()
-            name_match = all(t in gh_text for t in _name_terms(name)[:2])
-            if name_match and is_dev:
-                platforms["github"] = {
-                    "found": True,
-                    "url": _abs_url(gh_profile.get("html_url")),
-                    "handle": '@' + username,
-                    "identity_confidence": "strong",
-                }
-            else:
-                platforms["github"] = {
-                    "found": False,
-                    "url": None,
-                    "rejected_reason": "GitHub username matched mechanically, but profile identity did not match the subject.",
-                }
-                gh_profile = None
-        if gh_profile:
-            social_cards.append({
-                "platform": "github",
-                "profile_url": gh_profile.get("html_url"),
-                "handle": '@' + username,
-                "bio": gh_profile.get("bio") or "",
-                "join_date": gh_profile.get("created_at", "")[:10],
-                "activity_level": "active" if gh_profile.get("public_repos", 0) > 0 else "low",
-                "repo_count": gh_profile.get("public_repos", 0),
-                "languages": {},
-                "followers": gh_profile.get("followers", 0),
-            })
-
-    # Ensure we include any discovered platform URLs as simple social cards
-    for p, info in platforms.items():
-        try:
-            if not info or not info.get("found") or not info.get("url"):
-                continue
-            profile_url = info.get("url")
-            handle = info.get("handle") or None
-            # avoid duplicate entries (e.g. GitHub added above)
-            if any((c.get("profile_url") or c.get("url")) == profile_url for c in social_cards):
-                continue
-            social_cards.append({
-                "platform": p,
-                "profile_url": profile_url,
-                "url": profile_url,
-                "handle": handle,
-                "bio": "",
-                "fetched_profile": None,
-            })
-        except Exception:
-            continue
-
-    verified_images = []
-
-    # Fetch top profile pages to extract snippets for better AI vetting
-    try:
-        await _fetch_profile_pages(social_cards)
-    except Exception:
-        pass
+    img_source = "google_images" if web_images else "none"
 
     confidence = _confidence_breakdown(platforms, social_cards)
+    if verified_list:
+        confidence["score"] = min(100, confidence["score"] + 15)
+        confidence["signals"].append("AI verified profile page content (+15)")
     confirmed_urls = {
         (info.get("url") or "").rstrip("/")
         for info in platforms.values()
@@ -428,8 +394,11 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
         "keywords": keywords,
         "raw_results": raw_results,
         "identity_evidence": identity,
-        "search_source": "parallel_multi_source",
-        "verified_images": verified_images,
+        "search_source": "ai_agent",
+        "person_overview": person_overview,
+        "identity_notes": identity_notes,
+        "investigation_plan": plan.get("investigation_summary", ""),
+        "verified_images": [],
         "web_images": web_images,
         "images": web_images,
         "image_source": img_source,
@@ -442,10 +411,10 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
         "serpapi_configured": bool(os.getenv("SERPAPI_KEY")),
         "confidence_breakdown": confidence,
         "all_urls": display_urls[:20],
-        "total_sources": len(unique_results),
-        "agentic_notes": [
-            "SerpAPI/search results, platform evidence, profile metadata, and images were cross-checked before confidence scoring.",
-            "Weak name-only social results are rejected instead of being presented as confirmed profiles.",
+        "agentic_notes": agentic_notes + [
+            "Person scan is AI-led: investigation plan → profile fetch → content verification.",
+            "Social handles are shown only after AI confirms page content matches the subject.",
+            identity_notes,
         ],
     }
 

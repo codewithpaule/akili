@@ -91,11 +91,18 @@ class TestExposedFiles:
 
     def test_exposed_probe_rejects_custom_200_missing_page(self):
         """Test that custom 200 error pages are not treated as real files."""
-        from tools.exposed import _looks_like_custom_miss
+        from tools.page_verify import looks_like_custom_miss, path_exists
 
-        hit = {"status": 200, "location": "", "title": "not found", "hash": "abc", "content_length": 1024}
-        miss = {"status": 200, "location": "", "title": "not found", "hash": "abc", "content_length": 1010}
-        assert _looks_like_custom_miss(hit, [miss])
+        hit = {"status": 200, "location": "", "title": "not found", "hash": "abc", "content_length": 1024, "text": "404 not found"}
+        miss = {"status": 200, "location": "", "title": "not found", "hash": "abc", "content_length": 1010, "text": "404 not found"}
+        assert looks_like_custom_miss(hit, [miss])
+        soft_env = {
+            "status": 200,
+            "final_url": "https://example.com/",
+            "text": "<html><title>Page not found</title><body>Sorry</body></html>",
+            "content_type": "text/html",
+        }
+        assert not path_exists("/.env", soft_env, [miss])
 
 
 class TestSubdomains:

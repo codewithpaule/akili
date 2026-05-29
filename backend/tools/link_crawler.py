@@ -6,9 +6,7 @@ from urllib.parse import urljoin, urlparse
 from datetime import datetime
 
 
-def looks_like_missing_page(html: str) -> bool:
-    text = re.sub(r"\s+", " ", (html or "").lower())
-    return bool(re.search(r"\b(404|not found|page not found|does not exist|could not be found)\b", text))
+from tools.page_verify import looks_like_missing_page, path_exists, probe_hit_from_response
 
 
 # Common hidden/interesting paths to check
@@ -85,6 +83,45 @@ async def fetch_page(url: str) -> str:
     except Exception:
         return ""
 
+def _extract_paths_from_robots(text: str) -> list[str]:
+    paths: set[str] = set()
+    for line in (text or "").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        m = re.match(r"(?i)^(disallow|allow)\s*:\s*(\S+)", line)
+        if not m:
+            continue
+        p = m.group(2).strip()
+        if not p.startswith("/"):
+            continue
+        # skip wildcards and empty rules
+        if "*" in p or "$" in p:
+            continue
+        paths.add(p)
+    return list(paths)[:120]
+
+
+def _extract_paths_from_sitemap(xml: str, base_url: str) -> list[str]:
+    paths: set[str] = set()
+    if not xml:
+        return []
+    # very light sitemap parsing: find <loc> URLs
+    for m in re.finditer(r"(?is)<loc>\s*([^<\s]+)\s*</loc>", xml[:600000]):
+        loc = m.group(1).strip()
+        try:
+            p = urlparse(loc)
+            base = urlparse(base_url)
+            if p.netloc and base.netloc and p.netloc != base.netloc:
+                continue
+            path = p.path or "/"
+            if not path.startswith("/"):
+                continue
+            paths.add(path)
+        except Exception:
+            continue
+    return list(paths)[:200]
+
 
 def extract_links(html: str, base_url: str) -> List[str]:
     """Extract all links from HTML."""
@@ -135,22 +172,39 @@ def filter_links(links: List[str], base_domain: str) -> List[str]:
     return filtered
 
 
-async def check_path_exists(base_url: str, path: str) -> Dict[str, Any]:
-    """Check if a specific path exists and returns status."""
+async def _miss_signatures_async(client: httpx.AsyncClient, base_url: str) -> list[dict]:
+    import uuid as _uuid
+    misses = []
+    for _ in range(2):
+        miss_url = urljoin(base_url, f"akili-miss-{_uuid.uuid4()}.txt")
+        try:
+            r = await client.get(miss_url, headers={"User-Agent": "AKILI-Deep-Scan/1.0"})
+            misses.append(probe_hit_from_response(r))
+        except Exception:
+            continue
+    return misses
+
+
+async def check_path_exists(base_url: str, path: str, misses: list[dict] | None = None) -> Dict[str, Any]:
+    """Check if a specific path exists — reads page content, not just HTTP status."""
     url = urljoin(base_url, path)
     try:
-        async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
+            if misses is None:
+                misses = await _miss_signatures_async(client, base_url)
             response = await client.get(url, headers={"User-Agent": "AKILI-Deep-Scan/1.0"})
-            
-            missing_body = looks_like_missing_page(response.text[:10000])
+            hit = probe_hit_from_response(response)
+            exists = path_exists(path, hit, misses)
             return {
                 "path": path,
                 "url": url,
                 "status_code": response.status_code,
-                "exists": response.status_code < 400 and not missing_body,
+                "exists": exists,
                 "content_length": len(response.content),
                 "content_type": response.headers.get("Content-Type", ""),
-                "missing_body": missing_body,
+                "missing_body": not exists and looks_like_missing_page(response.text[:10000]),
+                "final_url": hit.get("final_url", url),
+                "content_verified": exists,
             }
     except Exception:
         return {
@@ -166,9 +220,9 @@ async def check_path_exists(base_url: str, path: str) -> Dict[str, Any]:
 async def discover_hidden_paths(base_url: str) -> List[Dict[str, Any]]:
     """Discover hidden paths by checking common paths."""
     results = []
-    
-    # Check common hidden paths
-    tasks = [check_path_exists(base_url, path) for path in COMMON_HIDDEN_PATHS]
+    async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
+        misses = await _miss_signatures_async(client, base_url)
+    tasks = [check_path_exists(base_url, path, misses) for path in COMMON_HIDDEN_PATHS]
     path_results = await asyncio.gather(*tasks, return_exceptions=True)
     
     for result in path_results:
@@ -227,6 +281,32 @@ Return ONLY a JSON array of paths (e.g., ["/api/v1/users", "/admin/dashboard", "
     except Exception:
         return []
 
+async def discover_policy_paths(base_url: str) -> list[str]:
+    """Discover additional candidate paths from robots.txt and sitemap.xml."""
+    robots_url = urljoin(base_url, "/robots.txt")
+    sitemap_url = urljoin(base_url, "/sitemap.xml")
+    try:
+        async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
+            robots = await client.get(robots_url, headers={"User-Agent": "AKILI-Deep-Scan/1.0"})
+            sitemap = await client.get(sitemap_url, headers={"User-Agent": "AKILI-Deep-Scan/1.0"})
+        robots_paths = _extract_paths_from_robots(robots.text or "")
+        sitemap_paths = _extract_paths_from_sitemap(sitemap.text or "", base_url)
+        # prioritize “interesting” paths first
+        interesting = []
+        for p in robots_paths + sitemap_paths:
+            if any(k in p.lower() for k in ("admin", "login", "dashboard", "api", "config", "backup", "debug", "test", "staging")):
+                interesting.append(p)
+        merged = interesting + [p for p in robots_paths + sitemap_paths if p not in interesting]
+        # unique, keep order
+        seen = set()
+        out = []
+        for p in merged:
+            if p and p.startswith("/") and p not in seen:
+                seen.add(p)
+                out.append(p)
+        return out[:120]
+    except Exception:
+        return []
 
 async def crawl_website(url: str, max_depth: int = 2, max_pages: int = 50) -> Dict[str, Any]:
     """Crawl website to discover all links and hidden paths."""
@@ -270,6 +350,19 @@ async def crawl_website(url: str, max_depth: int = 2, max_pages: int = 50) -> Di
     
     # Discover hidden paths using common paths
     hidden_paths = await discover_hidden_paths(base_url)
+
+    # Add policy-discovered paths (robots/sitemap), then verify
+    policy_paths = await discover_policy_paths(base_url)
+    if policy_paths:
+        async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
+            misses = await _miss_signatures_async(client, base_url)
+        policy_tasks = [check_path_exists(base_url, p, misses) for p in policy_paths[:80]]
+        policy_results = await asyncio.gather(*policy_tasks, return_exceptions=True)
+        for r in policy_results:
+            if isinstance(r, Exception):
+                continue
+            if r.get("exists") and not any(h.get("path") == r.get("path") for h in hidden_paths):
+                hidden_paths.append(r)
     
     # If few hidden paths found, use AI to discover more
     if len(hidden_paths) < 3:
@@ -309,6 +402,7 @@ async def crawl_website(url: str, max_depth: int = 2, max_pages: int = 50) -> Di
         "pages_crawled": len(visited),
         "interesting_links": interesting_links,
         "hidden_paths": hidden_paths,
+        "policy_paths": policy_paths[:80],
         "all_links": all_links[:100],  # Limit to 100
         "crawl_timestamp": datetime.utcnow().isoformat()
     }
@@ -324,7 +418,12 @@ def run_link_crawler(url: str, context: dict) -> dict:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
     
-    result = loop.run_until_complete(crawl_website(url))
+    # Deeper crawl for signed-in tiers
+    tier = (context.get("scan_tier") or "").lower()
+    deep = tier not in ("guest", "")
+    max_depth = 3 if deep else 2
+    max_pages = 120 if deep else 50
+    result = loop.run_until_complete(crawl_website(url, max_depth=max_depth, max_pages=max_pages))
     
     findings = []
     
@@ -335,11 +434,11 @@ def run_link_crawler(url: str, context: dict) -> dict:
         
         # Check for sensitive paths
         if any(keyword in path.lower() for keyword in ["admin", "login", "dashboard", "config"]):
-            if status_code == 200:
+            if path_info.get("content_verified") or (status_code == 200 and path_info.get("exists")):
                 findings.append({
                     "severity": "HIGH",
                     "name": f"Sensitive path exposed: {path}",
-                    "explanation": f"The path {path} is publicly accessible (HTTP {status_code}).",
+                    "explanation": f"The path {path} is publicly accessible with content matching the resource (HTTP {status_code}).",
                     "recommendation": "Restrict access to this path or ensure proper authentication is enforced.",
                     "url": path_info["url"]
                 })

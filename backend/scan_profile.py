@@ -16,7 +16,7 @@ SCAN_PROFILES = {
     },
     "account": {
         "label": "Account",
-        "max_iterations": 12,
+        "max_iterations": 18,
         "lite": False,
         "website_baseline": ["ssl_check", "headers", "dns", "fingerprint", "tech_fingerprint", "cve_lookup", "ports", "exposed_files", "link_crawler", "vulnerability"],
         "email_baseline": ["email_intel"],
@@ -27,7 +27,7 @@ SCAN_PROFILES = {
     },
     "trial": {
         "label": "Account",
-        "max_iterations": 8,
+        "max_iterations": 14,
         "lite": False,
         "website_baseline": ["ssl_check", "headers", "dns", "fingerprint", "tech_fingerprint", "cve_lookup", "ports", "exposed_files", "link_crawler", "vulnerability"],
         "email_baseline": ["email_intel"],

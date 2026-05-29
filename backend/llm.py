@@ -351,6 +351,7 @@ SCHEMAS = {
         "properties": {
             "name": {"type": "string"},
             "confidence": {"type": "number", "minimum": 0, "maximum": 100},
+            "person_overview": {"type": "string"},
             "platforms": {"type": "object"},
             "trust_signals": {"type": "array"},
             "red_flags": {"type": "array"},
@@ -362,6 +363,8 @@ SCHEMAS = {
             "overall_assessment": {"type": "string", "enum": ["proceed", "verify further", "insufficient data"]}
         },
     },
+    "person_plan": {"type": "object"},
+    "person_verify": {"type": "object"},
     "email": {
         "type": "object",
         "required": ["summary", "risk_level"],
