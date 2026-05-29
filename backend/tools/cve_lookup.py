@@ -222,17 +222,9 @@ async def lookup_cves(technologies: List[Dict[str, Any]]) -> Dict[str, Any]:
     return results
 
 
-def run_cve_lookup(technologies: list, context: dict) -> dict:
-    """Run CVE lookup (synchronous wrapper)."""
-    try:
-        import asyncio
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        import asyncio
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    
-    result = loop.run_until_complete(lookup_cves(technologies))
+async def run_cve_lookup(technologies: list, context: dict) -> dict:
+    """Run CVE lookup (async-safe wrapper)."""
+    result = await lookup_cves(technologies)
     
     findings = []
     

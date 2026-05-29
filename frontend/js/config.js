@@ -2,6 +2,8 @@ window.AKILI_CONFIG = {
   API_BASE: 'https://api.akili.com.ng',
   // Public client ID is loaded from the server to avoid committing it in source
   GOOGLE_CLIENT_ID: null,
+  // Secret admin UI base path (frontend only)
+  ADMIN_UI_PATH: '/x9Qp3-admin',
 };
 
 // Load public config (non-sensitive) from the API at runtime.

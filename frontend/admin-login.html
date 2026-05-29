@@ -40,12 +40,21 @@
   <script src="js/app.js"></script>
   <script src="js/admin.js"></script>
   <script>
+    const ADMIN_BASE = ((window.AKILI_CONFIG && AKILI_CONFIG.ADMIN_UI_PATH) || '/x9Qp3-admin').replace(/\/+$/, '');
     if (new URLSearchParams(location.search).get('entry') === '1') {
       sessionStorage.setItem('akili_admin_entry', '1');
       history.replaceState(null, '', 'admin-login.html');
     }
+    // Only allow access via the secret admin base path
+    if (!location.pathname.startsWith(ADMIN_BASE)) {
+      location.replace('index.html');
+    }
+    // Hide admin page unless you came through admin-entry with a key.
+    if (!sessionStorage.getItem('akili_admin_entry') || !sessionStorage.getItem('akili_admin_key')) {
+      location.replace('index.html');
+    }
     if (AKILI_ADMIN.getToken() && AKILI_ADMIN.getUser()?.is_admin) {
-      location.href = 'admin-panel.html';
+      location.href = ADMIN_BASE + '/panel';
     }
     (function() {
       const form = document.getElementById('admin-login-form');
@@ -96,7 +105,7 @@
           if (!out.user?.is_admin) throw new Error('Not an administrator');
           AKILI_ADMIN.setSession(out.token, out.user);
           AKILI.showToast('Admin signed in', 'success');
-          location.href = 'admin-panel.html';
+          location.href = ADMIN_BASE + '/panel';
         } catch (err) {
           AKILI.showToast(err.message, 'error');
           // on error, if during PIN step, go back to credentials so user can re-try password

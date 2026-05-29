@@ -119,7 +119,8 @@
         await AKILI_ADMIN.api('/api/v1/admin/events?page=1&limit=1');
       } catch (e) {
         AKILI_ADMIN.clearSession();
-        location.href = 'admin-login.html';
+        const base = ((window.AKILI_CONFIG && AKILI_CONFIG.ADMIN_UI_PATH) || '/x9Qp3-admin').replace(/\/+$/, '');
+        location.href = base + '/login';
       }
     })();
 

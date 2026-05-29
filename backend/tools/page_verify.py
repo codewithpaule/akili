@@ -140,7 +140,7 @@ def content_confirms_path(path: str, hit: dict) -> bool:
     return not looks_like_missing_page(text)
 
 
-def probe_hit_from_response(resp, *, text_limit: int = 4096) -> dict:
+def probe_hit_from_response(resp, *, text_limit: int = 12000) -> dict:
     text = (resp.text or "")[:text_limit]
     return {
         "status": resp.status_code,

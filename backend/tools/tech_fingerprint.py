@@ -327,17 +327,9 @@ async def fingerprint_technologies(url: str) -> Dict[str, Any]:
     }
 
 
-def run_tech_fingerprint(url: str, context: dict) -> dict:
-    """Run technology fingerprinting (synchronous wrapper)."""
-    try:
-        import asyncio
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        import asyncio
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    
-    result = loop.run_until_complete(fingerprint_technologies(url))
+async def run_tech_fingerprint(url: str, context: dict) -> dict:
+    """Run technology fingerprinting (async-safe wrapper)."""
+    result = await fingerprint_technologies(url)
     
     findings = []
     

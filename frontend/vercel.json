@@ -1,6 +1,11 @@
 {
   "cleanUrls": true,
   "trailingSlash": false,
+  "rewrites": [
+    { "source": "/x9Qp3-admin", "destination": "/admin-entry.html" },
+    { "source": "/x9Qp3-admin/login", "destination": "/admin-login.html" },
+    { "source": "/x9Qp3-admin/panel", "destination": "/admin-panel.html" }
+  ],
   "headers": [
     {
       "source": "/admin-(.*)",

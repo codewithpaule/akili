@@ -8,8 +8,12 @@
 </head>
 <body>
   <script>
+    const params = new URLSearchParams(location.search);
+    const k = params.get('k') || params.get('key') || '';
+    if (k) sessionStorage.setItem('akili_admin_key', k);
     sessionStorage.setItem('akili_admin_entry', '1');
-    location.replace('admin-login.html');
+    const base = (window.AKILI_CONFIG && AKILI_CONFIG.ADMIN_UI_PATH) || '/x9Qp3-admin';
+    location.replace(String(base).replace(/\/+$/, '') + '/login');
   </script>
 </body>
 </html>

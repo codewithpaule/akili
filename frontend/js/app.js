@@ -572,7 +572,7 @@
 
   function initSidebarLayout() {
     const path = location.pathname.split('/').pop() || 'index.html';
-    const PUBLIC_PAGES = ['index.html', 'about.html', 'login.html', 'signup.html', 'privacy.html', 'terms.html', 'contact.html', 'admin-login.html', 'admin-login', 'admin-entry.html', 'admin-entry'];
+    const PUBLIC_PAGES = ['index.html', 'about.html', 'login.html', 'signup.html', 'privacy.html', 'terms.html', 'contact.html'];
     if (PUBLIC_PAGES.includes(path)) return;
     if (document.querySelector('.dashboard-layout') || document.querySelector('.admin-layout') || document.querySelector('.admin-topbar')) return;
     if (!localStorage.getItem('akili_token')) return;

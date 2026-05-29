@@ -209,7 +209,17 @@ def _fetch_probe(client: httpx.Client, probe_url: str) -> dict:
         "Range": "bytes=0-4095",
     }
     resp = client.get(probe_url, headers=headers, follow_redirects=True)
-    return probe_hit_from_response(resp)
+    hit = probe_hit_from_response(resp)
+    # Soft-404 pages often hide the "404" text after the first 4KB.
+    # If it's HTML and looks suspicious, fetch a larger snippet to verify.
+    try:
+        ct = (hit.get("content_type") or "").lower()
+        if hit.get("status") in (200, 206) and "text/html" in ct:
+            resp2 = client.get(probe_url, headers={"User-Agent": "AKILI-Deep-Scan/1.0"}, follow_redirects=True)
+            hit = probe_hit_from_response(resp2, text_limit=20000)
+    except Exception:
+        pass
+    return hit
 
 
 def _miss_signatures(client: httpx.Client, base_root: str) -> list[dict]:

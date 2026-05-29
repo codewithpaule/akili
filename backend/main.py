@@ -109,6 +109,25 @@ PRIVATE_ROBOT_PATHS = (
     "/api/v1/secure-admin",
 )
 
+ADMIN_GATE_HEADER = "X-Akili-Admin-Key"
+ADMIN_GATE_PATH_PREFIXES = ("/api/v1/admin", "/api/v1/secure-admin")
+
+
+class AdminGateMiddleware(BaseHTTPMiddleware):
+    """Hide admin endpoints unless a shared secret header is present.
+
+    Set env `ADMIN_ACCESS_KEY` to enable. When enabled, requests to admin endpoints
+    without the correct header return 404 (not 401/403) to reduce discoverability.
+    """
+
+    async def dispatch(self, request, call_next):
+        key = (os.getenv("ADMIN_ACCESS_KEY", "") or "").strip()
+        if key and any(request.url.path.startswith(p) for p in ADMIN_GATE_PATH_PREFIXES):
+            provided = (request.headers.get(ADMIN_GATE_HEADER) or "").strip()
+            if provided != key:
+                return JSONResponse({"detail": "Not found"}, status_code=404)
+        return await call_next(request)
+
 
 class BodySizeLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
@@ -144,13 +163,14 @@ app.add_exception_handler(RateLimitExceeded, lambda r, e: JSONResponse({
 
 app.add_middleware(BodySizeLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(AdminGateMiddleware)
 app.add_middleware(APIKeyValidationMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "X-API-Key", "X-Request-ID", "Authorization", "X-Session-Token"],
+    allow_headers=["Content-Type", "X-API-Key", "X-Request-ID", "Authorization", "X-Session-Token", ADMIN_GATE_HEADER],
 )
 
 
@@ -456,8 +476,12 @@ def _stream_agent(module: str, target: str, scan_id: str, user_id: str = "", sca
             # Fall back to streaming if queuing fails
             pass
 
+    from starlette.concurrency import iterate_in_threadpool
+
     async def gen():
-        for chunk in run_agent(module, target, scan_id, user_id=user_id, scan_tier=scan_tier):
+        # Run the sync generator in a thread so one scan doesn't block others.
+        it = run_agent(module, target, scan_id, user_id=user_id, scan_tier=scan_tier)
+        async for chunk in iterate_in_threadpool(it):
             yield chunk
     return StreamingResponse(
         gen(),

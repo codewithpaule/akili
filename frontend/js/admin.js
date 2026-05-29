@@ -1,6 +1,11 @@
 (function () {
   const TOKEN_KEY = 'akili_admin_token';
   const USER_KEY = 'akili_admin_user';
+  const ADMIN_KEY_SESSION = 'akili_admin_key';
+  function adminBase() {
+    const p = (window.AKILI_CONFIG && AKILI_CONFIG.ADMIN_UI_PATH) || '/x9Qp3-admin';
+    return String(p || '/x9Qp3-admin').replace(/\/+$/, '');
+  }
 
   function API() {
     return ((window.AKILI_CONFIG && AKILI_CONFIG.API_BASE) || 'http://localhost:8001').replace(/\/+$/, '');
@@ -37,6 +42,11 @@
     if (opts.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
     const token = getToken();
     if (token) headers.Authorization = `Bearer ${token}`;
+    // Optional admin gate: include shared secret when present (hides admin endpoints).
+    try {
+      const adminKey = sessionStorage.getItem(ADMIN_KEY_SESSION) || '';
+      if (adminKey && !headers['X-Akili-Admin-Key']) headers['X-Akili-Admin-Key'] = adminKey;
+    } catch (e) {}
     // include X-API-Key when available (from global AKILI helper or localStorage)
     try {
       const keyFromAkili = (window.AKILI && typeof AKILI.getApiKey === 'function') ? AKILI.getApiKey() : '';
@@ -67,7 +77,7 @@
   function requireAdmin(redirectTo = 'admin-login.html') {
     const u = getUser();
     if (!getToken() || !u?.is_admin) {
-      location.href = redirectTo;
+      location.href = redirectTo || (adminBase() + '/login');
       return false;
     }
     return true;
