@@ -453,11 +453,11 @@ def run_link_crawler(url: str, context: dict) -> dict:
         
         # Check for backup/config files
         if any(keyword in path.lower() for keyword in ["backup", "config", ".env", ".git", ".svn"]):
-            if status_code == 200:
+            if path_info.get("content_verified") or (path_info.get("exists") and status_code in (200, 206)):
                 findings.append({
                     "severity": "CRITICAL",
                     "name": f"Backup/config file exposed: {path}",
-                    "explanation": f"The file {path} is publicly accessible (HTTP {status_code}). This may contain sensitive information.",
+                    "explanation": f"The file {path} is publicly accessible and its response content matches the requested resource (HTTP {status_code}). This may contain sensitive information.",
                     "recommendation": "Remove this file from public access or restrict it immediately.",
                     "url": path_info["url"]
                 })

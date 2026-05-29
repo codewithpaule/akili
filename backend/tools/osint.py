@@ -374,6 +374,11 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
     img_source = "google_images" if web_images else "none"
 
     confidence = _confidence_breakdown(platforms, social_cards)
+    if not social_cards:
+        person_overview = person_overview or (
+            "No public profile could be verified with enough confidence from the available search and profile evidence."
+        )
+        identity_notes = identity_notes or "Try adding a city, employer, school, username, or profession to reduce same-name matches."
     if verified_list:
         confidence["score"] = min(100, confidence["score"] + 15)
         confidence["signals"].append("AI verified profile page content (+15)")

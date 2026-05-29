@@ -84,11 +84,12 @@ def run(domain: str, context: dict) -> dict:
     except Exception:
         pass
 
-    # Method 2: DNS brute force (limited to first 50 common subdomains)
+    # Method 2: DNS brute force common names. Keep it conservative but do not
+    # silently stop at 50; users expect the full common list to be checked.
     seen_subdomains = {s["subdomain"] for s in subdomains}
     brute_force_results = []
     
-    for common in COMMON_SUBDOMAINS[:50]:
+    for common in COMMON_SUBDOMAINS:
         subdomain = f"{common}.{domain}"
         if subdomain not in seen_subdomains:
             result = resolve_subdomain(subdomain)
@@ -122,6 +123,7 @@ def run(domain: str, context: dict) -> dict:
 
     # Generate findings
     active_subdomains = [s for s in subdomains if s["status"] == "resolved"]
+    active_names = [s["subdomain"] for s in active_subdomains]
     
     if len(active_subdomains) > 20:
         findings.append({
@@ -149,10 +151,14 @@ def run(domain: str, context: dict) -> dict:
         "severity": "INFO",
         "title": "Deep subdomain discovery",
         "detail": f"{len(active_subdomains)} active subdomains",
-        "summary": f"Found {len(subdomains)} subdomains via certificate transparency and DNS enumeration",
+        "summary": (
+            f"Found {len(subdomains)} subdomains via certificate transparency and DNS enumeration"
+            + (f": {', '.join(active_names[:12])}" if active_names else "")
+        ),
         "raw": {
             "subdomains": subdomains[:100],
             "active_count": len(active_subdomains),
+            "active_subdomains": active_subdomains[:100],
             "hidden_links": hidden_links
         },
         "findings": findings,

@@ -7,7 +7,14 @@
 <div class="card" style="border-top:4px solid var(--mod-subdomain)"><h1 title="Scan a domain to find its subdomains — very effective!">Subdomain Finder</h1></div>
 <div class="card"><input id="domain" placeholder="example.com" style="width:100%;padding:0.75rem;border:1px solid var(--border);margin-bottom:1rem">
 <button class="btn btn-primary" id="scan-btn" style="background:var(--mod-subdomain)">SCAN</button></div>
-<div id="terminal" class="terminal-panel hidden"></div><section id="results" class="hidden"><div id="findings-grid"></div></section>
+<div id="terminal" class="terminal-panel hidden"></div><section id="results" class="hidden">
+  <div id="summary"></div>
+  <div class="card" style="margin-top:1rem">
+    <h3 style="margin-top:0">Discovered subdomains</h3>
+    <table class="data-table" id="subdomains-table"><thead><tr><th>Subdomain</th><th>IP</th><th>DNS</th><th>HTTP</th><th>Title</th></tr></thead><tbody></tbody></table>
+  </div>
+  <div id="findings-grid"></div>
+</section>
 </main>
 <script src="js/config.js"></script><script src="js/app.js"></script>
 <script>window.AKILI_SCAN={module:'subdomains',endpoint:'/api/v1/scan/subdomains',buildBody:()=>({domain:document.getElementById('domain').value})};</script>

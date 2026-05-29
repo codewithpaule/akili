@@ -33,7 +33,7 @@ def _check_port(host: str, port: int, timeout: float = 2.0) -> bool:
 
 
 def run(url: str, context: dict) -> dict:
-    hostname = urlparse(url).hostname
+    hostname = urlparse(url).hostname or url.strip()
     open_ports = []
     findings = []
 

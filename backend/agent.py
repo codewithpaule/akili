@@ -247,14 +247,23 @@ def _osint_person(target: str, context: dict) -> dict:
     canonical = (data.get('identity_evidence') or {}).get('canonical_name') or name
     summary_name = canonical or name
     overview = (data.get("person_overview") or "")[:120]
+    verified_count = len(data.get("social_cards") or [])
+    findings = []
+    if verified_count == 0:
+        findings.append({
+            "severity": "INFO",
+            "name": "No verified public profile match",
+            "explanation": "AKILI searched public profile candidates but did not find enough page-content evidence to confidently match this person.",
+            "recommendation": "Try adding keywords such as city, employer, school, username, or profession.",
+        })
     return {
         "tool": "osint_person",
         "severity": "INFO",
         "title": "Person OSINT",
         "detail": overview or "AI profile investigation complete",
-        "summary": f"Verified public profiles for {summary_name}" + (f" — {plat_summary}" if plat_summary else ""),
+        "summary": f"Verified {verified_count} public profile match(es) for {summary_name}" + (f" - {plat_summary}" if plat_summary else ""),
         "raw": data,
-        "findings": [],
+        "findings": findings,
     }
 
 
@@ -360,9 +369,26 @@ def _build_website_ai_payload(context: dict) -> dict:
 
 def _merge_ip_report(context: dict, ai: dict) -> dict:
     raw = context.get("ip_intel") or {}
+    ports = list(raw.get("ports") or [])
     for tr in context.get("tool_results", []):
         if tr.get("tool") == "ip_intel":
             raw = tr.get("raw", raw)
+            ports = list(raw.get("ports") or ports)
+        elif tr.get("tool") == "ports":
+            ports.extend((tr.get("raw", {}) or {}).get("ports", []) or [])
+        elif tr.get("tool") == "port_scanner":
+            ports.extend((tr.get("raw", {}) or {}).get("open_ports", []) or [])
+    deduped_ports = []
+    seen_ports = set()
+    for p in ports:
+        try:
+            key = int(p.get("port"))
+        except Exception:
+            key = p.get("port")
+        if key in seen_ports:
+            continue
+        seen_ports.add(key)
+        deduped_ports.append(p)
     geo = raw.get("geolocation", {})
     return {
         "scan_type": "ip",
@@ -373,7 +399,7 @@ def _merge_ip_report(context: dict, ai: dict) -> dict:
         "hosted_websites_summary": ai.get("hosted_websites_summary", ""),
         "reverse_dns": raw.get("reverse_dns"),
         "geolocation": geo,
-        "ports": raw.get("ports", []),
+        "ports": deduped_ports,
         "hosted_domains": raw.get("hosted_domains", []),
         "hosted_websites": raw.get("hosted_websites", []),
         "primary_website": raw.get("primary_website"),
@@ -597,6 +623,12 @@ def _merge_website_report(context: dict, ai: dict) -> dict:
                 report["whois"] = raw["whois"]
         if tool == "exposed_files":
             report["exposed_files"] = raw.get("probes", [])
+        if tool == "subdomains":
+            report["subdomains"] = raw.get("subdomains", [])
+            report["active_subdomains"] = raw.get("active_subdomains", [])
+            report["subdomain_count"] = len(raw.get("subdomains", []) or [])
+            report["active_subdomain_count"] = raw.get("active_count", 0)
+            report["hidden_links"] = raw.get("hidden_links", [])
         if tool == "link_crawler":
             report["crawl"] = raw
             report["interesting_links"] = raw.get("interesting_links", [])
@@ -760,8 +792,18 @@ def run_agent(
                         note = 'confirmed' if acc else 'not found'
                         yield _emit('TOOL', f"Probing {path} → HTTP {status} ({note})")
                 if result.get('tool') in ('ports', 'port_scanner', 'port_scan'):
-                    for p in raw.get('ports', []):
+                    for p in (raw.get('ports') or raw.get('open_ports') or []):
                         yield _emit('FOUND', f"Port {p.get('port')} open ({p.get('service')})")
+                if result.get('tool') == 'subdomains':
+                    for s in (raw.get('active_subdomains') or raw.get('subdomains') or [])[:40]:
+                        name = s.get('subdomain') or ''
+                        if name:
+                            bits = [name]
+                            if s.get('ip'):
+                                bits.append(str(s.get('ip')))
+                            if s.get('http_status'):
+                                bits.append(f"HTTP {s.get('http_status')}")
+                            yield _emit('FOUND', "Subdomain: " + " - ".join(bits))
                 if result.get('tool') in ('tech_fingerprint', 'fingerprint'):
                     techs = raw.get('technologies') or raw.get('tech_stack') or []
                     for t in techs[:20]:
@@ -957,6 +999,7 @@ def run_agent(
             "agentic_notes": osint_data.get("agentic_notes", []),
             "person_overview": ai.get("person_overview") or osint_data.get("person_overview", ""),
             "identity_notes": osint_data.get("identity_notes", ""),
+            "findings": context.get("findings", []),
         }
     elif module == "email":
         raw = _email_intel_from_context(context)

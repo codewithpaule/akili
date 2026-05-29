@@ -231,15 +231,11 @@ async def scan_ports(hostname: str, ports: List[int] = None, max_concurrent: int
 
 def run_port_scan(hostname: str, context: dict) -> dict:
     """Run port scan (synchronous wrapper for async function)."""
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+    from tools.async_util import run_async
     
     # If the caller explicitly requested credential brute-force, we refuse to perform it.
     if context.get('bruteforce'):
-        result = loop.run_until_complete(scan_ports(hostname))
+        result = run_async(scan_ports(hostname), timeout=180)
         findings = [{
             "severity": "INFO",
             "name": "Credential brute-force disabled",
@@ -255,7 +251,7 @@ def run_port_scan(hostname: str, context: dict) -> dict:
             "findings": findings,
         }
 
-    result = loop.run_until_complete(scan_ports(hostname))
+    result = run_async(scan_ports(hostname), timeout=180)
     
     findings = []
     

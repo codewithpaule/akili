@@ -450,6 +450,13 @@
           ? `<li>${AKILI.externalLink(`https://${report.reverse_dns}`, report.reverse_dns)} (reverse DNS)</li>`
           : '<li>No public website hostname found for this IP.</li>');
     }
+    const domainsList = document.getElementById('ip-domains-list');
+    const domains = report.hosted_domains || [];
+    if (domainsList) {
+      domainsList.innerHTML = domains.length
+        ? domains.map((d) => `<li>${AKILI.externalLink(`https://${d}`, d)}</li>`).join('')
+        : '<li>No reverse DNS, Shodan hostname, or hosted-domain data found.</li>';
+    }
     const geo = document.getElementById('ip-geo');
     const g = report.geolocation || {};
     if (geo) {
@@ -462,7 +469,40 @@
         report.reverse_dns && `Reverse DNS: ${report.reverse_dns}`,
       ].filter(Boolean).join(' · ') || 'No geolocation data';
     }
-    fillTable('ip-ports-table', report.ports, (p) => `<tr><td>${p.port}</td><td>${p.status || p.service || 'open'}</td></tr>`, 2);
+    fillTable('ip-ports-table', report.ports, (p) => {
+      const info = p.info || {};
+      const evidence = info.banner || info.server || info.powered_by || (info.status_code ? `HTTP ${info.status_code}` : '');
+      return `<tr><td>${p.port}</td><td>${AKILI.escapeHtml(p.service || 'unknown')}</td><td>${AKILI.escapeHtml(p.status || 'open')}</td><td>${AKILI.escapeHtml(evidence || p.risk || '')}</td></tr>`;
+    }, 4);
+  }
+
+  function renderSubdomains(report) {
+    const all = report.subdomains || report.active_subdomains || [];
+    const active = report.active_subdomains || all.filter((s) => s.status === 'resolved');
+    const sumEl = document.getElementById('summary');
+    if (sumEl) {
+      sumEl.innerHTML = `<div class="card" style="border-left:4px solid var(--mod-subdomain);margin-bottom:1rem">
+        <p class="label-sm">Subdomain discovery</p>
+        <h2 style="margin:0.25rem 0">${AKILI.escapeHtml(report.target || '')}</h2>
+        <p>${AKILI.escapeHtml(report.summary || `Found ${all.length} subdomains; ${active.length} resolved publicly.`)}</p>
+      </div>`;
+    }
+    fillTable('subdomains-table', all, (s) => `
+      <tr>
+        <td>${s.subdomain ? AKILI.externalLink(`https://${s.subdomain}`, s.subdomain) : ''}</td>
+        <td>${AKILI.escapeHtml(s.ip || '')}</td>
+        <td>${AKILI.escapeHtml(s.status || '')}</td>
+        <td>${AKILI.escapeHtml(s.http_status ? String(s.http_status) : '')}</td>
+        <td>${AKILI.escapeHtml(s.title || '')}</td>
+      </tr>`, 5);
+    const fg = document.getElementById('findings-grid');
+    if (fg) {
+      fg.innerHTML = (report.findings || []).map((f) => `
+        <div class="card"><span class="badge badge-${(f.severity || 'info').toLowerCase()}">${AKILI.escapeHtml(f.severity || 'INFO')}</span>
+        <h4>${AKILI.escapeHtml(f.name || '')}</h4><p>${AKILI.escapeHtml(f.explanation || '')}</p>
+        <p style="color:var(--blue)">${AKILI.escapeHtml(f.recommendation || '')}</p></div>
+      `).join('');
+    }
   }
 
   function breachDate(breach) {
@@ -714,6 +754,7 @@
     if (mod_now === 'person') renderPerson(report);
     else if (mod_now === 'email') renderEmail(report);
     else if (mod_now === 'ip') renderIp(report);
+    else if (mod_now === 'subdomains') renderSubdomains(report);
     else renderWebsite(report);
     AKILI.showToast('Scan complete', 'success');
     if (!currentCfg().public && 'Notification' in window) {

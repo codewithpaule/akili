@@ -170,6 +170,30 @@
           </article>
         </section>
 
+        <section class="dash-panel" style="border-left:4px solid var(--blue)">
+          <div class="dash-panel-head">
+            <div>
+              <h2>Run an assessment</h2>
+              <p class="label-sm">Start with the checks you use most. Results and reports stay in history.</p>
+            </div>
+            <a href="history.html" class="btn btn-outline btn-sm">History</a>
+          </div>
+          <div id="dashboard-action-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:0.85rem"></div>
+        </section>
+
+        <section class="dash-panel">
+          <div class="dash-panel-head">
+            <div>
+              <h2>Recent scans</h2>
+              <p class="label-sm">Your latest targets, scan types, and report links.</p>
+            </div>
+            <button type="button" class="btn btn-outline btn-sm" id="refresh-recent-btn">Refresh</button>
+          </div>
+          <div id="recent-scans-panel" class="dash-usage">
+            <p class="label-sm">Loading recent scans...</p>
+          </div>
+        </section>
+
         <!-- Account usage panel (populated by JS) -->
         <section class="dash-panel">
           <div class="dash-panel-head">
@@ -267,7 +291,8 @@
     renderSidebarMenu('sidebar-scans', SCAN_MODULES);
     renderSidebarMenu('sidebar-intel', INTEL_MODULES);
     // Hide guest quick-scan entry when user is authenticated
-    const toolsToShow = (u && u.id) ? [...QUICK_MODULES.filter(m => m.href !== 'quick-scan.html'), ...TOOL_MODULES] : [...QUICK_MODULES, ...TOOL_MODULES];
+    const sidebarUser = AKILI_AUTH.getUser?.() || null;
+    const toolsToShow = (sidebarUser && sidebarUser.id) ? [...QUICK_MODULES.filter(m => m.href !== 'quick-scan.html'), ...TOOL_MODULES] : [...QUICK_MODULES, ...TOOL_MODULES];
     renderSidebarMenu('sidebar-tools', toolsToShow);
 
     function planBadgeClass(plan) {
@@ -279,6 +304,58 @@
     function renderUsageBar(used, cap) {
       const pct = cap ? Math.min(100, Math.round((used / cap) * 100)) : 0;
       return `<div class="usage-bar"><span style="width:${pct}%"></span></div>`;
+    }
+
+    function renderDashboardActions() {
+      const mount = document.getElementById('dashboard-action-grid');
+      if (!mount) return;
+      const actions = [
+        { href: 'scan-website.html', icon: 'globe', color: 'var(--mod-website)', title: 'Website', text: 'Headers, SSL, DNS, exposed paths' },
+        { href: 'scan-subdomains.html', icon: 'git-branch', color: 'var(--mod-subdomain)', title: 'Subdomains', text: 'CT logs, DNS resolution, live hosts' },
+        { href: 'scan-ip.html', icon: 'network', color: 'var(--mod-ip)', title: 'IP intelligence', text: 'Hostnames, websites, ports, location' },
+        { href: 'person.html', icon: 'user-search', color: 'var(--mod-person)', title: 'Person OSINT', text: 'Verified public profile signals' },
+        { href: 'developer.html', icon: 'terminal', color: 'var(--navy)', title: 'API keys', text: 'Create keys and inspect usage' },
+        { href: 'docs.html', icon: 'book-open', color: 'var(--slate)', title: 'API docs', text: 'Endpoints and request examples' },
+      ];
+      mount.innerHTML = actions.map((a) => `
+        <a href="${a.href}" class="card" style="display:flex;gap:0.75rem;align-items:flex-start;text-decoration:none;color:inherit;margin:0;border-top:3px solid ${a.color}">
+          <span style="width:2.25rem;height:2.25rem;border-radius:8px;display:grid;place-items:center;background:${a.color}15;color:${a.color};flex:0 0 auto"><i data-lucide="${a.icon}"></i></span>
+          <span><strong style="display:block;color:var(--navy)">${a.title}</strong><span class="label-sm">${a.text}</span></span>
+        </a>
+      `).join('');
+    }
+
+    function scanTime(value) {
+      if (!value) return '';
+      try {
+        const n = Number(value);
+        const d = new Date(n > 10000000000 ? n : n * 1000);
+        return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+      } catch { return ''; }
+    }
+
+    async function loadRecentScans() {
+      const mount = document.getElementById('recent-scans-panel');
+      if (!mount) return;
+      try {
+        const data = await AKILI_AUTH.api('/api/v1/history?limit=5');
+        const items = data.items || [];
+        if (!items.length) {
+          mount.innerHTML = '<p class="label-sm">No scans yet. Pick a module above and your reports will appear here.</p>';
+          return;
+        }
+        mount.innerHTML = items.map((s) => `
+          <div class="dash-usage-row" style="align-items:center">
+            <div class="dash-usage-label">
+              <span><strong>${AKILI.escapeHtml(s.scan_type || s.module || 'scan')}</strong> - ${AKILI.escapeHtml(s.target || '')}</span>
+              <span>${AKILI.escapeHtml(scanTime(s.created_at || s.timestamp) || '')}</span>
+            </div>
+            <a class="btn btn-outline btn-sm" href="report.html?id=${encodeURIComponent(s.scan_id || s.id || '')}">Open</a>
+          </div>
+        `).join('');
+      } catch (e) {
+        mount.innerHTML = `<p class="label-sm">Could not load recent scans: ${AKILI.escapeHtml(e.message || 'request failed')}</p>`;
+      }
     }
 
     function renderKeyUsageCard(k) {
@@ -388,6 +465,10 @@
         }).catch(() => {});
       }
     }
+
+    renderDashboardActions();
+    loadRecentScans();
+    document.getElementById('refresh-recent-btn')?.addEventListener('click', loadRecentScans);
 
     document.getElementById('upgrade-btn')?.addEventListener('click', () => {
       document.getElementById('billing-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
