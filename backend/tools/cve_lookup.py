@@ -91,46 +91,53 @@ KNOWN_VULNERABILITIES = {
 
 async def search_cve_api(query: str) -> List[Dict[str, Any]]:
     """Search CVE database via NVD API."""
+    from cache import cache_get, cache_set, cache_key
+    from http_client import get_client
+
+    ck = cache_key("cve", query)
+    cached = cache_get(ck)
+    if cached is not None:
+        return cached
+
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            # NVD API v2.0
-            url = f"https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch={query}"
-            response = await client.get(url)
-            
-            if response.status_code == 200:
-                data = response.json()
-                cves = []
-                for item in data.get("vulnerabilities", [])[:10]:  # Limit to 10 results
-                    cve = item.get("cve", {})
-                    cve_id = cve.get("id", "")
-                    descriptions = cve.get("descriptions", [])
-                    description = descriptions[0].get("value", "") if descriptions else ""
-                    
-                    # Get severity
-                    metrics = cve.get("metrics", {})
-                    cvss_score = None
-                    severity = "UNKNOWN"
-                    
-                    if "cvssMetricV31" in metrics:
-                        cvss_data = metrics["cvssMetricV31"][0].get("cvssData", {})
-                        cvss_score = cvss_data.get("baseScore")
-                        severity = cvss_data.get("baseSeverity", "UNKNOWN")
-                    elif "cvssMetricV2" in metrics:
-                        cvss_data = metrics["cvssMetricV2"][0].get("cvssData", {})
-                        cvss_score = cvss_data.get("baseScore")
-                    
-                    cves.append({
-                        "cve_id": cve_id,
-                        "description": description,
-                        "cvss_score": cvss_score,
-                        "severity": severity,
-                        "link": f"https://nvd.nist.gov/vuln/detail/{cve_id}"
-                    })
-                
-                return cves
+        client = get_client()
+        url = f"https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch={query}"
+        response = await client.get(url)
+
+        if response.status_code == 200:
+            data = response.json()
+            cves = []
+            for item in data.get("vulnerabilities", [])[:10]:
+                cve = item.get("cve", {})
+                cve_id = cve.get("id", "")
+                descriptions = cve.get("descriptions", [])
+                description = descriptions[0].get("value", "") if descriptions else ""
+
+                metrics = cve.get("metrics", {})
+                cvss_score = None
+                severity = "UNKNOWN"
+
+                if "cvssMetricV31" in metrics:
+                    cvss_data = metrics["cvssMetricV31"][0].get("cvssData", {})
+                    cvss_score = cvss_data.get("baseScore")
+                    severity = cvss_data.get("baseSeverity", "UNKNOWN")
+                elif "cvssMetricV2" in metrics:
+                    cvss_data = metrics["cvssMetricV2"][0].get("cvssData", {})
+                    cvss_score = cvss_data.get("baseScore")
+
+                cves.append({
+                    "cve_id": cve_id,
+                    "description": description,
+                    "cvss_score": cvss_score,
+                    "severity": severity,
+                    "link": f"https://nvd.nist.gov/vuln/detail/{cve_id}"
+                })
+
+            cache_set(ck, cves, ttl_seconds=3600)
+            return cves
     except Exception:
         pass
-    
+
     return []
 
 

@@ -142,12 +142,28 @@
   }
 
   function ensureTerminalHeader() {
-    if (!terminal || terminal.querySelector('.terminal-module-label')) return;
-    const label = document.createElement('div');
-    label.className = 'terminal-module-label';
+    if (!terminal) return;
+    let label = terminal.querySelector('.terminal-module-label');
+    if (!label) {
+      label = document.createElement('div');
+      label.className = 'terminal-module-label';
+      terminal.prepend(label);
+    }
     const mod = terminal.dataset.scanModule || currentModule();
-    label.textContent = `${mod} scan session`;
-    terminal.prepend(label);
+    const moduleLabel = {
+      website: 'Website security scan',
+      vulnerability: 'Vulnerability assessment',
+      subdomains: 'Subdomain discovery',
+      ip: 'IP address investigation',
+      person: 'Person search',
+      email: 'Email investigation',
+      domain: 'Domain reputation check',
+      organization: 'Organisation scan',
+      company: 'Company intelligence',
+      api: 'API surface scan',
+    }[mod] || 'Scan';
+    label.textContent = moduleLabel;
+    label.style.display = 'block';
   }
 
   function lineClass(line) {
@@ -191,6 +207,12 @@
     text.split('\n').forEach((line) => {
       const trimmed = line.trim();
       if (!trimmed || trimmed.startsWith('COMPLETE:')) return;
+      if (currentModule() === 'person') {
+        const body = trimmed.replace(/^\[[A-Z]+\]\s*/, '');
+        if (/Port \d+/i.test(body) || /Detected tech/i.test(body) || /tech stack/i.test(body)) {
+          return;
+        }
+      }
       const display = humanizeTerminalLine(trimmed);
       if (session) session.lines.push(display);
       const el = document.createElement('div');
@@ -587,6 +609,25 @@
       instagram: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M7 2C4.24 2 2 4.24 2 7v10c0 2.76 2.24 5 5 5h10c2.76 0 5-2.24 5-5V7c0-2.76-2.24-5-5-5H7zm5 5.5A3.5 3.5 0 0115.5 11 3.5 3.5 0 0112 14.5 3.5 3.5 0 018.5 11 3.5 3.5 0 0112 7.5zM18 6.5a.9.9 0 11-1.8 0 .9.9 0 011.8 0zM12 9.2a1.8 1.8 0 100 3.6 1.8 1.8 0 000-3.6z"/></svg>',
       linkedin: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4.98 3.5C4.98 4.88 3.88 6 2.5 6S0 4.88 0 3.5 1.12 1 2.5 1 4.98 2.12 4.98 3.5zM0 8h5v14H0V8zm7.5 0H12v2.2h.1c.5-1 1.8-2.2 3.7-2.2 4 0 4.7 2.6 4.7 6V22h-5v-6.5c0-1.6 0-3.8-2.4-3.8-2.4 0-2.8 1.9-2.8 3.7V22h-5V8z"/></svg>',
     };
+
+    const banner = document.getElementById('best-match-banner');
+    const matchConf = (report.best_match_confidence || '').toLowerCase();
+    if (banner) {
+      if (matchConf === 'high') {
+        banner.className = 'card';
+        banner.style.cssText = 'margin-bottom:1rem;border-left:4px solid var(--green);background:#f0fdf4';
+        banner.textContent = 'We are confident this is the right person.';
+      } else if (matchConf === 'medium') {
+        banner.className = 'card';
+        banner.style.cssText = 'margin-bottom:1rem;border-left:4px solid var(--amber);background:#fffbeb';
+        banner.textContent = 'This is likely the right person but we recommend verifying.';
+      } else {
+        banner.className = 'card';
+        banner.style.cssText = 'margin-bottom:1rem;border-left:4px solid var(--slate);background:#f8fafc';
+        banner.textContent = 'We found limited public information for this name and keyword combination. Try adding more context.';
+      }
+    }
+
     const pn = document.getElementById('person-name');
     if (pn) pn.textContent = report.name || 'Subject';
     const overviewBlock = document.getElementById('person-overview-block');
@@ -614,6 +655,25 @@
         ...flags.map((s) => `<li style="color:var(--red)">− ${AKILI.escapeHtml(s)}</li>`),
       ].join('') || '<li>Insufficient breakdown data</li>';
     }
+
+    const pw = report.personal_website;
+    const pwb = document.getElementById('personal-website-block');
+    const pwc = document.getElementById('personal-website-card');
+    if (pwb && pwc) {
+      const url = pw && (pw.url || (typeof pw === 'string' ? pw : ''));
+      if (url) {
+        pwb.classList.remove('hidden');
+        const confText = (pw.confidence || '').toLowerCase() === 'high'
+          ? 'We are fairly confident this is their site'
+          : 'This may be their site';
+        const href = AKILI.externalUrl(url);
+        pwc.innerHTML = `<a href="${AKILI.escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="platform-pill">🌐 ${AKILI.escapeHtml(url)}</a><p class="label-sm" style="margin-top:0.35rem;color:var(--slate)">${AKILI.escapeHtml(confText)}</p>`;
+      } else {
+        pwb.classList.add('hidden');
+        pwc.innerHTML = '';
+      }
+    }
+
     const platforms = report.platforms || {};
     const pb = document.getElementById('platforms-block');
     const pl = document.getElementById('platforms-list');
@@ -642,62 +702,60 @@
           const label = handle ? `${displayName} · ${handle}` : displayName;
           const href = AKILI.externalUrl(v.url || '');
           const svg = PLATFORM_SVGS[displayName] || '';
-          const linkHtml = href
+          return href
             ? `<a href="${AKILI.escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="platform-pill">${svg}<span style="margin-left:6px">${AKILI.escapeHtml(label)}</span></a>`
             : AKILI.escapeHtml(label);
-          return linkHtml;
         }).join('');
-        // render social profile cards if available
-        const scBlock = document.getElementById('social-cards-block');
-        const scList = document.getElementById('social-cards-list');
-        let cards = report.social_cards || [];
-        // Only show AI-verified handles — no URL inference fallback (reduces wrong-person links)
-        if (false && (!cards || cards.length === 0) && Array.isArray(report.all_urls) && report.all_urls.length) {
-          const inferHandle = (url, platform) => {
-            try {
-              if (platform === 'github') { const m = url.match(/github\.com\/([\w\-]+)/i); if (m) return '@' + m[1]; }
-              if (platform === 'twitter' || platform === 'x') { const m = url.match(/(?:twitter|x)\.com\/(?:#!\/)?([\w_]+)/i); if (m) return '@' + m[1]; }
-              if (platform === 'instagram') { const m = url.match(/instagram\.com\/([\w\.]+)/i); if (m) return '@' + m[1]; }
-              if (platform === 'linkedin') { const m = url.match(/linkedin\.com\/(?:in|pub)\/([\w\-]+)/i); if (m) return m[1]; }
-            } catch (e) {}
-            return '';
-          };
-          const inferred = [];
-          report.all_urls.forEach((u) => {
-            ['github','x','instagram','linkedin'].forEach((p) => {
-              if (inferred.find(ic => (ic.profile_url || ic.url) === u)) return;
-              const key = p;
-              const re = key === 'github' ? /github\.com\/[\w\-]+/i : key === 'x' ? /(?:twitter|x)\.com\/(?:#!\/)?[\w_]+/i : key === 'instagram' ? /instagram\.com\/[\w\.]+/i : key === 'linkedin' ? /linkedin\.com\/(?:in|pub)\/[\w\-]+/i : null;
-              if (re && re.test(u)) {
-                inferred.push({ platform: key, profile_url: u, url: u, handle: inferHandle(u, key) });
-              }
-            });
-          });
-          if (inferred.length) cards = inferred;
-        }
-        if (scBlock && scList) {
-          if (cards.length) {
-            scBlock.classList.remove('hidden');
-            scList.innerHTML = cards.map((c) => {
-              const p = (c.platform || 'profile').toLowerCase() === 'twitter' ? 'x' : (c.platform || 'profile').toLowerCase();
-              const svg = PLATFORM_SVGS[p] || '';
-              const h = c.handle ? `${AKILI.escapeHtml(c.handle)}` : '';
-              const title = h ? `${p} · ${h}` : p;
-              const bio = c.bio ? `<div class="label-sm" style="color:var(--slate);margin-top:0.25rem">${AKILI.escapeHtml(c.bio)}</div>` : '';
-              const meta = (c.repo_count || c.followers) ? `<div class="label-sm" style="margin-top:0.25rem;color:var(--slate)">${c.repo_count ? c.repo_count + ' repos' : ''}${c.repo_count && c.followers ? ' · ' : ''}${c.followers ? c.followers + ' followers' : ''}</div>` : '';
-              const href = AKILI.externalUrl(c.profile_url || c.url || '');
-              const linkHtml = href
-                ? `<a href="${AKILI.escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="platform-pill">${svg}<span style="margin-left:6px">${AKILI.escapeHtml(title)}</span></a>`
-                : AKILI.escapeHtml(title);
-              return `<div class="social-card">${linkHtml}${bio}${meta}</div>`;
-            }).join('');
-          } else {
-            scBlock.classList.add('hidden');
-            scList.innerHTML = '';
-          }
-        }
       } else pb.classList.add('hidden');
     }
+
+    const scBlock = document.getElementById('social-cards-block');
+    const scList = document.getElementById('social-cards-list');
+    const cards = report.social_cards || [];
+    if (scBlock && scList) {
+      if (cards.length) {
+        scBlock.classList.remove('hidden');
+        scList.innerHTML = cards.map((c) => {
+          const p = (c.platform || 'profile').toLowerCase() === 'twitter' ? 'x' : (c.platform || 'profile').toLowerCase();
+          const svg = PLATFORM_SVGS[p] || '';
+          const h = c.handle ? `${AKILI.escapeHtml(c.handle)}` : '';
+          const title = h ? `${p} · ${h}` : p;
+          const job = c.job_title ? `<div class="label-sm" style="color:var(--slate)">${AKILI.escapeHtml(c.job_title)}</div>` : '';
+          const loc = c.location ? `<div class="label-sm" style="margin-top:0.15rem">📍 ${AKILI.escapeHtml(c.location)}</div>` : '';
+          const followers = c.follower_count ? `<div class="label-sm" style="color:var(--slate)">${AKILI.escapeHtml(String(c.follower_count))} followers</div>` : '';
+          const bio = c.bio ? `<div class="label-sm" style="color:var(--slate);margin-top:0.25rem">${AKILI.escapeHtml(c.bio)}</div>` : '';
+          const linked = c.linked_website ? `<div class="label-sm" style="margin-top:0.25rem"><a href="${AKILI.escapeHtml(AKILI.externalUrl(c.linked_website))}" target="_blank" rel="noopener noreferrer">${AKILI.escapeHtml(c.linked_website)}</a></div>` : '';
+          const href = AKILI.externalUrl(c.profile_url || c.url || '');
+          const linkHtml = href
+            ? `<a href="${AKILI.escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="platform-pill">${svg}<span style="margin-left:6px">${AKILI.escapeHtml(title)}</span></a>`
+            : AKILI.escapeHtml(title);
+          return `<div class="social-card">${linkHtml}${job}${loc}${followers}${bio}${linked}</div>`;
+        }).join('');
+      } else {
+        scBlock.classList.add('hidden');
+        scList.innerHTML = '';
+      }
+    }
+
+    const news = report.news_mentions || [];
+    const nmb = document.getElementById('news-mentions-block');
+    const nml = document.getElementById('news-mentions-list');
+    if (nmb && nml) {
+      if (news.length) {
+        nmb.classList.remove('hidden');
+        nml.innerHTML = news.map((n) => {
+          const href = AKILI.externalUrl(n.url || '');
+          return `<div class="social-card" style="margin-bottom:0.5rem">
+            ${href ? `<a href="${AKILI.escapeHtml(href)}" target="_blank" rel="noopener noreferrer"><strong>${AKILI.escapeHtml(n.title || 'Article')}</strong></a>` : `<strong>${AKILI.escapeHtml(n.title || 'Article')}</strong>`}
+            <p class="label-sm" style="margin:0.25rem 0 0;color:var(--slate)">${AKILI.escapeHtml(n.summary || '')}</p>
+          </div>`;
+        }).join('');
+      } else {
+        nmb.classList.add('hidden');
+        nml.innerHTML = '';
+      }
+    }
+
     const breaches = report.breaches || [];
     const bb = document.getElementById('breaches-block');
     const bl = document.getElementById('breaches-list');
@@ -709,22 +767,32 @@
         ).join('');
       } else bb.classList.add('hidden');
     }
-    const renderGrid = (id, imgs, verified) => {
+
+    const renderGrid = (id, imgs) => {
       const grid = document.getElementById(id);
-      if (!grid) return;
-      const list = (imgs || []).map((img, i) => ({ ...img, verified: img.verified ?? verified }));
+      if (!grid) return [];
+      const list = imgs || [];
       grid.innerHTML = list.length
         ? list.slice(0, 12).map((img, i) =>
             `<button type="button" class="person-img-btn" data-idx="${i}" aria-label="View image">
               <img src="${AKILI.escapeHtml(AKILI.externalUrl(img.url) || '')}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.style.display='none'">
             </button>`
           ).join('')
-        : `<p class="label-sm" style="grid-column:1/-1">${verified ? 'No verified profile images found.' : 'No web images found.'}</p>`;
+        : `<p class="label-sm" style="grid-column:1/-1">No images found.</p>`;
       grid.querySelectorAll('.person-img-btn').forEach((el) => {
         el.onclick = () => AKILI.openImageModal(list, +el.dataset.idx);
       });
+      return list;
     };
-    renderGrid('web-image-grid', report.web_images || report.images, false);
+
+    const profileImgs = report.profile_images || [];
+    const profilePanel = document.getElementById('profile-images-panel');
+    if (profilePanel) {
+      profilePanel.style.display = profileImgs.length ? '' : 'none';
+    }
+    renderGrid('profile-image-grid', profileImgs);
+    renderGrid('web-image-grid', report.web_images || report.images || []);
+
     const narrBlock = document.getElementById('profile-narrative-block');
     const narr = report.profile_narrative || '';
     const facts = [

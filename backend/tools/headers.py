@@ -44,9 +44,10 @@ def run(url: str, context: dict) -> dict:
 
     resp = None
     try:
-        with httpx.Client(timeout=10.0, follow_redirects=True, max_redirects=3) as client:
-            resp = client.get(url, headers={"User-Agent": "AKILI-Security-Audit/1.0"})
-            raw_headers = {k.lower(): v for k, v in resp.headers.items()}
+        from http_client import get_sync_client
+        client = get_sync_client()
+        resp = client.get(url, headers={"User-Agent": "AKILI-Platform/2.0"})
+        raw_headers = {k.lower(): v for k, v in resp.headers.items()}
     except Exception as e:
         return {
             "tool": "headers",

@@ -17,8 +17,9 @@ def _probe_site_title(hostname: str) -> dict:
     for scheme in ("https", "http"):
         url = f"{scheme}://{hostname}"
         try:
-            with httpx.Client(timeout=8.0, follow_redirects=True) as client:
-                r = client.get(url, headers={"User-Agent": "AKILI-IP-Intel/1.0"})
+            from http_client import get_sync_client
+            client = get_sync_client()
+            r = client.get(url, headers={"User-Agent": "AKILI-Platform/2.0"})
             html = (r.text or "")[:80000]
             tm = re.search(r"<title[^>]*>([^<]+)</title>", html, re.I)
             title = re.sub(r"\s+", " ", tm.group(1)).strip()[:200] if tm else ""

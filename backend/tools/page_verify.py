@@ -14,19 +14,48 @@ MISSING_PAGE_RE = re.compile(
     re.I,
 )
 
-SENSITIVE_HTML_PATHS = (
-    ".env",
-    ".git",
-    "wp-config",
-    ".sql",
-    "phpinfo",
-    ".htpasswd",
-    "credentials",
-    "secrets.json",
-    "backup.zip",
-    "backup.sql",
-    "actuator/env",
+ADMIN_PANEL_PATHS = (
+    "admin", "dashboard", "wp-admin", "manager", "cpanel",
+    "whm", "plesk", "webmail", "phpmyadmin", "pma", "adminer",
+    "pgadmin", "grafana", "kibana", "jenkins", "webmin",
+    "swagger", "swagger-ui", "redoc", "graphiql", "playground",
 )
+
+STRICT_CONTENT_RULES: dict[str, tuple[str, ...]] = {
+    ".env": (
+        "app_key=", "database_url=", "db_password=", "secret_key=",
+        "aws_access_key", "db_host=", "mail_host=", "db_connection=",
+    ),
+    ".git/config": ("[core]", "[remote", "repositoryformatversion"),
+    ".git/head": ("ref: refs/",),
+    ".git/index": ("dirc",),
+    "wp-config": ("db_name", "db_user", "wp_"),
+    ".sql": ("create table", "insert into", "-- mysql", "dump completed"),
+    "phpinfo": ("php version", "phpinfo()", "php_uname"),
+    "package.json": ('"dependencies"', '"scripts"', '"devdependencies"'),
+    "composer.json": ('"require"', '"autoload"'),
+    "requirements.txt": ("==", ">=", "django", "flask", "requests"),
+    ".htpasswd": (":$apr1$", ":$2y$", ":$2a$"),
+    ".git": ("index", "objects", "refs", "head", "config"),
+    "actuator/env": ("activeprofiles", "propertysources", "systemproperties", "spring", "classpath"),
+    "actuator/heapdump": ("java", "heap", "class"),
+    "actuator/health": ('"status"', '"up"', '"down"', "diskspace", "db"),
+    "debug/default/view": ("yii", "exception", "stack trace", "error"),
+    "phpmyadmin": ("phpmyadmin", "pma_", "mysql server"),
+    "adminer.php": ("adminer", "db server", "database"),
+    "storage/logs/laravel.log": ("[error]", "[warning]", "laravel", "exception", "stack trace"),
+    "credentials.json": ('"type":', '"project_id":', '"private_key":', '"client_email":'),
+    "service-account.json": ('"type":', '"project_id":', '"private_key_id":'),
+    "firebase.json": ('"hosting":', '"database":', '"rules":'),
+    ".npmrc": ("registry=", "//registry", "_authtoken"),
+    ".dockercfg": ('"auths":', '"auth":', '"serveraddress":'),
+    ".aws/credentials": ("[default]", "aws_access_key_id", "aws_secret_access_key"),
+    ".ssh/id_rsa": ("-----begin", "rsa private key", "openssh private key"),
+    ".ssh/id_ed25519": ("-----begin", "openssh private key"),
+    "backup.zip": (),
+    "backup.sql": ("create table", "insert into", "mysqldump"),
+    "database.sql": ("create table", "insert into", "mysqldump"),
+}
 
 
 def normalize_body_text(text: str, *, limit: int = 2048) -> str:
@@ -53,7 +82,6 @@ def looks_like_missing_page(html: str) -> bool:
 
 
 def path_stripped_after_redirect(requested_path: str, final_url: str) -> bool:
-    """True when the server dropped the sensitive path segment (e.g. /.env → /)."""
     req = (requested_path or "").strip().lower().rstrip("/") or "/"
     try:
         final_path = (urlparse(final_url or "").path or "/").lower().rstrip("/") or "/"
@@ -61,10 +89,8 @@ def path_stripped_after_redirect(requested_path: str, final_url: str) -> bool:
         return False
     if req == final_path:
         return False
-    # Homepage or generic fallback after requesting a secret path
     if req not in ("/", "") and final_path in ("/", ""):
         return True
-
     req_leaf = req.rsplit("/", 1)[-1]
     if req_leaf and req_leaf not in (".", "") and req_leaf not in final_path:
         return True
@@ -102,41 +128,41 @@ def looks_like_custom_miss(hit: dict, misses: list[dict]) -> bool:
 def content_confirms_path(path: str, hit: dict) -> bool:
     text = (hit.get("text") or "").lower()
     content_type = (hit.get("content_type") or "").lower()
-    lower_path = path.lower()
+    lower_path = path.lower().lstrip("/")
 
-    if any(k in lower_path for k in SENSITIVE_HTML_PATHS):
-        if "text/html" in content_type or "<html" in text[:800] or "<!doctype html" in text[:800]:
-            return False
+    if any(lower_path.endswith(ext) for ext in (".zip", ".tar", ".gz", ".tgz")):
+        return content_type in {
+            "application/zip", "application/x-tar", "application/gzip",
+            "application/octet-stream", "application/x-gzip",
+        }
+
+    for rule_key, needles in STRICT_CONTENT_RULES.items():
+        if rule_key in lower_path:
+            if "text/html" in content_type or "<html" in text[:200] or "<!doctype" in text[:200]:
+                return False
+            if needles:
+                return any(n.lower() in text for n in needles)
+            return True
+
+    if lower_path.rstrip("/") and "." not in lower_path.split("/")[-1]:
+        directory_listing_signals = (
+            "index of /", "directory listing", "parent directory",
+            "[dir]", "[   ]", "last modified",
+        )
+        if any(signal in text[:5000] for signal in directory_listing_signals):
+            return True
+        return False
+
+    if "text/html" in content_type or "<html" in text[:200] or "<!doctype" in text[:200]:
         if looks_like_missing_page(text):
             return False
+        if any(lower_path.rstrip("/") in d for d in ADMIN_PANEL_PATHS):
+            return not looks_like_missing_page(text)
+        return False
 
-    checks = {
-        ".env": ("app_key", "database_url", "db_password", "secret_key", "aws_access_key", "db_host", "mail_host"),
-        ".git/config": ("[core]", "[remote", "repositoryformatversion"),
-        ".git/head": ("ref: refs/",),
-        ".git/index": ("dirc",),
-        "wp-config": ("db_name", "db_user", "wordpress", "wp_"),
-        ".sql": ("create table", "insert into", "-- mysql", "dump"),
-        "phpinfo": ("php version", "phpinfo()", "configuration"),
-        "package.json": ('"dependencies"', '"scripts"', '"devdependencies"'),
-        "composer.json": ('"require"', '"autoload"'),
-        "requirements.txt": ("==", ">=", "django", "flask", "requests"),
-        ".htpasswd": (":$apr1$", ":$2y$", ":$2a$",),
-    }
-    for key, needles in checks.items():
-        if key in lower_path:
-            return any(n in text for n in needles)
-    if lower_path.endswith((".zip", ".tar", ".gz", ".tgz")):
-        return content_type in {
-            "application/zip",
-            "application/x-tar",
-            "application/gzip",
-            "application/octet-stream",
-        }
-    if lower_path.endswith((".json", ".yml", ".yaml", ".xml", ".txt", ".lock", ".log")):
-        return bool(text.strip()) and "text/html" not in content_type and not looks_like_missing_page(text)
-    if lower_path.endswith((".php",)):
-        return not looks_like_missing_page(text) and "text/html" not in content_type
+    stripped = text.strip()
+    if not stripped or len(stripped) < 10:
+        return False
     return not looks_like_missing_page(text)
 
 
@@ -161,7 +187,6 @@ def path_exists(
     *,
     require_content: bool = True,
 ) -> bool:
-    """Return True only when HTTP success looks like a real resource, not a soft 404."""
     status = hit.get("status")
     if status not in (200, 206):
         return False

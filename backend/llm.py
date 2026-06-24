@@ -42,7 +42,7 @@ def parse_json_response(text: str) -> dict:
         return json.loads(m2.group()) if m2 else {}
 
 
-def _ask_groq(system: str, user: str) -> dict | None:
+def _ask_groq(system: str, user: str, *, max_tokens: int = 800) -> dict | None:
     if not GROQ_API_KEY:
         return None
     attempts = 3
@@ -57,7 +57,7 @@ def _ask_groq(system: str, user: str) -> dict | None:
                     {"role": "user", "content": user[:14000]},
                 ],
                 temperature=0.0,
-                max_tokens=4096,
+                max_tokens=max_tokens,
             )
             raw_text = r.choices[0].message.content or ""
             out = parse_json_response(raw_text)
@@ -76,7 +76,7 @@ def _ask_groq(system: str, user: str) -> dict | None:
             return None
 
 
-def _ask_gemini(system: str, user: str) -> dict | None:
+def _ask_gemini(system: str, user: str, *, max_tokens: int = 800) -> dict | None:
     if not GEMINI_API_KEY:
         return None
     url = (
@@ -93,7 +93,7 @@ def _ask_gemini(system: str, user: str) -> dict | None:
                     url,
                     json={
                         "contents": [{"parts": [{"text": prompt}]}],
-                        "generationConfig": {"temperature": 0.0, "maxOutputTokens": 4096},
+                        "generationConfig": {"temperature": 0.0, "maxOutputTokens": max_tokens},
                     },
                 )
             if r.status_code != 200:
@@ -243,7 +243,13 @@ def validate_schema(obj: dict, schema_name: str) -> tuple[bool, str]:
         return False, str(e.message)
 
 
-def ask_llm(system: str, user: str, expected_schema: str | None = None) -> tuple[dict, str]:
+def ask_llm(
+    system: str,
+    user: str,
+    expected_schema: str | None = None,
+    *,
+    max_tokens: int = 800,
+) -> tuple[dict, str]:
     """Try Groq, then Gemini, then rule-based fallback. Returns (parsed_json, provider_name)."""
     system = _enhance_system_prompt(system)
 
@@ -259,7 +265,7 @@ def ask_llm(system: str, user: str, expected_schema: str | None = None) -> tuple
         if key_present:
             tried_any = True
         try:
-            out = fn(system, user)
+            out = fn(system, user, max_tokens=max_tokens)
         except Exception as e:
             logger.info("Provider %s failed during chain: %s", name, str(e)[:120])
             out = None

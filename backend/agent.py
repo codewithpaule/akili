@@ -52,33 +52,8 @@ else:
         MAX_AGENT_ACTIONS = 6
 AGENT_ALLOWED_HOSTS = [h.strip().lower() for h in os.getenv("AGENT_ALLOWED_HOSTS", "").split(",") if h.strip()]
 
-# Simple in-memory cache for expensive operations
-_tool_cache = {}
-_cache_ttl = 300  # 5 minutes
-
-
-def _get_cache_key(tool: str, target: str) -> str:
-    """Generate cache key for tool results."""
-    return f"{tool}:{target}"
-
-
-def _get_cached_result(tool: str, target: str) -> Any:
-    """Get cached result if available and not expired."""
-    key = _get_cache_key(tool, target)
-    if key in _tool_cache:
-        cached = _tool_cache[key]
-        if time.time() - cached["timestamp"] < _cache_ttl:
-            return cached["result"]
-    return None
-
-
-def _set_cached_result(tool: str, target: str, result: Any):
-    """Cache tool result."""
-    key = _get_cache_key(tool, target)
-    _tool_cache[key] = {
-        "result": result,
-        "timestamp": time.time()
-    }
+from cache import cache_get, cache_set, cache_key
+from scan_messages import get as scan_msg, PERSON_MESSAGES
 
 
 PLANNING_PROMPT = """You are AKILI, an autonomous cybersecurity intelligence agent.
@@ -201,33 +176,36 @@ EMAIL_PROMPT = """You are a cybersecurity analyst. From email scan JSON (breache
 {{"summary":"2-3 sentences","risk_level":"low|medium|high","recommendations":["action1","action2"],"pwned_assessment":"plain explanation if breaches listed"}}
 If breaches array is non-empty, state clearly the email was found in data breaches."""
 
-PERSON_PROMPT = """
-You are a professional due diligence analyst. From public OSINT only, produce strict JSON:
+PERSON_PROMPT = """You are a professional investigator writing a clear, honest profile
+of a real person based entirely on publicly available information.
 
-{
-    "name": "",
-    "confidence": 0,
-    "person_overview": "2-4 sentence overview of who this person appears to be",
-    "platforms": {},
-    "trust_signals": [],
-    "red_flags": [],
-    "profile_narrative": "",
-    "age_context": "",
-    "role_hint": "",
-    "location_hint": "",
-    "ai_summary": "",
-    "overall_assessment": ""
-}
+Write in natural, plain English. No bullet points. No em dashes. No corporate language.
+Sound like a knowledgeable colleague describing someone to another colleague.
+
+From the OSINT data provided, produce this exact JSON:
+{{
+  "name": "their full name as it appears in results",
+  "confidence": 0-100,
+  "person_overview": "3 to 5 sentences describing who this person is, what they do, where they appear to be based, and what they are publicly known for. If information is limited, be honest about that. Do not invent details.",
+  "platforms": {{}},
+  "personal_website": {{"url": "", "confidence": ""}},
+  "trust_signals": ["plain English signal 1", "signal 2"],
+  "red_flags": ["plain English flag 1"],
+  "profile_narrative": "A single paragraph you would be comfortable sharing with a client. Describe what is publicly known about this person. Mention their profession, location if known, and any notable public activity. End with an honest note about confidence level.",
+  "age_context": "estimated age range or generation if inferable from context, or empty string",
+  "role_hint": "their apparent profession or role",
+  "location_hint": "city or country if identifiable",
+  "overall_assessment": "proceed|verify further|insufficient data"
+}}
 
 Rules:
-- Use ONLY supplied evidence (person_overview, identity_evidence, AI-verified platforms, social_cards, fetched_profile snippets).
-- Prefer person_overview from evidence when present; refine it, do not contradict verified profiles.
-- Only list social platforms marked found/ai_verified in evidence — never invent handles or URLs.
-- If multiple distinct identities (ambiguous name), overall_assessment "insufficient data", confidence <= 40.
-- If verified profiles corroborate one identity, overall_assessment "proceed", confidence >= 70.
-- If weak evidence, overall_assessment "verify further", confidence 40-70.
-- Return valid JSON only.
-"""
+- Never invent facts. Only state what the evidence supports.
+- If the search found multiple people with the same name, say so clearly in person_overview.
+- overall_assessment is "proceed" only if confidence is above 70 and at least one profile
+  is high-confidence. Otherwise "verify further" or "insufficient data".
+- Do not use the word "leverage", "utilize", "state-of-the-art", or "cutting-edge".
+- Do not start any sentence with "It is worth noting that".
+- Write as if a real person wrote this."""
 
 
 def _web_search(query: str, intent: str, context: dict) -> dict:
@@ -291,7 +269,7 @@ def _osint_person(target: str, context: dict) -> dict:
         plat_summary = ", ".join(plats)
     except Exception:
         plat_summary = ""
-    canonical = (data.get('identity_evidence') or {}).get('canonical_name') or name
+    canonical = data.get("name") or name
     summary_name = canonical or name
     overview = (data.get("person_overview") or "")[:120]
     verified_count = len(data.get("social_cards") or [])
@@ -330,10 +308,17 @@ def parse_json_response(text: str) -> dict:
         return json.loads(m2.group()) if m2 else {}
 
 
-def ask_groq(system: str, user: str, scan_tier: str = "trial", expected_schema: str | None = None) -> dict:
+def ask_groq(
+    system: str,
+    user: str,
+    scan_tier: str = "trial",
+    expected_schema: str | None = None,
+    *,
+    max_tokens: int = 800,
+) -> dict:
     """Groq → Gemini (free) → rule-based fallback."""
     from llm import ask_llm
-    data, provider = ask_llm(system, user, expected_schema=expected_schema)
+    data, provider = ask_llm(system, user, expected_schema=expected_schema, max_tokens=max_tokens)
     if provider != "groq":
         logger.info("LLM provider=%s", provider)
     return data
@@ -349,7 +334,7 @@ def _groq_chat(messages: list, tools: list | None = None, tool_choice: str = "au
         "model": GROQ_MODEL,
         "messages": messages,
         "temperature": 0.0,
-        "max_tokens": 4096,
+        "max_tokens": 800,
     }
     if tools:
         kwargs["tools"] = tools
@@ -579,9 +564,19 @@ def run_tool(name: str, target: str, context: dict, tool_args: dict | None = Non
     module = context.get("module", "")
     
     # Check cache for expensive tools
-    cacheable_tools = {"ssl_check", "whois_check", "fingerprint", "headers", "ip_intel"}
+    cacheable_tools = {
+        "ssl_check": ("ssl", 1800),
+        "whois_check": ("whois", 3600),
+        "whois": ("whois", 3600),
+        "fingerprint": ("fingerprint", 300),
+        "headers": ("headers", 300),
+        "ip_intel": ("ip_geo", 3600),
+        "subdomains": ("subdomains", 1800),
+    }
     if name in cacheable_tools:
-        cached = _get_cached_result(name, target)
+        cache_name, ttl = cacheable_tools[name]
+        key = cache_key(cache_name, target)
+        cached = cache_get(key)
         if cached:
             context.setdefault("tools_used", []).append(name)
             context.setdefault("tool_results", []).append(cached)
@@ -620,7 +615,8 @@ def run_tool(name: str, target: str, context: dict, tool_args: dict | None = Non
         
         # Cache expensive tool results
         if name in cacheable_tools:
-            _set_cached_result(name, target, result)
+            cache_name, ttl = cacheable_tools[name]
+            cache_set(cache_key(cache_name, target), result, ttl_seconds=ttl)
         
         context.setdefault("tool_results", []).append(result)
         for f in result.get("findings", []):
@@ -765,16 +761,20 @@ def _fallback_report(context: dict) -> dict:
     return {"grade": grade, "score": score, "summary": "Automated scan completed.", "findings": findings}
 
 
-def _stream_tool_result(result: dict, tool: str, _emit) -> Generator[str, None, None]:
+def _stream_tool_result(result: dict, tool: str, _emit, module: str = "website") -> Generator[str, None, None]:
     if not result:
-        yield _emit("OK", f"{_tool_label(tool)} finished")
+        yield _emit("OK", scan_msg("clean", module))
+        time.sleep(0)
         return
     sev = str(result.get("severity", "info")).upper()
-    yield _emit("OK", f"{_tool_label(tool)} complete")
+    yield _emit("OK", f"{_tool_label(tool)} done")
+    time.sleep(0)
     yield _emit("FOUND" if sev not in ("CRITICAL",) else "CRITICAL", result.get("summary", result.get("title", "")))
+    time.sleep(0)
     for f in result.get("findings", []):
         fs = str(f.get("severity", "INFO")).upper()
         yield _emit("CRITICAL" if fs == "CRITICAL" else "FOUND", f.get("name", ""))
+        time.sleep(0)
     try:
         raw = result.get("raw", {}) or {}
         if result.get("tool") in ("exposed_files", "exposed"):
@@ -782,11 +782,13 @@ def _stream_tool_result(result: dict, tool: str, _emit) -> Generator[str, None, 
                 path = a.get("path") or ""
                 status = a.get("status") or 0
                 acc = a.get("accessible")
-                note = "confirmed" if acc else "not found"
-                yield _emit("TOOL", f"Probing {path} → HTTP {status} ({note})")
-        if result.get("tool") in ("ports", "port_scanner", "port_scan"):
+                note = "exists" if acc else "not there"
+                yield _emit("TOOL", f"{path} — HTTP {status} — {note}")
+                time.sleep(0)
+        if result.get("tool") in ("ports", "port_scanner", "port_scan") and module in ("website", "ip"):
             for p in (raw.get("ports") or raw.get("open_ports") or []):
                 yield _emit("FOUND", f"Port {p.get('port')} open ({p.get('service')})")
+                time.sleep(0)
         if result.get("tool") == "subdomains":
             for s in (raw.get("active_subdomains") or raw.get("subdomains") or [])[:40]:
                 name = s.get("subdomain") or ""
@@ -797,18 +799,21 @@ def _stream_tool_result(result: dict, tool: str, _emit) -> Generator[str, None, 
                     if s.get("http_status"):
                         bits.append(f"HTTP {s.get('http_status')}")
                     yield _emit("FOUND", "Subdomain: " + " - ".join(bits))
-        if result.get("tool") in ("tech_fingerprint", "fingerprint"):
+                    time.sleep(0)
+        if result.get("tool") in ("tech_fingerprint", "fingerprint") and module in ("website", "vulnerability", "company", "api"):
             techs = raw.get("technologies") or raw.get("tech_stack") or []
             for t in techs[:20]:
                 nm = t.get("name") or ""
                 ver = t.get("version") or ""
                 if nm:
                     yield _emit("TOOL", f"Detected tech: {nm}" + (f" {ver}" if ver else ""))
+                    time.sleep(0)
         if result.get("tool") == "web_search":
             for r in (raw.get("results") or [])[:5]:
                 title = r.get("title") or r.get("link") or ""
                 if title:
                     yield _emit("FOUND", title[:120])
+                    time.sleep(0)
     except Exception:
         pass
 
@@ -852,9 +857,12 @@ def run_agent(
             pass
         return line
 
-    yield _emit("AKILI", f"Starting {module} assessment ({prof.get('label', scan_tier)})")
+    yield _emit("AKILI", scan_msg("start", module, target=target[:80]))
+    time.sleep(0)
     yield _emit("THINK", f"Target: {target[:120]}")
-    yield _emit("PLAN", "Building investigation plan before running any tools")
+    time.sleep(0)
+    yield _emit("PLAN", scan_msg("planning", module))
+    time.sleep(0)
 
     allowed_set = set(get_available_tools(module))
     available_tools_str = ", ".join(sorted(allowed_set))
@@ -867,6 +875,7 @@ def run_agent(
             max_tools=max_plan_tools,
         ),
         scan_tier,
+        max_tokens=800,
     )
     if not isinstance(plan_data, dict):
         plan_data = {}
@@ -884,7 +893,8 @@ def run_agent(
     context["plan"] = plan_queue
     context["investigation_goal"] = plan_data.get("investigation_goal", "")
     for item in plan_queue:
-        yield _emit("PLAN", f"{_tool_label(item.get('tool', ''))} ({item.get('priority', 'medium')}) — {item.get('reason', '')}")
+        yield _emit("PLAN", scan_msg("tool_running", module, tool=_tool_label(item.get("tool", ""))))
+        time.sleep(0)
 
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": AGENT_SYSTEM_PROMPT},
@@ -961,8 +971,10 @@ def run_agent(
             continue
 
         if reason:
-            yield _emit("PLAN", f"Running {_tool_label(next_tool)} — {reason}")
-        yield _emit("TOOL", f"Running {_tool_label(next_tool)}…")
+            yield _emit("PLAN", scan_msg("tool_running", module, tool=_tool_label(next_tool)))
+            time.sleep(0)
+        yield _emit("TOOL", scan_msg("tool_running", module, tool=_tool_label(next_tool)))
+        time.sleep(0)
         context["scan_id"] = scan_id
 
         exec_args = tool_args if next_tool == "web_search" else None
@@ -970,7 +982,7 @@ def run_agent(
         result = run_tool(next_tool, exec_target, context, exec_args)
         tool_count += 1
 
-        for line in _stream_tool_result(result, next_tool, _emit):
+        for line in _stream_tool_result(result, next_tool, _emit, module):
             yield line
 
         result_payload = json.dumps(result or {}, default=str)[:8000]
@@ -993,7 +1005,7 @@ def run_agent(
             "module": module,
             "target": target,
         }, default=str)
-        revision = ask_groq(CONFIDENCE_REVISE_PROMPT, revise_user, scan_tier)
+        revision = ask_groq(CONFIDENCE_REVISE_PROMPT, revise_user, scan_tier, max_tokens=400)
         if isinstance(revision, dict):
             try:
                 confidence = int(revision.get("confidence", confidence))
@@ -1007,19 +1019,29 @@ def run_agent(
                     if not any(p.get("tool") == tname for p in plan_queue):
                         plan_queue.append(item)
 
-        yield _emit("THINK", f"Investigation confidence: {confidence}%")
+        yield _emit("THINK", scan_msg("thinking", module))
+        time.sleep(0)
 
         if confidence < 40 and tool_count >= 6:
             low_confidence_extra += 1
             if low_confidence_extra > 3:
-                yield _emit("THINK", "Reached extra investigation limit with low confidence")
+                yield _emit("THINK", scan_msg("wrapping_up", module))
+                time.sleep(0)
                 break
 
-    yield _emit("THINK", "AKILI synthesizing findings into your report…")
-    yield _emit("AI", "AKILI writing executive summary…")
+    yield _emit("THINK", scan_msg("wrapping_up", module))
+    time.sleep(0)
+    yield _emit("AI", scan_msg("report", module))
+    time.sleep(0)
     if module == "person":
         osint_data = context.get("osint") or {}
-        ai = ask_groq(PERSON_PROMPT, json.dumps(osint_data, default=str)[:12000], scan_tier, expected_schema="person")
+        ai = ask_groq(
+            PERSON_PROMPT,
+            json.dumps(osint_data, default=str)[:12000],
+            scan_tier,
+            expected_schema="person",
+            max_tokens=2000,
+        )
         if not isinstance(ai, dict):
             ai = {}
         if not ai:
@@ -1037,21 +1059,25 @@ def run_agent(
             **ai,
             "scan_type": "person",
             "target": target,
-            "name": ai.get("name") or osint_data.get("identity_evidence", {}).get("canonical_name") or osint_data.get("name") or target.split("|")[0],
+            "name": ai.get("name") or osint_data.get("name") or target.split("|")[0],
             "score": ai.get("confidence", cb.get("score", 50)),
             "confidence": ai.get("confidence", cb.get("score", 50)),
-            "verified_images": [],
+            "best_match_confidence": osint_data.get("best_match_confidence", "none"),
+            "personal_website": osint_data.get("personal_website") or ai.get("personal_website"),
+            "news_mentions": osint_data.get("news_mentions", []),
+            "profile_images": osint_data.get("profile_images", []),
+            "all_images": osint_data.get("all_images", []),
             "web_images": osint_data.get("web_images", []),
-            "images": osint_data.get("web_images", []),
-                "social_cards": osint_data.get("social_cards", []),
-                "breaches": osint_data.get("breaches", []),
-                "platforms": osint_data.get("platforms", {}),
-                "raw_results": osint_data.get("raw_results", []),
-                "all_urls": osint_data.get("all_urls", []),
+            "images": osint_data.get("all_images") or osint_data.get("web_images", []),
+            "social_cards": osint_data.get("social_cards", []),
+            "breaches": osint_data.get("breach_data", {}).get("breaches", []) if isinstance(osint_data.get("breach_data"), dict) else [],
+            "platforms": osint_data.get("platforms", {}),
+            "raw_results": osint_data.get("raw_results", []),
+            "all_urls": osint_data.get("all_urls", []),
             "trust_signals": ai.get("trust_signals", cb.get("signals", [])),
             "red_flags": ai.get("red_flags", cb.get("red_flags", [])),
             "profile_narrative": ai.get("profile_narrative", ""),
-            "ai_summary": ai.get("ai_summary") or ai.get("profile_narrative") or osint_data.get("identity_evidence", {}).get("canonical_name", ""),
+            "ai_summary": ai.get("profile_narrative") or ai.get("person_overview") or osint_data.get("person_overview", ""),
             "age_context": ai.get("age_context", ""),
             "role_hint": ai.get("role_hint", ""),
             "location_hint": ai.get("location_hint", ""),
@@ -1060,12 +1086,13 @@ def run_agent(
             "agentic_notes": osint_data.get("agentic_notes", []),
             "person_overview": ai.get("person_overview") or osint_data.get("person_overview", ""),
             "identity_notes": osint_data.get("identity_notes", ""),
+            "investigation_plan": osint_data.get("investigation_plan", ""),
             "findings": context.get("findings", []),
         }
     elif module == "email":
         raw = _email_intel_from_context(context)
         payload = {"email_intel": raw, "findings": context.get("findings", [])}
-        ai = ask_groq(EMAIL_PROMPT, json.dumps(payload, default=str)[:12000], scan_tier, expected_schema="email")
+        ai = ask_groq(EMAIL_PROMPT, json.dumps(payload, default=str)[:12000], scan_tier, expected_schema="email", max_tokens=800)
         if not isinstance(ai, dict):
             ai = {}
         if not ai:
@@ -1076,19 +1103,19 @@ def run_agent(
         for tr in context.get("tool_results", []):
             if tr.get("tool") == "ip_intel":
                 payload["ip_intel"] = tr.get("raw", {})
-        ai = ask_groq(IP_PROMPT, json.dumps(payload, default=str)[:12000], scan_tier, expected_schema="ip")
+        ai = ask_groq(IP_PROMPT, json.dumps(payload, default=str)[:12000], scan_tier, expected_schema="ip", max_tokens=800)
         if not isinstance(ai, dict):
             ai = {}
         report = _merge_ip_report(context, ai if ai else {})
     elif module in ("website", "vulnerability", "subdomains", "organization", "company", "domain"):
         payload = _build_website_ai_payload(context)
-        ai = ask_groq(FINAL_WEBSITE_PROMPT, json.dumps(payload, default=str)[:12000], scan_tier, expected_schema="website")
+        ai = ask_groq(FINAL_WEBSITE_PROMPT, json.dumps(payload, default=str)[:12000], scan_tier, expected_schema="website", max_tokens=3000)
         if not isinstance(ai, dict):
             ai = {}
         report = _merge_website_report(context, ai if ai else _fallback_report(context))
     else:
         payload = _build_website_ai_payload(context)
-        ai = ask_groq(FINAL_WEBSITE_PROMPT, json.dumps(payload, default=str)[:12000], scan_tier, expected_schema="website")
+        ai = ask_groq(FINAL_WEBSITE_PROMPT, json.dumps(payload, default=str)[:12000], scan_tier, expected_schema="website", max_tokens=3000)
         if not isinstance(ai, dict):
             ai = {}
         report = _merge_website_report(context, ai if ai else _fallback_report(context))
@@ -1116,5 +1143,6 @@ def run_agent(
         logger.exception("Error evaluating review gate")
 
     save_scan(scan_id, module, target, report, tool_count, duration, user_id=user_id)
-    yield _emit("DONE", "Report ready")
+    yield _emit("DONE", "Your report is ready")
+    time.sleep(0)
     yield f"COMPLETE:{json.dumps(report)}\n"

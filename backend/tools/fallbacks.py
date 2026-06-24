@@ -137,30 +137,39 @@ async def bing_search(query: str, num: int = 10) -> list[dict]:
 async def serpapi_search(query: str, engine: str = "google", num: int = 10) -> list[dict]:
     if not SERPAPI_KEY:
         return []
+    from cache import cache_get, cache_set, cache_key
+    from http_client import get_client
+
+    ck = cache_key("serpapi", query, engine)
+    cached = cache_get(ck)
+    if cached is not None:
+        return cached
+
     params = {
         "api_key": SERPAPI_KEY,
         "q": query,
         "engine": engine,
         "num": min(num, 10),
     }
-    async with httpx.AsyncClient(timeout=20) as client:
-        response = await client.get("https://serpapi.com/search", params=params)
-        response.raise_for_status()
-        data = response.json()
-        if engine == "google_images":
-            return [
-                {
-                    "url": img.get("original") or img.get("thumbnail"),
-                    "source": img.get("source") or img.get("link", ""),
-                    "title": img.get("title", ""),
-                    "thumbnail": img.get("thumbnail", ""),
-                    "confidence": "unverified",
-                    "label": f"From {img.get('source', 'SerpAPI')}",
-                    "verified": False,
-                }
-                for img in data.get("images_results", [])[:num]
-            ]
-        return [
+    client = get_client()
+    response = await client.get("https://serpapi.com/search", params=params)
+    response.raise_for_status()
+    data = response.json()
+    if engine == "google_images":
+        results = [
+            {
+                "url": img.get("original") or img.get("thumbnail"),
+                "source": img.get("source") or img.get("link", ""),
+                "title": img.get("title", ""),
+                "thumbnail": img.get("thumbnail", ""),
+                "confidence": "unverified",
+                "label": f"From {img.get('source', 'SerpAPI')}",
+                "verified": False,
+            }
+            for img in data.get("images_results", [])[:num]
+        ]
+    else:
+        results = [
             {
                 "title": item.get("title", ""),
                 "link": item.get("link", ""),
@@ -169,6 +178,8 @@ async def serpapi_search(query: str, engine: str = "google", num: int = 10) -> l
             }
             for item in data.get("organic_results", [])[:num]
         ]
+    cache_set(ck, results, ttl_seconds=600)
+    return results
 
 
 async def serpapi_image_search(query: str, num: int = 10) -> list[dict]:

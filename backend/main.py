@@ -153,6 +153,32 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 app = FastAPI(title="AKILI API", version="1.0.0")
+
+
+@app.on_event("startup")
+async def startup():
+    from http_client import get_client
+    get_client()
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    from http_client import close_client
+    await close_client()
+
+
+@app.middleware("http")
+async def timeout_middleware(request: Request, call_next):
+    import asyncio
+    try:
+        return await asyncio.wait_for(call_next(request), timeout=90.0)
+    except asyncio.TimeoutError:
+        return JSONResponse(
+            {"detail": "This scan took too long. Try a more specific target or try again in a moment."},
+            status_code=504,
+        )
+
+
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, lambda r, e: JSONResponse({
     "error": "rate_limit_exceeded",

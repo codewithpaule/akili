@@ -1,18 +1,38 @@
+"""Person OSINT collection — parallel profile fetch, search, and verification."""
+
+from __future__ import annotations
+
 import asyncio
 import os
 import re
 from typing import Any
 
-import httpx
-
-from tools.fallbacks import search_with_fallback, serpapi_image_search
 from tools import person_agent
+from tools.fallbacks import search_with_fallback, serpapi_image_search
 
 PLATFORM_PATTERNS = {
     "linkedin": r"linkedin\.com/in/[\w\-]+",
-    "github": r"github\.com/[\w\-]+",
-    "x": r"(twitter|x)\.com/[\w]+",
+    "github": r"github\.com/[\w\-]+(?:/[\w\-]+)?",
+    "x": r"(?:twitter|x)\.com/[\w]+",
     "instagram": r"instagram\.com/[\w\.]+",
+    "facebook": r"facebook\.com/(?:[\w\.]+|people/[\w\-]+/[\d]+)",
+    "tiktok": r"tiktok\.com/@[\w\.]+",
+    "youtube": r"youtube\.com/(?:@[\w\-]+|channel/[\w\-]+|c/[\w\-]+)",
+    "reddit": r"reddit\.com/u(?:ser)?/[\w\-]+",
+    "medium": r"medium\.com/@[\w\-]+",
+    "substack": r"[\w\-]+\.substack\.com",
+    "quora": r"quora\.com/profile/[\w\-]+",
+    "pinterest": r"pinterest\.com/[\w_]+",
+    "behance": r"behance\.net/[\w]+",
+    "dribbble": r"dribbble\.com/[\w]+",
+    "researchgate": r"researchgate\.net/profile/[\w\-]+",
+    "academia": r"(?:[\w]+\.)?academia\.edu/[\w]+",
+    "soundcloud": r"soundcloud\.com/[\w\-]+",
+    "spotify": r"open\.spotify\.com/artist/[\w]+",
+    "imdb": r"imdb\.com/name/nm[\d]+",
+    "crunchbase": r"crunchbase\.com/person/[\w\-]+",
+    "wikipedia": r"(?:en\.)?wikipedia\.org/wiki/[\w\(\)]+",
+    "website": r"",
 }
 
 STOPWORDS = {
@@ -22,83 +42,42 @@ STOPWORDS = {
 }
 
 
-def _github_user(username: str) -> dict | None:
-    try:
-        resp = httpx.get(f"https://api.github.com/users/{username}", timeout=10)
-        if resp.status_code == 200:
-            return resp.json()
-    except Exception:
-        pass
-    return None
+def _empty_platforms() -> dict:
+    return {p: {"found": False, "url": None} for p in PLATFORM_PATTERNS}
 
 
-def _extract_username(name: str) -> str:
-    return re.sub(r"[^\w\-]", "", name.lower().replace(" ", ""))[:39]
-
-
-async def _fetch_verified_profile_images(platforms: dict) -> list[dict]:
-    verified = []
-    gh = platforms.get("github", {})
-    if gh.get("found") and gh.get("url"):
-        m = re.search(r"github\.com/([\w\-]+)", gh["url"], re.I)
-        if m:
-            username = m.group(1)
-            verified.append({
-                "url": f"https://github.com/{username}.png",
-                "source": gh["url"],
-                "platform": "github",
-                "label": "From GitHub",
-                "verified": True,
-                "confidence": "verified",
-            })
-    for platform, info in platforms.items():
-        if platform == "github" or not info.get("found") or not info.get("url"):
-            continue
-        try:
-            async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
-                r = await client.get(info["url"], headers={"User-Agent": "AKILI-Platform/1.0"})
-                if r.status_code == 200:
-                    og = re.search(
-                        r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)',
-                        r.text[:50000],
-                        re.I,
-                    )
-                    if og:
-                        verified.append({
-                            "url": og.group(1),
-                            "source": info["url"],
-                            "platform": platform,
-                            "label": f"From {platform.title()}",
-                            "verified": True,
-                            "confidence": "verified",
-                        })
-        except Exception:
-            continue
-    return verified
-
-
-def _confidence_breakdown(platforms: dict, social_cards: list) -> dict:
-    score = 30
+def _confidence_breakdown(
+    platforms: dict,
+    social_cards: list,
+    personal_website: dict | None,
+) -> dict:
+    score = 20
     signals = []
     red_flags = []
 
-    if platforms.get("github", {}).get("found") and platforms.get("github", {}).get("identity_confidence") != "weak":
+    found_platforms = [p for p, info in platforms.items() if info.get("found")]
+    high_confidence = [c for c in social_cards if c.get("confidence") == "high"]
+    medium_confidence = [c for c in social_cards if c.get("confidence") == "medium"]
+
+    for card in high_confidence:
         score += 20
-        signals.append("GitHub account found with developer/identity evidence (+20)")
-    elif platforms.get("github", {}).get("found"):
-        score -= 10
-        red_flags.append("GitHub match is weak or name-only; not treated as identity proof (-10)")
-    if platforms.get("linkedin", {}).get("found"):
+        signals.append(f"Verified {card['platform']} profile with strong content match (+20)")
+
+    for card in medium_confidence:
+        score += 10
+        signals.append(f"Likely {card['platform']} profile found (+10)")
+
+    if len(found_platforms) >= 3:
+        score += 10
+        signals.append(f"Presence on {len(found_platforms)} platforms is consistent (+10)")
+
+    if personal_website and personal_website.get("url"):
         score += 15
-        signals.append("LinkedIn profile found (+15)")
-    if len([p for p in platforms.values() if p.get("found")]) >= 2:
-        score += 10
-        signals.append("Multiple platforms consistent (+10)")
-    if social_cards:
-        score += 10
-        signals.append("Public activity data available (+10)")
-    if not platforms.get("github", {}).get("found"):
-        signals.append("No verified GitHub/developer profile found (+0)")
+        signals.append(f"Personal website found at {personal_website['url']} (+15)")
+
+    if not social_cards:
+        red_flags.append("No profiles could be verified from the available search results.")
+        red_flags.append("Try adding more context like a city, employer, school, or username.")
 
     return {
         "score": max(0, min(100, score)),
@@ -106,96 +85,6 @@ def _confidence_breakdown(platforms: dict, social_cards: list) -> dict:
         "red_flags": red_flags,
         "breakdown_visible": True,
     }
-
-
-def _name_terms(name: str) -> list[str]:
-    return [p.lower() for p in re.findall(r"[a-zA-Z0-9]+", name) if len(p) > 1]
-
-
-def _keyword_terms(keywords: str) -> list[str]:
-    return [p.lower() for p in re.findall(r"[a-zA-Z0-9]+", keywords or "") if len(p) > 2 and p.lower() not in STOPWORDS]
-
-
-def _compact(text: str) -> str:
-    return re.sub(r"[^a-z0-9]", "", (text or "").lower())
-
-
-def _identity_evidence(name: str, keywords: str, results: list[dict]) -> dict:
-    name_terms = _name_terms(name)
-    key_terms = _keyword_terms(keywords)
-    counts: dict[str, int] = {}
-    supporting = []
-    for item in results[:20]:
-        text = f"{item.get('title', '')} {item.get('snippet', '')}".lower()
-        name_hit = all(t in text for t in name_terms[:2]) if name_terms else False
-        keyword_hits = [t for t in key_terms if t in text]
-        if name_hit:
-            supporting.append({
-                "title": item.get("title", ""),
-                "link": item.get("link", ""),
-                "snippet": item.get("snippet", ""),
-                "keyword_hits": keyword_hits,
-            })
-            for token in re.findall(r"[a-zA-Z][a-zA-Z0-9\-]{2,}", text):
-                token_l = token.lower()
-                if token_l not in STOPWORDS and token_l not in name_terms:
-                    counts[token_l] = counts.get(token_l, 0) + 1
-    majority_terms = [
-        term for term, _ in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:10]
-    ]
-    top = supporting[0] if supporting else {}
-    canonical = name
-    primary_profile = None
-    if top.get("title"):
-        canonical = re.split(r"[-|–—]", top["title"], 1)[0].strip() or name
-    # Try to find a primary profile URL from supporting results (prefer LinkedIn/GitHub/X)
-    for sup in supporting:
-        link = sup.get("link", "")
-        if re.search(r"linkedin\.com/in/|linkedin\.com/pub/", link, re.I):
-            primary_profile = {"platform": "linkedin", "url": link}
-            break
-        if re.search(r"github\.com/", link, re.I) and is_likely_dev(keywords):
-            primary_profile = {"platform": "github", "url": link}
-            break
-        if re.search(r"(?:twitter|x)\.com/", link, re.I):
-            primary_profile = {"platform": "x", "url": link}
-            break
-    return {
-        "canonical_name": canonical,
-        "primary_profile": primary_profile,
-        "keywords": key_terms,
-        "majority_terms": majority_terms,
-        "supporting_results": supporting[:8],
-        "support_count": len(supporting),
-    }
-
-
-def is_likely_dev(keywords: str) -> bool:
-    if not keywords:
-        return False
-    dev_terms = ("developer", "engineer", "github", "open source", "programmer", "software")
-    k = (keywords or "").lower()
-    return any(t in k for t in dev_terms)
-
-
-def _result_matches_name(item: dict, name: str) -> bool:
-    text = f"{item.get('title', '')} {item.get('snippet', '')} {item.get('link', '')}".lower()
-    terms = _name_terms(name)
-    if not terms:
-        return False
-    return all(t in text for t in terms[:2])
-
-
-def _result_supports_identity(item: dict, name: str, identity: dict, *, require_keyword: bool = True) -> bool:
-    text = f"{item.get('title', '')} {item.get('snippet', '')} {item.get('link', '')}".lower()
-    name_match = _result_matches_name(item, name)
-    keyword_hits = [t for t in identity.get("keywords", []) if t in text]
-    majority_hits = [t for t in identity.get("majority_terms", [])[:6] if t in text]
-    if not name_match:
-        return False
-    if not require_keyword:
-        return True
-    return bool(keyword_hits or majority_hits)
 
 
 def _abs_url(url: str | None) -> str | None:
@@ -213,28 +102,36 @@ def _abs_url(url: str | None) -> str | None:
 
 def _platform_from_url(url: str) -> str | None:
     for platform, pattern in PLATFORM_PATTERNS.items():
+        if platform == "website" or not pattern:
+            continue
         if re.search(pattern, url, re.I):
             return platform
     return None
 
 
 def _handle_from_url(url: str, platform: str) -> str | None:
+    patterns = {
+        "github": r"github\.com/([\w\-]+)",
+        "x": r"(?:twitter|x)\.com/(?:#!\/)?([\w_]+)",
+        "instagram": r"instagram\.com/([\w\.]+)",
+        "linkedin": r"linkedin\.com/(?:in|pub)/([\w\-]+)",
+        "facebook": r"facebook\.com/([\w\.]+)",
+        "tiktok": r"tiktok\.com/@([\w\.]+)",
+        "youtube": r"youtube\.com/@([\w\-]+)",
+        "reddit": r"reddit\.com/u(?:ser)?/([\w\-]+)",
+        "medium": r"medium\.com/@([\w\-]+)",
+    }
+    pat = patterns.get(platform)
+    if not pat:
+        return None
     try:
-        if platform == "github":
-            m = re.search(r"github\.com/([\w\-]+)", url, re.I)
-            return f"@{m.group(1)}" if m else None
-        if platform == "x":
-            m = re.search(r"(?:twitter|x)\.com/(?:#!\/)?([\w_]+)", url, re.I)
-            return f"@{m.group(1)}" if m else None
-        if platform == "instagram":
-            m = re.search(r"instagram\.com/([\w\.]+)", url, re.I)
-            return f"@{m.group(1)}" if m else None
-        if platform == "linkedin":
-            m = re.search(r"linkedin\.com/(?:in|pub)/([\w\-]+)", url, re.I)
-            return m.group(1) if m else None
+        m = re.search(pat, url, re.I)
+        if not m:
+            return None
+        slug = m.group(1)
+        return f"@{slug}" if platform not in ("linkedin",) else slug
     except Exception:
-        pass
-    return None
+        return None
 
 
 def _apply_verified_profiles(
@@ -252,6 +149,8 @@ def _apply_verified_profiles(
         handle = vp.get("handle") or _handle_from_url(url, platform)
         if platform == "x":
             url = re.sub(r"https?://(?:www\.)?twitter\.com", "https://x.com", url, flags=re.I)
+        if platform not in platforms:
+            platforms[platform] = {"found": False, "url": None}
         platforms[platform] = {
             "found": True,
             "url": url,
@@ -267,6 +166,11 @@ def _apply_verified_profiles(
             "handle": handle,
             "bio": vp.get("bio_snippet") or "",
             "display_name": vp.get("display_name_on_profile") or "",
+            "job_title": vp.get("job_title") or "",
+            "location": vp.get("location") or "",
+            "follower_count": vp.get("follower_count") or "",
+            "linked_website": vp.get("linked_website") or "",
+            "profile_image_url": vp.get("profile_image_url") or "",
             "ai_verified": True,
             "confidence": vp.get("confidence", "medium"),
         }
@@ -274,214 +178,273 @@ def _apply_verified_profiles(
             social_cards.append(card)
 
 
-async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
-    raw_results = []
-    platforms = {
-        "linkedin": {"found": False, "url": None},
-        "github": {"found": False, "url": None},
-        "x": {"found": False, "url": None},
-        "instagram": {"found": False, "url": None},
-    }
-    social_cards = []
-    all_urls = []
-    agentic_notes = []
-    dev_terms = [
-        "developer", "software", "engineer", "programmer", "devops",
-        "frontend", "backend", "fullstack", "tech lead", "github", "open source",
-    ]
-    is_dev_intent = any(t in (keywords or "").lower() for t in dev_terms)
+def _build_profile_images(social_cards: list) -> list[dict]:
+    seen: set[str] = set()
+    out: list[dict] = []
+    order = {"high": 0, "medium": 1, "low": 2}
+    sorted_cards = sorted(
+        social_cards,
+        key=lambda c: order.get(str(c.get("confidence", "low")).lower(), 3),
+    )
+    for card in sorted_cards:
+        img_url = _abs_url(card.get("profile_image_url") or "")
+        if not img_url or img_url in seen:
+            continue
+        seen.add(img_url)
+        out.append({
+            "url": img_url,
+            "source": card.get("profile_url") or card.get("url") or "",
+            "platform": card.get("platform", ""),
+            "label": "From their profile",
+            "verified": True,
+            "confidence": card.get("confidence", "medium"),
+        })
+    return out
 
-    # AI plans the investigation (profile URLs to check, username variants)
+
+def _dedupe_images(*groups: list[dict], limit: int = 20) -> list[dict]:
+    seen: set[str] = set()
+    out: list[dict] = []
+    for group in groups:
+        for img in group or []:
+            url = _abs_url(img.get("url") or "")
+            if not url or url in seen:
+                continue
+            seen.add(url)
+            out.append({**img, "url": url})
+            if len(out) >= limit:
+                return out
+    return out
+
+
+async def _fetch_one_profile(url: str, platform: str, sem: asyncio.Semaphore) -> dict:
+    from agentic_policy import extract_domain, is_allowed_target
+    from http_client import get_client
+    from tools.crawl_utils import rate_limit_domain
+
+    card = {"platform": platform, "url": url, "profile_url": url}
+    if not url:
+        return card
+    try:
+        if not is_allowed_target(url):
+            card["fetched_profile"] = {"status": 0, "text_snippet": None, "url": url, "blocked": True}
+            return card
+        domain = extract_domain(url) or ""
+        if domain:
+            await rate_limit_domain(domain, min_interval=0.4)
+    except Exception:
+        pass
+
+    async with sem:
+        try:
+            client = get_client()
+            r = await asyncio.wait_for(
+                client.get(url, headers={"User-Agent": "AKILI-Platform/2.0"}),
+                timeout=10.0,
+            )
+            text = r.text or ""
+            title_m = re.search(r"<title>([^<]+)</title>", text[:10000], re.I)
+            desc_m = re.search(
+                r'<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']+)',
+                text[:20000],
+                re.I,
+            )
+            og_img = re.search(
+                r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)',
+                text[:30000],
+                re.I,
+            )
+            h1_m = re.search(r"<h1[^>]*>([^<]+)</h1>", text[:20000], re.I)
+            if h1_m:
+                snippet = h1_m.group(1).strip()
+            else:
+                plain = re.sub(r"<[^>]+>", " ", text[:20000])
+                snippet = " ".join(plain.split())[:600]
+            card["fetched_profile"] = {
+                "status": r.status_code,
+                "title": title_m.group(1).strip() if title_m else None,
+                "description": desc_m.group(1).strip() if desc_m else None,
+                "text_snippet": snippet,
+                "og_image": og_img.group(1).strip() if og_img else None,
+                "url": url,
+            }
+        except Exception:
+            card["fetched_profile"] = {"status": 0, "text_snippet": None, "url": url}
+    return card
+
+
+async def _fetch_all_profile_pages(urls: list[dict]) -> list[dict]:
+    items = (urls or [])[:12]
+    sem = asyncio.Semaphore(6)
+    tasks = []
+    for item in items:
+        url = _abs_url(item.get("url") or item.get("profile_url") or "")
+        platform = (item.get("platform") or "profile").lower()
+        tasks.append(_fetch_one_profile(url or "", platform, sem))
+    if not tasks:
+        return []
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    out = []
+    for r in results:
+        if isinstance(r, Exception):
+            continue
+        out.append(r)
+    return out
+
+
+async def _run_all_search_queries(queries: list[str]) -> list[dict]:
+    queries = [q.strip() for q in (queries or []) if q and q.strip()][:6]
+    if not queries:
+        return []
+
+    async def _one(q: str) -> list[dict]:
+        try:
+            results, _src = await search_with_fallback(q, 8)
+            return results or []
+        except Exception:
+            return []
+
+    batches = await asyncio.gather(*[_one(q) for q in queries], return_exceptions=True)
+    seen: set[str] = set()
+    out: list[dict] = []
+    for batch in batches:
+        if isinstance(batch, Exception):
+            continue
+        for item in batch:
+            link = item.get("link") or item.get("url") or ""
+            if link and link not in seen:
+                seen.add(link)
+                out.append(item)
+    return out
+
+
+async def _run_image_searches(queries: list[str]) -> list[dict]:
+    queries = [q.strip() for q in (queries or []) if q and q.strip()][:4]
+    if not queries:
+        return []
+
+    async def _one(q: str) -> list[dict]:
+        try:
+            return await serpapi_image_search(q, 8)
+        except Exception:
+            return []
+
+    batches = await asyncio.gather(*[_one(q) for q in queries], return_exceptions=True)
+    seen: set[str] = set()
+    out: list[dict] = []
+    for batch in batches:
+        if isinstance(batch, Exception):
+            continue
+        for img in batch or []:
+            url = _abs_url(img.get("url") or "")
+            if url and url not in seen:
+                seen.add(url)
+                out.append({**img, "url": url})
+                if len(out) >= 15:
+                    return out
+    return out[:15]
+
+
+async def _check_breach_databases(name: str) -> dict:
+    """Optional email breach lookup — returns empty when not configured."""
+    return {}
+
+
+async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
+    agentic_notes: list[str] = []
+    raw_results: list[dict] = []
+    platforms = _empty_platforms()
+    social_cards: list[dict] = []
+    all_urls: list[str] = []
+
     plan = person_agent.plan_investigation(name, keywords)
     agentic_notes.append(plan.get("investigation_summary") or "AI planned profile verification")
-    candidates = plan.get("candidates") or []
+    profile_urls = plan.get("profile_urls_to_check") or plan.get("candidates") or []
 
-    # Fetch each candidate profile page for content-based verification
-    for c in candidates:
-        c.setdefault("url", c.get("profile_url"))
-    await _fetch_profile_pages(candidates)
+    phase2 = await asyncio.gather(
+        _fetch_all_profile_pages(profile_urls),
+        _run_all_search_queries(plan.get("web_search_queries") or []),
+        _run_image_searches(plan.get("image_search_queries") or []),
+        _check_breach_databases(name),
+        return_exceptions=True,
+    )
 
-    verification = person_agent.verify_profiles(name, keywords, candidates)
+    fetched_profiles = phase2[0] if not isinstance(phase2[0], Exception) else []
+    web_results = phase2[1] if not isinstance(phase2[1], Exception) else []
+    web_images = phase2[2] if not isinstance(phase2[2], Exception) else []
+    breach_data = phase2[3] if not isinstance(phase2[3], Exception) else {}
+
+    for item in web_results[:30]:
+        raw_results.append({
+            "title": item.get("title", ""),
+            "link": item.get("link", ""),
+            "snippet": item.get("snippet", ""),
+        })
+        if item.get("link"):
+            all_urls.append(item["link"])
+
+    candidates = fetched_profiles or []
+    verification = person_agent.verify_profiles(
+        name,
+        keywords,
+        candidates,
+        web_results=web_results,
+    )
     verified_list = verification.get("verified_profiles") or []
     person_overview = verification.get("person_overview") or ""
     identity_notes = verification.get("identity_notes") or ""
+    best_match_confidence = verification.get("best_match_confidence") or "none"
+    personal_website = verification.get("personal_website")
+    news_mentions = verification.get("news_mentions") or []
+
+    if isinstance(personal_website, dict) and not personal_website.get("url"):
+        personal_website = None
+
     _apply_verified_profiles(platforms, social_cards, verified_list)
 
-    # Fallback: only if AI found no profiles, run up to 2 AI-suggested search queries
-    unique_results = []
-    if not verified_list:
-        queries = (plan.get("verification_queries") or [])[:2]
-        if not queries:
-            queries = [f'"{name}" {keywords} site:linkedin.com/in'.strip()]
-        search_tasks = [search_with_fallback(q, 8) for q in queries]
-        search_results = await asyncio.gather(*search_tasks, return_exceptions=True)
-        seen_urls: set[str] = set()
-        for result_set in search_results:
-            if isinstance(result_set, Exception):
-                continue
-            web_results, _ = result_set
-            for item in web_results:
-                link = item.get("link", "")
-                if link and link not in seen_urls:
-                    seen_urls.add(link)
-                    unique_results.append(item)
-        agentic_notes.append("Supplemental search used after direct profile checks found no match")
+    for vp in verified_list:
+        u = vp.get("url")
+        if u:
+            all_urls.append(u)
 
-        identity = _identity_evidence(name, keywords, unique_results)
-        fallback_candidates = []
-        for item in unique_results[:15]:
-            link = item.get("link", "")
-            raw_results.append({"title": item.get("title", ""), "link": link, "snippet": item.get("snippet", "")})
-            all_urls.append(link)
-            plat = _platform_from_url(link)
-            if plat and _result_supports_identity(item, name, identity):
-                fallback_candidates.append({
-                    "platform": plat,
-                    "url": _abs_url(link),
-                    "reason": "search fallback",
-                })
-        if fallback_candidates:
-            await _fetch_profile_pages(fallback_candidates)
-            verification2 = person_agent.verify_profiles(name, keywords, fallback_candidates)
-            _apply_verified_profiles(platforms, social_cards, verification2.get("verified_profiles") or [])
-            person_overview = person_overview or verification2.get("person_overview") or ""
-            identity_notes = identity_notes or verification2.get("identity_notes") or ""
-    else:
-        identity = _identity_evidence(name, keywords, [])
-        for vp in verified_list:
-            u = vp.get("url")
-            if u:
-                all_urls.append(u)
+    profile_images = _build_profile_images(social_cards)
+    all_images = _dedupe_images(profile_images, web_images, limit=20)
+    confidence = _confidence_breakdown(platforms, social_cards, personal_website)
 
-    # GitHub API enrichment for verified dev profiles
-    gh = platforms.get("github") or {}
-    if is_dev_intent and gh.get("found") and gh.get("url"):
-        m = re.search(r"github\.com/([\w\-]+)", gh["url"], re.I)
-        if m:
-            gh_profile = _github_user(m.group(1))
-            if gh_profile:
-                for card in social_cards:
-                    if card.get("platform") == "github":
-                        card.update({
-                            "bio": gh_profile.get("bio") or card.get("bio", ""),
-                            "join_date": (gh_profile.get("created_at") or "")[:10],
-                            "repo_count": gh_profile.get("public_repos", 0),
-                            "followers": gh_profile.get("followers", 0),
-                        })
-
-    image_query = f"{name} {keywords} photo".strip()
-    web_images = await serpapi_image_search(image_query, 12)
-    img_source = "google_images" if web_images else "none"
-
-    confidence = _confidence_breakdown(platforms, social_cards)
-    if not social_cards:
-        person_overview = person_overview or (
-            "No public profile could be verified with enough confidence from the available search and profile evidence."
+    if not social_cards and not person_overview:
+        person_overview = (
+            "We could not find enough public information to build a profile for this person. "
+            "Try adding more context like their city, employer, or profession."
         )
-        identity_notes = identity_notes or "Try adding a city, employer, school, username, or profession to reduce same-name matches."
-    if verified_list:
-        confidence["score"] = min(100, confidence["score"] + 15)
-        confidence["signals"].append("AI verified profile page content (+15)")
-    confirmed_urls = {
-        (info.get("url") or "").rstrip("/")
-        for info in platforms.values()
-        if info and info.get("found") and info.get("url")
-    }
-    display_urls = []
-    for u in all_urls:
-        abs_u = (_abs_url(u) or "").rstrip("/")
-        if re.search(r"github\.com/[\w\-]+", abs_u, re.I) and abs_u not in confirmed_urls:
-            continue
-        display_urls.append(u)
+        identity_notes = identity_notes or (
+            "Try adding a city, employer, school, username, or profession to reduce same-name matches."
+        )
 
     return {
         "name": name,
         "keywords": keywords,
-        "raw_results": raw_results,
-        "identity_evidence": identity,
-        "search_source": "ai_agent",
         "person_overview": person_overview,
+        "best_match_confidence": best_match_confidence,
         "identity_notes": identity_notes,
-        "investigation_plan": plan.get("investigation_summary", ""),
-        "verified_images": [],
-        "web_images": web_images,
-        "images": web_images,
-        "image_source": img_source,
         "platforms": platforms,
         "social_cards": social_cards,
-        "breach_signal": False,
-        "breach_count": 0,
-        "breach_sources": [],
-        "breaches": [],
-        "serpapi_configured": bool(os.getenv("SERPAPI_KEY")),
+        "personal_website": personal_website,
+        "news_mentions": news_mentions,
+        "web_images": web_images,
+        "profile_images": profile_images,
+        "all_images": all_images,
+        "breach_data": breach_data,
+        "raw_results": raw_results[:30],
         "confidence_breakdown": confidence,
-        "all_urls": display_urls[:20],
+        "all_urls": all_urls[:30],
+        "search_source": "akili_agent",
         "agentic_notes": agentic_notes + [
-            "Person scan is AI-led: investigation plan → profile fetch → content verification.",
-            "Social handles are shown only after AI confirms page content matches the subject.",
+            "Person scan: investigation plan → parallel fetch → content verification.",
             identity_notes,
         ],
+        "investigation_plan": plan.get("investigation_summary", ""),
+        "serpapi_configured": bool(os.getenv("SERPAPI_KEY")),
     }
-
-
-async def _fetch_profile_pages(social_cards: list[dict]) -> None:
-    """Fetch profile pages for discovered social cards and attach a short text excerpt.
-
-    Modifies `social_cards` in-place, adding a `fetched_profile` dict with `status`,
-    `text_snippet`, and `meta` (title/description) when available.
-    """
-    import asyncio
-    import httpx
-    from agentic_policy import is_allowed_target, extract_domain
-    from tools.crawl_utils import rate_limit_domain
-    async def _fetch(card: dict):
-        url = card.get('url') or card.get('profile_url')
-        if not url:
-            return card
-        # Enforce agentic policy and per-domain rate limits
-        try:
-            if not is_allowed_target(url):
-                card['fetched_profile'] = {'status': 0, 'text_snippet': None, 'url': url, 'blocked': True}
-                return card
-            domain = extract_domain(url) or ''
-            if domain:
-                await rate_limit_domain(domain, min_interval=0.6)
-        except Exception:
-            pass
-        try:
-            async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
-                r = await client.get(url, headers={"User-Agent": "AKILI-Platform/1.0"})
-                text = r.text or ""
-                # extract title and meta description
-                title_m = re.search(r"<title>([^<]+)</title>", text[:10000], re.I)
-                desc_m = re.search(r'<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']+)', text[:20000], re.I)
-                og_m = re.search(r'<meta[^>]+property=["\']og:description["\'][^>]+content=["\']([^"\']+)', text[:20000], re.I)
-                snippet = None
-                # prefer visible h1 or first 600 chars of text
-                h1_m = re.search(r"<h1[^>]*>([^<]+)</h1>", text[:20000], re.I)
-                if h1_m:
-                    snippet = h1_m.group(1).strip()
-                else:
-                    # strip tags and collapse whitespace for snippet
-                    plain = re.sub(r"<[^>]+>", " ", text[:20000])
-                    plain = " ".join(plain.split())
-                    snippet = plain[:600]
-                card['fetched_profile'] = {
-                    'status': r.status_code,
-                    'title': title_m.group(1).strip() if title_m else None,
-                    'description': (desc_m.group(1).strip() if desc_m else (og_m.group(1).strip() if og_m else None)),
-                    'text_snippet': snippet,
-                    'url': url,
-                }
-        except Exception:
-            card['fetched_profile'] = {'status': 0, 'text_snippet': None, 'url': url}
-        return card
-
-    tasks = [_fetch(card) for card in social_cards[:8]]
-    try:
-        await asyncio.gather(*tasks)
-    except Exception:
-        pass
 
 
 def run_person_collect(name: str, keywords: str) -> dict[str, Any]:
