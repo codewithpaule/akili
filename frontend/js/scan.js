@@ -165,7 +165,10 @@
   }
 
   function stripPrefix(line) {
-    return line.replace(/^\[[A-Z]+\]\s*/, '').trim();
+    const human = humanizeTerminalLine(line);
+    const m = human.match(/^\[[A-Z]+\]\s*(.*)$/);
+    if (m) return m[1].trim();
+    return human.replace(/^\[[A-Z]+\]\s*/, '').trim();
   }
 
   function updateLiveStatus(line) {
@@ -188,10 +191,11 @@
     text.split('\n').forEach((line) => {
       const trimmed = line.trim();
       if (!trimmed || trimmed.startsWith('COMPLETE:')) return;
-      if (session) session.lines.push(trimmed);
+      const display = humanizeTerminalLine(trimmed);
+      if (session) session.lines.push(display);
       const el = document.createElement('div');
       el.className = lineClass(trimmed);
-      el.textContent = trimmed;
+      el.textContent = display;
       terminal.appendChild(el);
       if (/^\[(THINK|PLAN|PROGRESS|TOOL|AI|AKILI)\]/.test(trimmed)) {
         updateLiveStatus(trimmed);
@@ -282,10 +286,17 @@
 
   function websiteVerdict(report, findings) {
     const grade = (report.grade || '').toUpperCase();
-    if (grade === 'A' || grade === 'B') return 'Looks reasonably healthy from this quick check.';
-    if (grade === 'C') return 'Usable, but there are visible security headers or configuration gaps.';
-    if (grade) return 'Needs attention before it should be treated as production-grade.';
+    if (grade === 'A' || grade === 'B') return 'This site looks well configured. Keep it that way.';
+    if (grade === 'F' || grade === 'D') return 'This site has serious issues that need attention right away.';
+    if (grade === 'C') return 'Usable, but there are visible security gaps worth fixing.';
     return findings.length ? 'Quick check found issues worth reviewing.' : 'Quick check completed.';
+  }
+
+  function gradeNote(grade) {
+    const g = (grade || '').toUpperCase();
+    if (g === 'F' || g === 'D') return 'This site has serious issues that need attention right away.';
+    if (g === 'A' || g === 'B') return 'This site looks well configured. Keep it that way.';
+    return '';
   }
 
   function findingLink(f) {
@@ -295,7 +306,8 @@
   function renderWebsite(report) {
     const grade = (report.grade || '—').toUpperCase();
     const gradeEl = document.getElementById('grade');
-    if (gradeEl) gradeEl.innerHTML = `<div class="grade-lg grade-${grade}">${grade}</div>`;
+    const gradeNoteText = gradeNote(grade);
+    if (gradeEl) gradeEl.innerHTML = `<div class="grade-lg grade-${grade}">${grade}</div>${gradeNoteText ? `<p style="margin-top:0.5rem;color:var(--slate)">${AKILI.escapeHtml(gradeNoteText)}</p>` : ''}`;
     const sumEl = document.getElementById('summary');
     if (sumEl) {
       const topFindings = report.top_findings || report.findings || [];
@@ -792,9 +804,38 @@
     if (typeof AKILI.refreshHealth === 'function') AKILI.refreshHealth();
   }
 
+  const EMIT_LABELS = {
+    THINK: 'Thinking through the findings...',
+    TOOL: 'Running a check...',
+    FOUND: 'Found something worth noting',
+    CRITICAL: 'Found a serious issue',
+    PLAN: 'Planning the next step',
+    OK: 'Check complete',
+    DONE: 'Wrapping up the report',
+    AI: 'Analyzing with AI',
+    PROGRESS: null,
+    AKILI: null,
+  };
+
+  function humanizeTerminalLine(line) {
+    const m = line.match(/^\[([A-Z]+)\]\s*(.*)$/);
+    if (!m) return line;
+    const label = EMIT_LABELS[m[1]];
+    if (label === null) return line.replace(/^\[([A-Z]+)\]\s*/, '').trim() ? line : line;
+    if (label) return label + (m[2] ? ': ' + m[2] : '');
+    return line;
+  }
+
   function scanErrorMessage(err, fallback = 'Scan failed') {
     const detail = err && (err.detail || err.message || err.error || err);
-    if (typeof detail === 'string') return detail;
+    if (typeof detail === 'string') {
+      const d = detail.toLowerCase();
+      if (d.includes('timeout') || d.includes('timed out')) return 'The scan took too long to respond. Try again in a moment.';
+      if (d.includes('network') || d.includes('failed to fetch')) return 'Could not reach the AKILI server. Check your connection and try again.';
+      if (d.includes('invalid') || d.includes('validation')) return 'That does not look right. Double-check the address and try again.';
+      if (d.includes('rate limit') || d.includes('429') || d.includes('too many')) return 'You have run quite a few scans recently. Wait a minute and try again.';
+      return detail;
+    }
     if (detail && typeof detail.message === 'string') return detail.message;
     if (detail && typeof detail.detail === 'string') return detail.detail;
     if (detail && typeof detail.error === 'string') return detail.error;
@@ -866,7 +907,7 @@
               sessionStore.delete(thisScanId);
               renderSessionList();
               btn.disabled = false;
-              btn.textContent = cfg_now.buttonLabel || 'SCAN';
+              btn.textContent = cfg_now.buttonLabel || 'Run scan';
               showResultsLoading(false);
               document.body.classList.remove('akili-scan-active');
               return;
@@ -883,7 +924,7 @@
               sessionStore.delete(thisScanId);
               renderSessionList();
               btn.disabled = false;
-              btn.textContent = cfg_now.buttonLabel || 'SCAN';
+              btn.textContent = cfg_now.buttonLabel || 'Run scan';
               showResultsLoading(false);
               document.body.classList.remove('akili-scan-active');
               return;

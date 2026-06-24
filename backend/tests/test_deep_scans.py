@@ -124,16 +124,15 @@ class TestAgentIntegration:
     
     def test_agent_includes_deep_scans(self):
         """Test that agent.py includes deep scan tools."""
-        from agent import BASELINE_TOOLS, TOOL_MAP
-        
-        # Check that deep scan tools are in baseline
-        website_tools = BASELINE_TOOLS.get("website", [])
-        assert "port_scanner" in website_tools
-        assert "tech_fingerprint" in website_tools
-        assert "link_crawler" in website_tools
-        assert "cve_lookup" in website_tools
-        
-        # Check that tools are mapped
+        from agent import TOOL_MAP, TOOL_DEFINITIONS
+
+        tool_names = {d["function"]["name"] for d in TOOL_DEFINITIONS}
+        assert "port_scanner" in tool_names
+        assert "tech_fingerprint" in tool_names
+        assert "link_crawler" in tool_names
+        assert "cve_lookup" in tool_names
+        assert "web_search" in tool_names
+
         assert "port_scanner" in TOOL_MAP
         assert "tech_fingerprint" in TOOL_MAP
         assert "cve_lookup" in TOOL_MAP

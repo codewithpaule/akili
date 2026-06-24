@@ -206,6 +206,8 @@
     document.querySelectorAll('.nav-links a[data-page]').forEach((a) => {
       if (a.getAttribute('data-page') === path) a.classList.add('active');
     });
+    const apiDocs = document.getElementById('nav-api-docs');
+    if (apiDocs) apiDocs.href = `${API()}/docs`;
   }
 
   const HEALTH_COLORS = { ok: '#22C55E', warn: '#F59E0B', err: '#EF4444', idle: '#94A3B8' };
@@ -618,7 +620,6 @@
     const TOOL_MODULES = [
       { href: 'api-search.html', icon: 'search', color: 'var(--navy)', name: 'API Search', desc: 'Search the API and docs' },
       { href: 'quick-scan.html', icon: 'zap', color: '#f59e0b', name: 'Quick Scan', desc: 'No login — light website or email check' },
-      { href: 'sandbox.html', icon: 'flask-conical', color: 'var(--slate)', name: 'Sandbox Demo', desc: 'Mock data, no live targets' },
       { href: 'developer.html', icon: 'terminal', color: 'var(--navy)', name: 'Developers', desc: 'Named API keys & limits' },
     ];
 
@@ -700,7 +701,7 @@
                   </a>
                 </li>
                 <li>
-                  <a href="docs.html" class="sidebar-menu-item${path === 'docs.html' ? ' active' : ''}" style="--accent:var(--blue)">
+                  <a href="#" id="global-sidebar-api-docs" class="sidebar-menu-item" style="--accent:var(--blue)" target="_blank" rel="noopener">
                     <span class="sidebar-menu-icon" style="background:var(--blue-light);color:var(--blue)"><i data-lucide="book-open"></i></span>
                     <span class="sidebar-menu-text">API Docs</span>
                   </a>
@@ -785,6 +786,9 @@
         location.href = 'index.html';
       });
     }
+
+    const globalDocs = layout.querySelector('#global-sidebar-api-docs');
+    if (globalDocs) globalDocs.href = `${API().replace(/\/$/, '')}/docs`;
 
     if (typeof lucide !== 'undefined') {
       lucide.createIcons();

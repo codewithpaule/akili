@@ -3,16 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AKILI — See everything others miss.</title>
+  <title>AKILI | See everything others miss.</title>
   <link rel="icon" href="/logo.svg" type="image/svg+xml">
-  <meta name="description" content="AKILI combines cybersecurity scanning, OSINT, and agent-driven analysis — one platform for security intelligence.">
-  <meta property="og:title" content="AKILI — See everything others miss.">
-  <meta property="og:description" content="AKILI combines cybersecurity scanning, OSINT, and agent-driven analysis — one platform for security intelligence.">
+  <meta name="description" content="AKILI combines cybersecurity scanning, OSINT, and a planning-first AI agent on one platform.">
+  <meta property="og:title" content="AKILI | See everything others miss.">
+  <meta property="og:description" content="AKILI combines cybersecurity scanning, OSINT, and a planning-first AI agent on one platform.">
   <meta property="og:image" content="https://akili.com.ng/logo.svg">
   <meta property="og:url" content="https://akili.com.ng">
   <meta name="twitter:site" content="@akili">
-  <meta name="twitter:title" content="AKILI — See everything others miss.">
-  <meta name="twitter:description" content="AKILI combines cybersecurity scanning, OSINT, and agent-driven analysis — one platform for security intelligence.">
+  <meta name="twitter:title" content="AKILI | See everything others miss.">
+  <meta name="twitter:description" content="AKILI combines cybersecurity scanning, OSINT, and a planning-first AI agent on one platform.">
   <meta name="twitter:image" content="https://akili.com.ng/logo.svg">
   <script type="application/ld+json">
   {
@@ -48,12 +48,12 @@
       </div>
       <span class="pill">Intelligence Platform</span>
       <h1 class="hero-tagline"><span id="type-line1">See everything</span> <span class="accent cursor-blink" id="type-line2"></span></h1>
-      <p class="hero-sub fade-up" id="hero-sub" style="opacity:0">AKILI combines cybersecurity scanning, OSINT, and agent-driven analysis — one platform, one blinking eye on what others miss.</p>
+      <p class="hero-sub fade-up" id="hero-sub" style="opacity:0">AKILI plans each investigation before it runs a single check. You get streaming scans, clear reports, and an agent that searches the web when the evidence runs thin.</p>
       <div class="hero-cta fade-up" id="hero-cta" style="opacity:0">
         <a href="scan-website.html" class="btn btn-primary">Start Scanning</a>
-        <a href="docs.html" class="btn btn-outline">View Docs</a>
+        <a href="#" id="hero-api-docs" class="btn btn-outline" target="_blank" rel="noopener">API docs</a>
       </div>
-      <p class="trust-line" id="trust-line" style="opacity:0">Used by security researchers, freelancers, and enterprises.</p>
+      <p class="trust-line" id="trust-line" style="opacity:0">Built for researchers, freelancers, and teams who need answers fast.</p>
     </div>
     <div class="mac-terminal">
       <div class="mac-bar"><span class="mac-dot r"></span><span class="mac-dot y"></span><span class="mac-dot g"></span><span style="margin-left:0.5rem;font-size:0.7rem;color:#94A3B8">akili — live</span></div>
@@ -164,7 +164,7 @@
     <div class="graph-wrap" style="grid-template-columns:1fr 1fr">
       <div>
         <h2>Built for developers</h2>
-        <p style="color:var(--slate);margin:1rem 0">REST API with streaming scans, sandbox mode, and tiered rate limits.</p>
+        <p style="color:var(--slate);margin:1rem 0">REST API with streaming scans and tiered rate limits. Built on live AI analysis.</p>
         <a href="developer.html">Get API Key →</a>
       </div>
       <div class="code-block"><button class="btn btn-sm copy-btn" onclick="AKILI.copyText(document.getElementById('curl-ex').textContent)">Copy</button>
@@ -179,11 +179,11 @@
   <footer class="footer">
     <div class="container footer-grid">
       <div><a href="index.html" class="logo">AKILI</a><p style="color:var(--slate);margin-top:0.5rem;font-size:0.9rem">See everything others miss.</p></div>
-      <div><strong>Product</strong><br><a href="signup.html">Create account</a><br><a href="login.html">Sign in</a><br><a href="docs.html">Documentation</a></div>
+      <div><strong>Product</strong><br><a href="signup.html">Create account</a><br><a href="login.html">Sign in</a><br><a href="developer.html">Developers</a></div>
       <div><strong>Learn</strong><br><a href="about.html">About</a><br><a href="contact.html">Contact</a></div>
-      <div><strong>Company</strong><br><a href="about.html">About</a><br><a href="contact.html">Contact</a><br><a href="privacy.html">Privacy</a><br><a href="docs.html">Docs</a></div>
+      <div><strong>Company</strong><br><a href="about.html">About</a><br><a href="contact.html">Contact</a><br><a href="privacy.html">Privacy</a><br><a href="#" id="footer-api-docs" target="_blank" rel="noopener">API docs</a></div>
     </div>
-    <div class="footer-bottom">&copy; <span id="footer-year"></span> AKILI · Authorized security testing and due diligence only.</div>
+    <div class="footer-bottom">AKILI watches so you do not have to. &copy; <span id="footer-year"></span></div>
   </footer>
 
   <script src="js/config.runtime.js"></script>
@@ -196,19 +196,22 @@
       location.replace('dashboard.html');
     }
     const MODULES = [
-      { href:'scan-website.html', color:'var(--mod-website)', name:'Website Scan', desc:'Headers, SSL, ports, DNS' },
-      { href:'scan-vulnerability.html', color:'var(--mod-vuln)', name:'Vulnerability', desc:'CORS, CSRF, misconfigs' },
-      { href:'scan-subdomains.html', color:'var(--mod-subdomain)', name:'Subdomain Finder', desc:'Scan a domain to find its subdomains (very effective!)' },
-      { href:'scan-ip.html', color:'var(--mod-ip)', name:'IP Intelligence', desc:'Geo, ports, reputation' },
-      { href:'scan-organization.html', color:'var(--mod-org)', name:'Organization', desc:'ASN and footprint' },
-      { href:'person.html', color:'var(--mod-person)', name:'Person Search', desc:'Public OSINT due diligence' },
-      { href:'company.html', color:'var(--mod-company)', name:'Company Intel', desc:'Domains, people, stack' },
-      { href:'email.html', color:'var(--mod-email)', name:'Email Investigator', desc:'MX, breaches, validity' },
-      { href:'domain.html', color:'var(--mod-domain)', name:'Domain Reputation', desc:'Safe browsing, age, typos' },
-      // { href:'breaches.html', color:'#EF4444', name:'Nigerian Breaches', desc:'Nigerian compromised infrastructure feed' },
-      // Relationship Graph removed
-      { href:'api-search.html', color:'var(--navy)', name:'API Search', desc:'Search the API and docs' },
+      { href:'scan-website.html', color:'var(--mod-website)', name:'Website Scan', desc:'SSL, headers, and ports checked against what your site actually exposes.' },
+      { href:'scan-vulnerability.html', color:'var(--mod-vuln)', name:'Vulnerability', desc:'Common misconfigs and risky patterns surfaced in plain language.' },
+      { href:'scan-subdomains.html', color:'var(--mod-subdomain)', name:'Subdomain Finder', desc:'Hidden hosts and certificate trails mapped for your domain.' },
+      { href:'scan-ip.html', color:'var(--mod-ip)', name:'IP Intelligence', desc:'You see what services sit on a public IP and who hosts them.' },
+      { href:'scan-organization.html', color:'var(--mod-org)', name:'Organization', desc:'ASN footprint and related infrastructure in one view.' },
+      { href:'person.html', color:'var(--mod-person)', name:'Person Search', desc:'Public profiles verified before they land in your report.' },
+      { href:'company.html', color:'var(--mod-company)', name:'Company Intel', desc:'Domains, stack hints, and org context pulled together.' },
+      { href:'email.html', color:'var(--mod-email)', name:'Email Investigator', desc:'Breach exposure and mail setup checked in seconds.' },
+      { href:'domain.html', color:'var(--mod-domain)', name:'Domain Reputation', desc:'Age, typosquat risk, and reputation signals for a domain.' },
+      { href:'api-search.html', color:'var(--navy)', name:'API Search', desc:'Query AKILI endpoints from the browser.' },
     ];
+    const apiDocsUrl = (window.AKILI && AKILI.API ? AKILI.API() : (window.AKILI_CONFIG?.API_BASE || '')).replace(/\/$/, '') + '/docs';
+    const heroDocs = document.getElementById('hero-api-docs');
+    const footerDocs = document.getElementById('footer-api-docs');
+    if (heroDocs) heroDocs.href = apiDocsUrl;
+    if (footerDocs) footerDocs.href = apiDocsUrl;
     document.getElementById('modules-grid').innerHTML = MODULES.map(m => `
       <a href="${m.href}" class="module-card${m.premium ? ' locked' : ''}" data-module="${m.href.replace('.html','')}" style="--accent:${m.color}">
         <div class="module-icon" style="background:${m.color}22;color:${m.color}"><i data-lucide="shield"></i></div>

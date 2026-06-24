@@ -69,7 +69,6 @@ from tools.auth_scan import run_auth_scan
 from tools.api_scanner import scan_api
 from tools.verify_domain import check_txt_record, generate_token
 from rate_limit import get_tier_from_request, limiter, rate_limit_headers
-from sandbox import get_mock_report, stream_sandbox
 from api_middleware import APIKeyValidationMiddleware, validate_api_request
 from security import (
     MAX_BODY_BYTES,
@@ -1501,7 +1500,7 @@ async def proxy_fetch(request: Request, body: ProxyBody, user: dict = Depends(re
         try:
             # ask LLM to summarize the response
             user_ctx = json.dumps({"url": url, "method": method, "status": resp.status_code, "headers": dict(resp.headers), "body": data}, default=str)
-            analysis, provider = ask_llm(API_SCAN_PROMPT, user_ctx, allow_ensemble=True)
+            analysis, provider = ask_llm(API_SCAN_PROMPT, user_ctx)
             out["analysis"] = {"provider": provider, "result": analysis}
         except Exception:
             out["analysis_error"] = "LLM analysis failed"
@@ -1705,31 +1704,6 @@ async def scan_api(request: Request, body: UrlBody):
     log_scan(scan_id, "api")
     return _stream_agent("api", url, scan_id, user["user_id"], scan_tier=tier_for_user(user))
 
-
-# Sandbox routes
-SANDBOX_MODULES = ["website", "vulnerability", "subdomains", "ip", "organization", "person", "company", "email", "domain", "api", "link"]
-
-
-def _make_sandbox_route(module: str):
-    async def sandbox_scan(request: Request, scenario: str = "clean_scan"):
-        # Sandbox serves mock data only — auth is optional.
-        # enforce_scan_access already handles user=None safely.
-        user = get_current_user_from_request(request)
-        enforce_scan_access(user, module, sandbox=True)
-        async def gen():
-            async for line in stream_sandbox(module, scenario):
-                yield line
-        return StreamingResponse(gen(), media_type="text/plain")
-    return sandbox_scan
-
-
-for _mod in SANDBOX_MODULES:
-    app.add_api_route(f"/api/v1/sandbox/scan/{_mod}", _make_sandbox_route(_mod), methods=["POST"])
-
-
-@app.get("/api/v1/sandbox/report/{module}")
-async def sandbox_report(module: str, scenario: str = "clean_scan"):
-    return get_mock_report(module, scenario)
 
 
 @app.get("/api/v1/public/report/{share_token}")

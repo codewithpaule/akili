@@ -81,18 +81,72 @@ def _set_cached_result(tool: str, target: str, result: Any):
     }
 
 
-BASELINE_TOOLS = {
-    "website": ["ssl_check", "headers", "fingerprint", "whois_check", "ports", "port_scanner", "tech_fingerprint", "link_crawler", "cve_lookup"],
-    "vulnerability": ["vulnerability", "headers", "tech_fingerprint", "cve_lookup"],
-    "subdomains": ["subdomains"],
-    "ip": ["ip_intel", "ports", "port_scanner"],
-    "organization": ["org_scan"],
-    "person": ["osint_person"],
-    "company": ["org_scan", "fingerprint", "tech_fingerprint"],
-    "email": ["email_intel"],
-    "domain": ["domain_rep", "whois_check"],
-    "api": ["headers", "fingerprint", "ssl_check", "ports", "tech_fingerprint", "cve_lookup"],
-}
+PLANNING_PROMPT = """You are AKILI, an autonomous cybersecurity intelligence agent.
+A scan has just been requested. Before running anything, think carefully about what
+actually matters for this target.
+
+Scan type: {module}
+Target: {target}
+
+Your job is to build a focused investigation plan. Choose only the tools that will
+reveal genuine security value for this specific target. Do not include tools just because
+they exist. Prefer depth over breadth.
+
+Available tools: {available_tools}
+
+Reply in valid JSON only:
+{{
+  "plan": [
+    {{"tool": "tool_name", "reason": "one sentence explaining what this reveals", "priority": "high|medium|low"}},
+    ...
+  ],
+  "investigation_goal": "one sentence describing what you are trying to find out"
+}}
+
+Maximum {max_tools} tools. Order them from most important to least important."""
+
+CONFIDENCE_REVISE_PROMPT = """You are AKILI reviewing an ongoing security investigation.
+Based on findings so far, respond in valid JSON only:
+{{
+  "confidence": <0-100 integer>,
+  "plan": [{{"tool": "tool_name", "reason": "one sentence", "priority": "high|medium|low"}}],
+  "investigation_goal": "optional updated goal"
+}}
+confidence means how sure you are you have enough evidence for a meaningful report.
+Only include tools not in already_used. Maximum 6 tools in plan."""
+
+AGENT_SYSTEM_PROMPT = """You are AKILI, an autonomous cybersecurity intelligence agent.
+Run security tools to investigate the target. Use web_search when scan evidence is not
+enough to draw a conclusion. Respond with tool calls when you need more data."""
+
+def _target_param_schema(description: str = "URL, hostname, IP, email, or identifier"):
+    return {
+        "type": "object",
+        "properties": {"target": {"type": "string", "description": description}},
+        "required": ["target"],
+    }
+
+TOOL_DEFINITIONS = [
+    {"type": "function", "function": {"name": "ssl_check", "description": "Check TLS certificate validity, chain, expiry, and cipher strength", "parameters": _target_param_schema("URL or hostname to scan")}},
+    {"type": "function", "function": {"name": "headers", "description": "Analyze HTTP security headers, cookies, redirects, and page metadata", "parameters": _target_param_schema()}},
+    {"type": "function", "function": {"name": "whois_check", "description": "WHOIS registration and DNS records for a domain", "parameters": _target_param_schema()}},
+    {"type": "function", "function": {"name": "dns", "description": "DNS record lookup only (A, MX, TXT, NS)", "parameters": _target_param_schema()}},
+    {"type": "function", "function": {"name": "ports", "description": "Probe common open ports and services", "parameters": _target_param_schema()}},
+    {"type": "function", "function": {"name": "port_scanner", "description": "Extended port scan with service detection", "parameters": _target_param_schema()}},
+    {"type": "function", "function": {"name": "fingerprint", "description": "Detect web technologies and frameworks", "parameters": _target_param_schema()}},
+    {"type": "function", "function": {"name": "tech_fingerprint", "description": "Deep technology fingerprint with versions", "parameters": _target_param_schema()}},
+    {"type": "function", "function": {"name": "cve_lookup", "description": "Look up CVEs for detected software versions", "parameters": {"type": "object", "properties": {"target": {"type": "string", "description": "Hostname context"}}, "required": []}}},
+    {"type": "function", "function": {"name": "exposed_files", "description": "Probe for exposed config, backup, and sensitive files", "parameters": _target_param_schema()}},
+    {"type": "function", "function": {"name": "vulnerability", "description": "Check for common web vulnerability patterns", "parameters": _target_param_schema()}},
+    {"type": "function", "function": {"name": "subdomains", "description": "Discover subdomains via certificate transparency and DNS", "parameters": _target_param_schema("Domain or hostname")}},
+    {"type": "function", "function": {"name": "ip_intel", "description": "Geolocation, ASN, reverse DNS, and hosted domains for an IP", "parameters": _target_param_schema("Public IP address")}},
+    {"type": "function", "function": {"name": "org_scan", "description": "Organization footprint and ASN intelligence", "parameters": _target_param_schema("Organization name or domain")}},
+    {"type": "function", "function": {"name": "email_intel", "description": "Email breach check, MX validation, disposable detection", "parameters": _target_param_schema("Email address")}},
+    {"type": "function", "function": {"name": "domain_rep", "description": "Domain reputation and blacklist checks", "parameters": _target_param_schema("Domain name")}},
+    {"type": "function", "function": {"name": "osint_person", "description": "Person OSINT across public profiles and web sources", "parameters": _target_param_schema("Person name or name|keywords")}},
+    {"type": "function", "function": {"name": "link_crawler", "description": "Crawl links and discover hidden paths on a website", "parameters": _target_param_schema()}},
+    {"type": "function", "function": {"name": "web_search", "description": "Search the web for current threat intelligence, CVE details, breach news, or public information about a target. Use when scan evidence is not enough.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "A focused search query"}, "intent": {"type": "string", "description": "What you are hoping to find"}}, "required": ["query"]}}},
+]
 
 TOOL_MAP = {
     "ssl_check": lambda t, c: ssl_check.run(_as_url(t), c),
@@ -118,45 +172,8 @@ TOOL_MAP = {
     "tech_fingerprint": lambda t, c: run_tech_fingerprint(_as_url(t), c),
     "cve_lookup": lambda t, c: run_cve_lookup(c.get("technologies", []), c),
     "link_crawler": lambda t, c: run_link_crawler(_as_url(t), c),
+    "web_search": lambda t, c: _web_search(c.get("_tool_query", t), c.get("_tool_intent", ""), c),
 }
-
-# Modules that only run baseline tools — no follow-up AI tool picker (avoids nmap on names)
-SINGLE_PASS_MODULES = frozenset({"email", "domain", "subdomains"})
-
-PERSON_NEXT_ACTION_PROMPT = """You are AKILI verifying a person investigation. Read evidence and decide the next step.
-Available actions: run osint_person again is NOT allowed. You may open specific profile URLs to read more public page content.
-
-Already opened pages: {open_pages}
-Verified so far: {verified_count} profile(s)
-
-Respond ONLY in JSON:
-{{"actions":[{{"type":"open_page","url":"https://..."}}], "done":false, "reason":"why"}}
-Or when complete: {{"done":true, "reason":"profiles verified"}}
-Open at most 1 new profile URL per step. Only linkedin.com, github.com, x.com, twitter.com, instagram.com URLs."""
-
-TOOL_ALIASES = {
-    "nmap": "ports",
-    "port_scan": "ports",
-    "ssl": "ssl_check",
-    "whois": "whois_check",
-    "exposed": "exposed_files",
-}
-
-NEXT_ACTION_PROMPT = """You are AKILI's senior autonomous cybersecurity triage engine running an authorized assessment.
-Your job is to push the scan deeper without wasting a tool call. Read the evidence, identify the riskiest unresolved question, and pick exactly one next tool.
-
-Think like an operator and a defender:
-- If exposed services, databases, admin panels, weak TLS, missing headers, leaked files, suspicious domains, stale technologies, or takeover paths appear, choose the tool that can confirm impact or collect better evidence.
-- Prefer evidence-rich checks over cosmetic checks.
-- Do not repeat tools already used.
-- Stop only when every useful tool has run or no remaining tool can add meaningful security evidence.
-
-Available tools: {available_tools}
-Already used: {used_tools}
-
-Respond ONLY in valid JSON:
-{{"tool": "tool_name", "reason": "one clear sentence explaining the defensive value", "priority": "high|medium|low"}}
-Or if complete: {{"done": true, "reason": "all meaningful checks complete"}}"""
 
 FINAL_WEBSITE_PROMPT = """You are a senior cybersecurity analyst preparing a report that should make a real software owner want to patch. Use ONLY the evidence JSON provided.
 Produce assessment JSON:
@@ -211,6 +228,36 @@ Rules:
 - If weak evidence, overall_assessment "verify further", confidence 40-70.
 - Return valid JSON only.
 """
+
+
+def _web_search(query: str, intent: str, context: dict) -> dict:
+    from tools.async_util import run_async
+    from tools.fallbacks import serpapi_search
+
+    query = (query or "").strip()
+    if not query:
+        return {
+            "tool": "web_search",
+            "severity": "INFO",
+            "title": "Web search",
+            "summary": "No search query provided",
+            "findings": [],
+            "raw": {"query": "", "results": []},
+        }
+
+    async def _run():
+        return await serpapi_search(query, "google", num=8)
+
+    results = run_async(_run()) or []
+    return {
+        "tool": "web_search",
+        "severity": "INFO",
+        "title": "Web search",
+        "summary": f"Found {len(results)} result(s) for: {query[:100]}",
+        "detail": intent or query,
+        "raw": {"query": query, "intent": intent, "results": results[:10], "serpapi_configured": bool(os.getenv("SERPAPI_KEY", "").strip())},
+        "findings": [],
+    }
 
 
 def _as_url(target: str) -> str:
@@ -284,17 +331,34 @@ def parse_json_response(text: str) -> dict:
 
 
 def ask_groq(system: str, user: str, scan_tier: str = "trial", expected_schema: str | None = None) -> dict:
-    """Groq → Gemini (free) → rule-based fallback.
-
-    If `scan_tier` == 'premium' then allow ensemble calls to all configured providers.
-    """
+    """Groq → Gemini (free) → rule-based fallback."""
     from llm import ask_llm
-    # Always prefer ensemble across providers to improve reliability; providers without keys are skipped.
-    allow_ensemble = True
-    data, provider = ask_llm(system, user, allow_ensemble=allow_ensemble, expected_schema=expected_schema)
+    data, provider = ask_llm(system, user, expected_schema=expected_schema)
     if provider != "groq":
-        logger.info("LLM provider=%s (ensemble=%s)", provider, allow_ensemble)
+        logger.info("LLM provider=%s", provider)
     return data
+
+
+def _groq_chat(messages: list, tools: list | None = None, tool_choice: str = "auto"):
+    if not GROQ_API_KEY:
+        return None
+    client = _get_client()
+    if not client:
+        return None
+    kwargs: dict[str, Any] = {
+        "model": GROQ_MODEL,
+        "messages": messages,
+        "temperature": 0.0,
+        "max_tokens": 4096,
+    }
+    if tools:
+        kwargs["tools"] = tools
+        kwargs["tool_choice"] = tool_choice
+    try:
+        return client.chat.completions.create(**kwargs)
+    except Exception as e:
+        logger.warning("Groq tool chat failed: %s", str(e)[:200])
+        return None
 
 
 def _email_intel_from_context(context: dict) -> dict:
@@ -466,6 +530,7 @@ TOOL_LABELS = {
     "email_intel": "email reputation",
     "domain_rep": "domain reputation",
     "osint_person": "person OSINT (AI-led)",
+    "web_search": "web threat intelligence search",
     "dns": "DNS records",
 }
 
@@ -506,15 +571,11 @@ def stream_line(kind: str, msg: str) -> str:
     return f"{prefix} {msg}\n"
 
 
-def _normalize_tool(name: str) -> str:
-    if not name:
-        return ""
-    key = str(name).strip().lower().replace(" ", "_")
-    return TOOL_ALIASES.get(key, key)
-
-
-def run_tool(name: str, target: str, context: dict) -> dict | None:
-    name = _normalize_tool(name)
+def run_tool(name: str, target: str, context: dict, tool_args: dict | None = None) -> dict | None:
+    name = str(name or "").strip().lower()
+    if tool_args:
+        context["_tool_query"] = tool_args.get("query", "")
+        context["_tool_intent"] = tool_args.get("intent", "")
     module = context.get("module", "")
     
     # Check cache for expensive tools
@@ -571,8 +632,8 @@ def run_tool(name: str, target: str, context: dict) -> dict | None:
 
 def get_available_tools(module: str) -> list[str]:
     if module == "person":
-        return ["osint_person"]
-    base = ["headers", "ssl_check", "whois_check", "dns", "ports", "port_scanner", "fingerprint", "tech_fingerprint", "cve_lookup", "exposed_files", "link_crawler", "vulnerability", "subdomains"]
+        return ["osint_person", "web_search"]
+    base = ["headers", "ssl_check", "whois_check", "dns", "ports", "port_scanner", "fingerprint", "tech_fingerprint", "cve_lookup", "exposed_files", "link_crawler", "vulnerability", "subdomains", "web_search"]
     if module == "ip":
         return ["ip_intel", "ports", "port_scanner"]
     if module == "email":
@@ -704,6 +765,54 @@ def _fallback_report(context: dict) -> dict:
     return {"grade": grade, "score": score, "summary": "Automated scan completed.", "findings": findings}
 
 
+def _stream_tool_result(result: dict, tool: str, _emit) -> Generator[str, None, None]:
+    if not result:
+        yield _emit("OK", f"{_tool_label(tool)} finished")
+        return
+    sev = str(result.get("severity", "info")).upper()
+    yield _emit("OK", f"{_tool_label(tool)} complete")
+    yield _emit("FOUND" if sev not in ("CRITICAL",) else "CRITICAL", result.get("summary", result.get("title", "")))
+    for f in result.get("findings", []):
+        fs = str(f.get("severity", "INFO")).upper()
+        yield _emit("CRITICAL" if fs == "CRITICAL" else "FOUND", f.get("name", ""))
+    try:
+        raw = result.get("raw", {}) or {}
+        if result.get("tool") in ("exposed_files", "exposed"):
+            for a in raw.get("attempted", [])[:60]:
+                path = a.get("path") or ""
+                status = a.get("status") or 0
+                acc = a.get("accessible")
+                note = "confirmed" if acc else "not found"
+                yield _emit("TOOL", f"Probing {path} → HTTP {status} ({note})")
+        if result.get("tool") in ("ports", "port_scanner", "port_scan"):
+            for p in (raw.get("ports") or raw.get("open_ports") or []):
+                yield _emit("FOUND", f"Port {p.get('port')} open ({p.get('service')})")
+        if result.get("tool") == "subdomains":
+            for s in (raw.get("active_subdomains") or raw.get("subdomains") or [])[:40]:
+                name = s.get("subdomain") or ""
+                if name:
+                    bits = [name]
+                    if s.get("ip"):
+                        bits.append(str(s.get("ip")))
+                    if s.get("http_status"):
+                        bits.append(f"HTTP {s.get('http_status')}")
+                    yield _emit("FOUND", "Subdomain: " + " - ".join(bits))
+        if result.get("tool") in ("tech_fingerprint", "fingerprint"):
+            techs = raw.get("technologies") or raw.get("tech_stack") or []
+            for t in techs[:20]:
+                nm = t.get("name") or ""
+                ver = t.get("version") or ""
+                if nm:
+                    yield _emit("TOOL", f"Detected tech: {nm}" + (f" {ver}" if ver else ""))
+        if result.get("tool") == "web_search":
+            for r in (raw.get("results") or [])[:5]:
+                title = r.get("title") or r.get("link") or ""
+                if title:
+                    yield _emit("FOUND", title[:120])
+    except Exception:
+        pass
+
+
 def run_agent(
     module: str,
     target: str,
@@ -728,11 +837,13 @@ def run_agent(
     # scan_id available to all tools (e.g. fingerprint snapshots)
     tool_count = 0
 
-    from scan_profile import baseline_tools, profile_for_tier
+    from scan_profile import profile_for_tier
 
     prof = profile_for_tier(scan_tier)
     if scan_tier == "guest":
         lite = True
+    max_plan_tools = 2 if lite else 6
+
     def _emit(kind: str, msg: str) -> str:
         line = stream_line(kind, msg)
         try:
@@ -741,218 +852,168 @@ def run_agent(
             pass
         return line
 
-    def _allowed_open_url(url: str) -> bool:
-        try:
-            p = urlparse(url)
-            host = (p.hostname or '').lower()
-            if not host:
-                return False
-            if module == "person":
-                from tools.person_agent import is_social_profile_url
-                if is_social_profile_url(url):
-                    return True
-            target_host = urlparse(target).hostname or ''
-            if target_host and host == target_host:
-                return True
-            if AGENT_ALLOWED_HOSTS and host in AGENT_ALLOWED_HOSTS:
-                return True
-            return False
-        except Exception:
-            return False
-
-    yield _emit("AKILI", f"Starting deep {module} assessment… ({prof.get('label', scan_tier)})")
+    yield _emit("AKILI", f"Starting {module} assessment ({prof.get('label', scan_tier)})")
     yield _emit("THINK", f"Target: {target[:120]}")
-    yield _emit("THINK", prof.get("description", "Running security checks…")[:200])
+    yield _emit("PLAN", "Building investigation plan before running any tools")
 
-    baselines = baseline_tools(module, scan_tier) or BASELINE_TOOLS.get(module, ["headers"])
-    for i, tool in enumerate(baselines, 1):
-        label = _tool_label(tool)
-        yield _emit("PROGRESS", f"Step {i}/{len(baselines)} — now checking {label}…")
-        if tool == "osint_person":
-            yield _emit("THINK", "AI planning investigation & verifying profile pages…")
-        yield _emit("TOOL", f"Running {_tool_label(tool)}…")
-        context["scan_id"] = scan_id
-        result = run_tool(tool, target, context)
-        tool_count += 1
-        if result:
-            sev = str(result.get("severity", "info")).upper()
-            yield _emit("OK", f"{_tool_label(tool)} complete")
-            yield _emit("FOUND" if sev not in ("CRITICAL",) else "CRITICAL", result.get("summary", result.get("title", "")))
-            for f in result.get("findings", []):
-                fs = str(f.get("severity", "INFO")).upper()
-                yield _emit("CRITICAL" if fs == "CRITICAL" else "FOUND", f.get("name", ""))
-            # Stream tool-specific details for better session visibility
-            try:
-                raw = result.get('raw', {}) or {}
-                if result.get('tool') in ('exposed_files', 'exposed'):
-                    for a in raw.get('attempted', [])[:60]:
-                        path = a.get('path') or ''
-                        status = a.get('status') or 0
-                        acc = a.get('accessible')
-                        note = 'confirmed' if acc else 'not found'
-                        yield _emit('TOOL', f"Probing {path} → HTTP {status} ({note})")
-                if result.get('tool') in ('ports', 'port_scanner', 'port_scan'):
-                    for p in (raw.get('ports') or raw.get('open_ports') or []):
-                        yield _emit('FOUND', f"Port {p.get('port')} open ({p.get('service')})")
-                if result.get('tool') == 'subdomains':
-                    for s in (raw.get('active_subdomains') or raw.get('subdomains') or [])[:40]:
-                        name = s.get('subdomain') or ''
-                        if name:
-                            bits = [name]
-                            if s.get('ip'):
-                                bits.append(str(s.get('ip')))
-                            if s.get('http_status'):
-                                bits.append(f"HTTP {s.get('http_status')}")
-                            yield _emit('FOUND', "Subdomain: " + " - ".join(bits))
-                if result.get('tool') in ('tech_fingerprint', 'fingerprint'):
-                    techs = raw.get('technologies') or raw.get('tech_stack') or []
-                    for t in techs[:20]:
-                        nm = t.get('name') or ''
-                        ver = t.get('version') or ''
-                        if nm:
-                            yield _emit('TOOL', f"Detected tech: {nm}" + (f" {ver}" if ver else ""))
-            except Exception:
-                pass
-        else:
-            yield _emit("OK", f"{_tool_label(tool)} — no extra data")
+    allowed_set = set(get_available_tools(module))
+    available_tools_str = ", ".join(sorted(allowed_set))
+    plan_data = ask_groq(
+        "",
+        PLANNING_PROMPT.format(
+            module=module,
+            target=target,
+            available_tools=available_tools_str,
+            max_tools=max_plan_tools,
+        ),
+        scan_tier,
+    )
+    if not isinstance(plan_data, dict):
+        plan_data = {}
 
-    if module in SINGLE_PASS_MODULES:
-        yield _emit("THINK", "OSINT collection complete — generating report")
-    elif module == "person":
-        yield _emit("THINK", "Profile verification complete — AI may open more pages if needed")
-    tier_loops = int(prof.get("max_iterations", 0))
-    person_loops = 3 if module == "person" and not lite else 0
-    max_loops = person_loops if module == "person" else (0 if lite or module in SINGLE_PASS_MODULES else min(MAX_ITERATIONS, tier_loops))
-    while context["iteration"] < max_loops:
-        context["iteration"] += 1
-        allowed_set = set(get_available_tools(module))
-        available = [t for t in allowed_set if t not in context["tools_used"]]
-        if not available:
-            yield _emit("THINK", "All configured deep tools have run — finishing discovery")
+    plan_queue: list[dict] = []
+    for item in (plan_data.get("plan") or [])[:max_plan_tools]:
+        tname = str(item.get("tool") or "").strip().lower()
+        if tname in allowed_set or tname == "web_search":
+            plan_queue.append(item)
+
+    if not plan_queue and allowed_set:
+        fallback_tool = "email_intel" if module == "email" else "osint_person" if module == "person" else next(iter(sorted(allowed_set)), "headers")
+        plan_queue = [{"tool": fallback_tool, "reason": "Initial focused check", "priority": "high"}]
+
+    context["plan"] = plan_queue
+    context["investigation_goal"] = plan_data.get("investigation_goal", "")
+    for item in plan_queue:
+        yield _emit("PLAN", f"{_tool_label(item.get('tool', ''))} ({item.get('priority', 'medium')}) — {item.get('reason', '')}")
+
+    messages: list[dict[str, Any]] = [
+        {"role": "system", "content": AGENT_SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": f"Scan type: {module}. Target: {target}. Goal: {context.get('investigation_goal', '')}",
+        },
+    ]
+
+    confidence = 0
+    low_confidence_extra = 0
+    pending_tool_call_id: str | None = None
+
+    def _should_stop() -> bool:
+        if tool_count >= MAX_ITERATIONS:
+            return True
+        if confidence > 85 and tool_count >= 3:
+            return True
+        return False
+
+    while not _should_stop():
+        next_tool: str | None = None
+        tool_args: dict[str, Any] = {}
+        tool_target = target
+        reason = ""
+        pending_tool_call_id = None
+
+        while plan_queue:
+            item = plan_queue[0]
+            tname = str(item.get("tool") or "").strip().lower()
+            if tname in context.get("tools_used", []):
+                plan_queue.pop(0)
+                continue
+            next_tool = tname
+            reason = item.get("reason", "")
+            plan_queue.pop(0)
             break
-        n_findings = len(context["findings"])
-        yield _emit("THINK", f"Reviewing {n_findings} finding(s) — deciding what to try next…")
-        yield _emit("THINK", "AKILI is thinking…")
-        if module == "person":
-            osint_data = context.get("osint") or {}
-            verified = sum(1 for p in (osint_data.get("platforms") or {}).values() if p and p.get("found"))
-            prompt = PERSON_NEXT_ACTION_PROMPT.format(
-                open_pages=[p.get("url") for p in context.get("open_pages", [])][:8],
-                verified_count=verified,
-            )
-            decision = ask_groq(prompt, json.dumps({"osint": osint_data}, default=str)[:8000], scan_tier, expected_schema="next_action")
-        else:
-            prompt = NEXT_ACTION_PROMPT.format(available_tools=available, used_tools=context["tools_used"])
-            decision = ask_groq(prompt, json.dumps({"findings": context["findings"][:15]}), scan_tier, expected_schema="next_action")
-        if not decision:
-            if available:
-                decision = {"tool": available[0], "reason": "Continuing automated audit."}
-                yield _emit("PLAN", f"Trying {_tool_label(available[0])} — AKILI using fallback plan")
-            else:
-                yield _emit("THINK", "No more tools available — wrapping up discovery phase")
+
+        if not next_tool:
+            completion = _groq_chat(messages, tools=TOOL_DEFINITIONS, tool_choice="auto")
+            if not completion:
                 break
-        # Support agentic actions from the LLM: list of actions to run (open_page, run_tool)
-        if isinstance(decision, dict) and decision.get('actions'):
-            acts = decision.get('actions') or []
-            context.setdefault('action_count', 0)
-            for act in acts:
-                typ = (act.get('type') or '').lower()
-                if typ in ('open_page', 'openurl', 'open_url'):
-                    url = act.get('url') or act.get('target') or ''
-                    if not url:
-                        continue
-                    # Enforce per-scan action limits
-                    if MAX_AGENT_ACTIONS is not None and context.get('action_count', 0) >= MAX_AGENT_ACTIONS:
-                        yield _emit('THINK', 'Agent action limit reached; skipping open_page')
-                        continue
-                    # Validate URL against allowlist (target-host or configured hosts)
-                    if not _allowed_open_url(url):
-                        yield _emit('THINK', f"Refusing to open external page: {url}")
-                        continue
-                    yield _emit('TOOL', f"AI requested opening page: {url}")
-                    try:
-                        with httpx.Client(timeout=8.0, follow_redirects=True) as client:
-                            resp = client.get(url, headers={"User-Agent": "AKILI-Agent/1.0"})
-                            snippet = (resp.text or '')[:4096]
-                            context.setdefault('open_pages', []).append({'url': url, 'status': resp.status_code, 'text_snippet': snippet})
-                            context['action_count'] = context.get('action_count', 0) + 1
-                            yield _emit('TOOL', f"Opened {url} → HTTP {resp.status_code}")
-                    except Exception as e:
-                        yield _emit('TOOL', f"Failed to open {url}: {str(e)[:160]}")
-                if typ in ('run_tool', 'scan', 'execute'):
-                    toolname = _normalize_tool(act.get('tool') or act.get('name') or '')
-                    ttarget = act.get('target') or target
-                    if not toolname:
-                        continue
-                    # Enforce per-scan action limits and tool allowlist
-                    if MAX_AGENT_ACTIONS is not None and context.get('action_count', 0) >= MAX_AGENT_ACTIONS:
-                        yield _emit('THINK', 'Agent action limit reached; skipping run_tool')
-                        continue
-                    allowed_tools = set(get_available_tools(context.get('module', '')))
-                    if allowed_tools and toolname not in allowed_tools:
-                        yield _emit('THINK', f"Requested tool {toolname} not permitted for this module")
-                        continue
-                    yield _emit('PLAN', f"AI requested running tool {toolname} on {ttarget}")
-                    r = run_tool(toolname, ttarget, context)
-                    if r:
-                        context['action_count'] = context.get('action_count', 0) + 1
-                        yield _emit('OK', f"{_tool_label(toolname)} complete (AI requested)")
-                        sev = str(r.get('severity', '')).upper()
-                        yield _emit('FOUND' if sev not in ('CRITICAL',) else 'CRITICAL', r.get('summary', r.get('title', '')))
-                        for f in r.get('findings', []):
-                            fs = str(f.get('severity', 'INFO')).upper()
-                            yield _emit('CRITICAL' if fs == 'CRITICAL' else 'FOUND', f.get('name', ''))
-            # after running actions, continue the normal decision handling
-        if decision.get("done"):
-            yield _emit("THINK", decision.get("reason", "Agent decided the assessment is complete"))
-            yield _emit("AI", "Discovery complete — preparing report")
-            break
-        tool = _normalize_tool(decision.get("tool") or "")
-        if not tool or tool in context["tools_used"]:
-            yield _emit("THINK", "Skipping duplicate or unknown tool — finishing discovery")
-            break
-        if allowed_set and tool not in allowed_set:
-            context["tools_used"].append(tool)
-            yield _emit("THINK", f"{tool} is not applicable to {module} scans — finishing")
-            break
-        reason = decision.get("reason", "Follow-up check recommended")
-        priority = decision.get("priority", "medium")
-        yield _emit("PLAN", f"Trying {_tool_label(tool)} ({priority}) — {reason}")
-        yield _emit("PROGRESS", f"Now running {_tool_label(tool)}…")
-        yield _emit("TOOL", f"Executing {tool}…")
-        context["scan_id"] = scan_id
-        result = run_tool(tool, target, context)
-        tool_count += 1
-        if result:
-            yield _emit("OK", f"{_tool_label(tool)} complete")
-            if str(result.get("severity", "")).lower() == "critical":
-                yield _emit("CRITICAL", f"{result.get('title')} — investigating further")
+            msg = completion.choices[0].message
+            if msg.tool_calls:
+                tc = msg.tool_calls[0]
+                next_tool = tc.function.name
+                try:
+                    tool_args = json.loads(tc.function.arguments or "{}")
+                except json.JSONDecodeError:
+                    tool_args = {}
+                pending_tool_call_id = tc.id
+                messages.append({
+                    "role": "assistant",
+                    "content": msg.content or "",
+                    "tool_calls": [
+                        {
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                        }
+                    ],
+                })
+                reason = "Agent requested follow-up check"
+                tool_target = tool_args.get("target", target)
             else:
-                yield _emit("FOUND", result.get("summary", result.get("title", "")))
-            # Stream tool-specific details for better session visibility (follow-up loop)
-            try:
-                raw = result.get('raw', {}) or {}
-                if result.get('tool') in ('exposed_files', 'exposed'):
-                    for a in raw.get('attempted', [])[:60]:
-                        path = a.get('path') or ''
-                        status = a.get('status') or 0
-                        acc = a.get('accessible')
-                        note = 'confirmed' if acc else 'not found'
-                        yield _emit('TOOL', f"Probing {path} → HTTP {status} ({note})")
-                if result.get('tool') in ('ports', 'port_scanner', 'port_scan'):
-                    for p in raw.get('ports', []):
-                        yield _emit('FOUND', f"Port {p.get('port')} open ({p.get('service')})")
-                if result.get('tool') in ('tech_fingerprint', 'fingerprint'):
-                    techs = raw.get('technologies') or raw.get('tech_stack') or []
-                    for t in techs[:20]:
-                        nm = t.get('name') or ''
-                        ver = t.get('version') or ''
-                        if nm:
-                            yield _emit('TOOL', f"Detected tech: {nm}" + (f" {ver}" if ver else ""))
-            except Exception:
-                pass
+                if msg.content:
+                    messages.append({"role": "assistant", "content": msg.content})
+                break
+
+        if not next_tool or next_tool in context.get("tools_used", []):
+            break
+        if allowed_set and next_tool not in allowed_set and next_tool != "web_search":
+            context.setdefault("tools_used", []).append(next_tool)
+            continue
+
+        if reason:
+            yield _emit("PLAN", f"Running {_tool_label(next_tool)} — {reason}")
+        yield _emit("TOOL", f"Running {_tool_label(next_tool)}…")
+        context["scan_id"] = scan_id
+
+        exec_args = tool_args if next_tool == "web_search" else None
+        exec_target = tool_target if next_tool != "web_search" else target
+        result = run_tool(next_tool, exec_target, context, exec_args)
+        tool_count += 1
+
+        for line in _stream_tool_result(result, next_tool, _emit):
+            yield line
+
+        result_payload = json.dumps(result or {}, default=str)[:8000]
+        if pending_tool_call_id:
+            messages.append({
+                "role": "tool",
+                "tool_call_id": pending_tool_call_id,
+                "content": result_payload,
+            })
         else:
-            yield _emit("OK", f"{_tool_label(tool)} finished")
+            messages.append({
+                "role": "user",
+                "content": f"Tool {next_tool} completed. Result JSON: {result_payload}",
+            })
+
+        revise_user = json.dumps({
+            "already_used": context.get("tools_used", []),
+            "findings_count": len(context.get("findings", [])),
+            "investigation_goal": context.get("investigation_goal", ""),
+            "module": module,
+            "target": target,
+        }, default=str)
+        revision = ask_groq(CONFIDENCE_REVISE_PROMPT, revise_user, scan_tier)
+        if isinstance(revision, dict):
+            try:
+                confidence = int(revision.get("confidence", confidence))
+            except (TypeError, ValueError):
+                pass
+            if revision.get("investigation_goal"):
+                context["investigation_goal"] = revision["investigation_goal"]
+            for item in (revision.get("plan") or [])[:6]:
+                tname = str(item.get("tool") or "").strip().lower()
+                if tname and tname not in context.get("tools_used", []) and (tname in allowed_set or tname == "web_search"):
+                    if not any(p.get("tool") == tname for p in plan_queue):
+                        plan_queue.append(item)
+
+        yield _emit("THINK", f"Investigation confidence: {confidence}%")
+
+        if confidence < 40 and tool_count >= 6:
+            low_confidence_extra += 1
+            if low_confidence_extra > 3:
+                yield _emit("THINK", "Reached extra investigation limit with low confidence")
+                break
 
     yield _emit("THINK", "AKILI synthesizing findings into your report…")
     yield _emit("AI", "AKILI writing executive summary…")

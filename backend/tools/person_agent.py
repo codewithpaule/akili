@@ -75,7 +75,7 @@ def _parse_json(text: str) -> dict:
 
 def _ask(system: str, user: str, schema: str) -> dict:
     from llm import ask_llm
-    data, _provider = ask_llm(system, user, allow_ensemble=True, expected_schema=schema)
+    data, _provider = ask_llm(system, user, expected_schema=schema)
     return data if isinstance(data, dict) else {}
 
 

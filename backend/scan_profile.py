@@ -61,15 +61,8 @@ def profile_for_tier(tier: str) -> dict:
 
 
 def baseline_tools(module: str, tier: str) -> list[str]:
-    p = profile_for_tier(tier)
-    key = f"{module}_baseline"
-    if key in p:
-        return list(p[key])
-    from agent import BASELINE_TOOLS
-    base = list(BASELINE_TOOLS.get(module, ["headers"]))
-    if tier == "guest":
-        return base[:1]
-    return base
+    """Planning-first agent selects tools dynamically; no fixed baseline."""
+    return []
 
 
 def plan_comparison_rows() -> list[dict]:

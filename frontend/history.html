@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>History — AKILI</title>
+  <title>History | AKILI</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/main.css">
   <link rel="stylesheet" href="css/components.css">
@@ -26,7 +26,7 @@
       const res = await AKILI.apiFetch('/api/v1/history?limit=20' + (q ? '&q=' + encodeURIComponent(q) : ''));
       const data = await res.json();
       const tbody = document.getElementById('rows');
-      if (!data.items.length) { tbody.innerHTML = '<tr><td colspan="5">No scans yet.</td></tr>'; return; }
+      if (!data.items.length) { tbody.innerHTML = '<tr><td colspan="5">No scans have been run yet. Head back to the dashboard and run your first scan.</td></tr>'; return; }
       tbody.innerHTML = data.items.map(s => `<tr>
         <td>${s.scan_type}</td><td>${AKILI.escapeHtml(s.target)}</td>
         <td>${s.score}${s.grade ? ' ('+s.grade+')' : ''}</td>

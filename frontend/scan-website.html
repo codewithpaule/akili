@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Website Scan — AKILI</title>
+  <title>Website Scan | AKILI</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/main.css">
   <link rel="stylesheet" href="css/components.css">
@@ -16,13 +16,13 @@
     <p class="breadcrumb">Home &gt; Scan &gt; Website</p>
     <div class="card scan-accent" style="--accent:var(--mod-website);border-top:4px solid var(--mod-website)">
       <h1><i data-lucide="shield"></i> Website Scan</h1>
-      <p style="color:var(--slate)">Security headers, SSL, ports, tech stack, and AI assessment.</p>
+      <p style="color:var(--slate)">Checks SSL, headers, ports, and exposed paths, then writes an AI summary.</p>
     </div>
     <div class="disclaimer">Only scan websites you own or have explicit permission to test.</div>
     <div class="card">
       <label class="label-sm">Target URL</label>
       <input type="url" id="url" placeholder="https://example.com" style="width:100%;padding:0.75rem;border:1px solid var(--border);border-radius:var(--radius);margin:0.5rem 0 1rem">
-      <button class="btn btn-primary" id="scan-btn" style="background:var(--mod-website)">SCAN</button>
+      <button class="btn btn-primary" id="scan-btn" style="background:var(--mod-website)">Run scan</button>
     </div>
     <div id="terminal" class="terminal-panel hidden"></div>
     <section id="results" class="hidden" style="margin-top:2rem">
@@ -66,7 +66,7 @@
     window.AKILI_SCAN = {
       module: 'website',
       endpoint: '/api/v1/scan/website',
-      buttonLabel: 'SCAN',
+      buttonLabel: 'Run scan',
       buildBody: () => ({ url: document.getElementById('url').value.trim() }),
       validate: (b) => { if (!b.url) { AKILI.showToast('Enter a URL', 'error'); return true; } return false; }
     };

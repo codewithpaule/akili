@@ -1,6 +1,8 @@
 # AKILI
 
-**See everything others miss.** — AI-powered cybersecurity and trust intelligence platform.
+**See everything others miss.** AI-powered cybersecurity and trust intelligence platform.
+
+Akili uses a **planning-first AI agent** that decides its own investigation path before running any tools. During a scan it can search the web for threat intelligence when on-target evidence is not enough.
 
 - **Backend:** FastAPI + Groq (`llama-3.3-70b-versatile`) + SQLite/PostgreSQL  
 - **Frontend:** Pure HTML/CSS/JS (Cabinet Grotesk, DM Sans, JetBrains Mono)  
@@ -8,7 +10,7 @@
 
 ## Quick start
 
-### Backend (port 8000 — or use a second terminal if RECON-X is on 8000)
+### Backend (port 8001 recommended)
 
 ```powershell
 cd akili\backend
@@ -26,7 +28,7 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8001
 2. Frontend navbar dot turns green and shows **LIVE** when the API responds and Groq is connected.
 3. Run any scan (e.g. website) — terminal lines stream and results save to History.
 
-Person/company OSINT uses **SerpAPI** first (`SERPAPI_KEY` in `.env`); DuckDuckGo/Google/Bing are optional fallbacks.
+Person/company OSINT uses **SerpAPI** first (`SERPAPI_KEY` in `.env`); the agent also uses SerpAPI for `web_search` during scans.
 
 ### Frontend (port 5501)
 
@@ -51,7 +53,7 @@ ALLOWED_ORIGINS=http://localhost:5501,http://127.0.0.1:5501
 
 | Page | Purpose |
 |------|---------|
-| `index.html` | Landing — hero terminal, modules, D3 graph, GSAP |
+| `index.html` | Landing — hero terminal, modules, GSAP |
 | `scan-website.html` | Website security scan |
 | `scan-vulnerability.html` | Vuln assessment |
 | `scan-subdomains.html` | Subdomain discovery |
@@ -62,12 +64,11 @@ ALLOWED_ORIGINS=http://localhost:5501,http://127.0.0.1:5501
 | `email.html` | Email investigator |
 | `domain.html` | Domain reputation |
 | `graph.html` | Relationship graph (D3) |
-| `monitor.html` | Watchlist |
 | `history.html` / `report.html` | Scan archive |
 | `developer.html` | API keys |
-| `docs.html` | API documentation |
-| `sandbox.html` | Mock API testing |
 | `about.html` / `contact.html` / `privacy.html` | Company & NDPR |
+
+Interactive API documentation: `{API_BASE}/docs` (FastAPI OpenAPI UI).
 
 ## API (v1)
 
@@ -79,13 +80,13 @@ Base: `{API_BASE}/api/v1`
 - `GET /report/{scan_id}` — full report
 - `GET /history` — paginated metadata
 - `POST /keys/generate` — API key (shown once, SHA-256 stored)
-- `POST /sandbox/scan/website?scenario=critical_vulns` — mock data
 
 ## Developer docs
 
 - API scanner documentation: [backend/docs/api_scan.md](backend/docs/api_scan.md)
+- Interactive API reference: `{API_BASE}/docs`
 
-**Auth:** `X-API-Key: ak_live_...` or browser (10 scans/hour/IP).
+**Auth:** `X-API-Key: ak_live_...` or browser session (daily scan limits apply).
 
 ## Rate limits
 
@@ -94,7 +95,7 @@ Base: `{API_BASE}/api/v1`
 | Browser (no key) | 10/hour |
 | Free (`ak_live_`) | 50/hour |
 | Pro | 500/hour |
-| Sandbox (`ak_test_`) | Unlimited (mock only) |
+| Test keys (`ak_test_`) | Same limits as live keys |
 
 ## Security
 
