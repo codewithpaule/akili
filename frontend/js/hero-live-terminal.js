@@ -1,5 +1,5 @@
 /**
- * Homepage akili — live terminal: endless random module scan demos.
+ * Homepage akili live terminal: endless random module scan demos.
  */
 (function () {
   const el = document.getElementById('hero-terminal');
@@ -8,10 +8,10 @@
   const TARGETS = {
     url: ['https://example-university.edu', 'https://example.com', 'https://api.stripe.com', 'https://wordpress.org'],
     ip: ['8.8.8.8', '1.1.1.1', '203.0.113.50', '102.89.12.4'],
-    email: ['admin@example-university.edu', 'security@example.com', 'dev@startup.io'],
+    email: ['admin@edu.ng', 'info-akili@akili.com.ng', 'dev@startup.io'],
     name: ['Ada Okonkwo', 'John Smith', 'Jane Doe | Lagos developer'],
     domain: ['example-university.edu', 'example.com', 'safe-site.org'],
-    org: ['Example University', 'Acme Corp', 'Ministry of Health NG'],
+    org: ['Example University', 'Akili', 'Ministry of Health NG'],
   };
 
   function pick(arr) {
@@ -38,16 +38,16 @@
       lines: (t) => [
         `[AKILI] Website Scan → ${t}`,
         '[THINK] Loading baseline security checks…',
-        '[PROGRESS] Step 1/5 — SSL certificate…',
+        '[PROGRESS] Step 1/5 SSL certificate…',
         '[OK] SSL certificate complete',
-        '[FOUND] Valid HTTPS — cert expires in 142 days',
-        '[PROGRESS] Step 2/5 — HTTP security headers…',
+        '[FOUND] Valid HTTPS cert expires in 142 days',
+        '[PROGRESS] Step 2/5 HTTP security headers…',
         '[FOUND] Missing CSP header (common on older sites)',
-        '[PROGRESS] Step 3/5 — technology fingerprint…',
+        '[PROGRESS] Step 3/5 technology fingerprint…',
         '[FOUND] Detected 6 technologies (4 versioned)',
-        '[PROGRESS] Step 4/5 — WHOIS & DNS…',
+        '[PROGRESS] Step 4/5 WHOIS & DNS…',
         '[FOUND] 12 DNS records',
-        '[PROGRESS] Step 5/5 — open ports…',
+        '[PROGRESS] Step 5/5 open ports…',
         '[AI] AKILI writing executive summary…',
         '[DONE] Report ready → Grade B · Score 74',
       ],
@@ -82,7 +82,7 @@
       lines: (t) => [
         `[AKILI] IP Intelligence → ${t}`,
         '[TOOL] Running IP intelligence…',
-        '[FOUND] IP located in Nigeria — ISP: regional provider',
+        '[FOUND] IP located in Nigeria ISP: regional provider',
         '[FOUND] Reverse DNS: hosted.example.net',
         '[FOUND] Website on IP: university portal (HTTP 200)',
         '[TOOL] Running open ports…',
@@ -95,7 +95,7 @@
       lines: (t) => [
         `[AKILI] Organization Scan → ${t}`,
         '[TOOL] Running organization footprint…',
-        '[FOUND] ASN mapped — 3 netblocks',
+        '[FOUND] ASN mapped 3 netblocks',
         '[TOOL] Running subdomain discovery…',
         '[FOUND] 8 related hostnames',
         '[AI] AKILI synthesizing org footprint…',
@@ -132,9 +132,9 @@
         `[AKILI] Email Scan → ${t}`,
         '[TOOL] Running email reputation…',
         '[FOUND] MX records valid',
-        '[FOUND] Pwned in 3 breach(es) — xposedornot.com (free)',
+        '[FOUND] Pwned in 3 breach(es) xposedornot.com (free)',
         '[AI] AKILI writing summary…',
-        '[DONE] Risk level: high — rotate passwords',
+        '[DONE] Risk level: high rotate passwords',
       ],
     },
     {
@@ -162,11 +162,11 @@
       name: 'Scan Template',
       lines: (t) => [
         `[AKILI] Template: Quick Security Audit`,
-        '[PLAN] Step 1/3 — website scan (' + t + ')',
+        '[PLAN] Step 1/3 website scan (' + t + ')',
         '[OK] website scan complete',
-        '[PLAN] Step 2/3 — vulnerability scan',
+        '[PLAN] Step 2/3 vulnerability scan',
         '[OK] vulnerability scan complete',
-        '[PLAN] Step 3/3 — subdomain discovery',
+        '[PLAN] Step 3/3 subdomain discovery',
         '[DONE] Template run finished · 3 modules',
       ],
     },
