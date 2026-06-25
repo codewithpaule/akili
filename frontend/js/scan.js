@@ -21,7 +21,7 @@
   const ACCURACY_HTML = `
     <div class="results-accuracy-disclaimer">
       <strong>Results may be inaccurate</strong>
-      AKILI uses automated OSINT and security checks. Findings can be incomplete, outdated, or wrong — especially person matches and breach lists. Verify anything important before you act.
+      AKILI uses automated OSINT and security checks. Findings can be incomplete, outdated, or wrong especially person matches and breach lists. Verify anything important before you act.
     </div>`;
 
   function scanHeaders() {
@@ -88,7 +88,7 @@
           <span class="scan-session-target">${AKILI.escapeHtml(s.targetLabel)}</span>
           <span class="scan-session-state">${s.status === 'running' ? 'Running…' : 'Complete'}</span>
         </button>`).join('')
-      : '<p class="label-sm" style="color:var(--slate)">No scans yet — run one above.</p>';
+      : '<p class="label-sm" style="color:var(--slate)">No scans yet run one above.</p>';
     list.querySelectorAll('.scan-session-item').forEach((el) => {
       el.onclick = () => selectSession(el.dataset.id);
     });
@@ -382,7 +382,7 @@
       let eduNote = document.getElementById('site-edu-note');
       if (report.domain_profile === 'education') {
         if (!eduNote) {
-          purposeEl.insertAdjacentHTML('afterend', '<p id="site-edu-note" class="label-sm" style="margin-top:0.5rem;color:var(--blue)">Educational / institutional site — scored with university-appropriate expectations.</p>');
+          purposeEl.insertAdjacentHTML('afterend', '<p id="site-edu-note" class="label-sm" style="margin-top:0.5rem;color:var(--blue)">Educational / institutional site, scored with university appropriate expectations.</p>');
         }
       } else if (eduNote) eduNote.remove();
     }
@@ -661,7 +661,7 @@
           ? 'We are fairly confident this is their site'
           : 'This may be their site';
         const href = AKILI.externalUrl(url);
-        pwc.innerHTML = `<a href="${AKILI.escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="platform-pill">🌐 ${AKILI.escapeHtml(url)}</a><p class="label-sm" style="margin-top:0.35rem;color:var(--slate)">${AKILI.escapeHtml(confText)}</p>`;
+        pwc.innerHTML = `<a href="${AKILI.escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="platform-pill">${AKILI.escapeHtml(url)}</a><p class="label-sm" style="margin-top:0.35rem;color:var(--slate)">${AKILI.escapeHtml(confText)}</p>`;
       } else {
         pwb.classList.add('hidden');
         pwc.innerHTML = '';
@@ -715,7 +715,7 @@
           const h = c.handle ? `${AKILI.escapeHtml(c.handle)}` : '';
           const title = h ? `${p} · ${h}` : p;
           const job = c.job_title ? `<div class="label-sm" style="color:var(--slate)">${AKILI.escapeHtml(c.job_title)}</div>` : '';
-          const loc = c.location ? `<div class="label-sm" style="margin-top:0.15rem">📍 ${AKILI.escapeHtml(c.location)}</div>` : '';
+          const loc = c.location ? `<div class="label-sm" style="margin-top:0.15rem">${AKILI.escapeHtml(c.location)}</div>` : '';
           const followers = c.follower_count ? `<div class="label-sm" style="color:var(--slate)">${AKILI.escapeHtml(String(c.follower_count))} followers</div>` : '';
           const bio = c.bio ? `<div class="label-sm" style="color:var(--slate);margin-top:0.25rem">${AKILI.escapeHtml(c.bio)}</div>` : '';
           const linked = c.linked_website ? `<div class="label-sm" style="margin-top:0.25rem"><a href="${AKILI.escapeHtml(AKILI.externalUrl(c.linked_website))}" target="_blank" rel="noopener noreferrer">${AKILI.escapeHtml(c.linked_website)}</a></div>` : '';
