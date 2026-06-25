@@ -1,5 +1,28 @@
 const API_BASE = 'https://api.akili.com.ng';
 
+chrome.storage.local.get('apiKey').then(({ apiKey }) => {
+  const input = document.getElementById('api-key-input');
+  if (input && apiKey) input.value = apiKey;
+  const badge = document.getElementById('mode-badge');
+  if (badge) {
+    badge.textContent = apiKey ? 'Deep scan' : 'Guest';
+    if (apiKey) badge.classList.add('deep');
+  }
+});
+
+document.getElementById('save-key-btn')?.addEventListener('click', async () => {
+  const apiKey = document.getElementById('api-key-input').value.trim();
+  if (apiKey) {
+    await chrome.storage.local.set({ apiKey });
+    const badge = document.getElementById('mode-badge');
+    if (badge) {
+      badge.textContent = 'Deep scan';
+      badge.classList.add('deep');
+    }
+    location.reload();
+  }
+});
+
 // On popup open get current tab URL
 chrome.tabs.query({active: true, currentWindow: true}, async (tabs) => {
   if (!tabs[0]) return;
@@ -32,6 +55,12 @@ chrome.tabs.query({active: true, currentWindow: true}, async (tabs) => {
   
   // Get stored API key
   const { apiKey } = await chrome.storage.local.get('apiKey');
+  const loadingText = document.getElementById('loading-text');
+  if (loadingText) {
+    loadingText.textContent = apiKey
+      ? 'Deep agent investigation (planning + tools)…'
+      : 'Guest agent scan (planning first)…';
+  }
   
   try {
     const pageSignals = await getPageSignals(tabs[0].id);
@@ -59,9 +88,9 @@ chrome.tabs.query({active: true, currentWindow: true}, async (tabs) => {
       throw new Error(data.detail || data.message || 'Scan failed');
     }
 
-    const data = normalizeScanResult(await readScanResult(result));
+    const data = normalizeScanResult(await readScanResult(result, loadingText));
     if (!apiKey) {
-      data.summary = data.summary || 'Guest page check completed. Add an API key in the extension for full deep scanning.';
+      data.summary = data.summary || 'Guest scan complete. Add an API key below for full depth (10 tools + follow-ups).';
     }
     
     // Cache result for 1 hour
@@ -107,7 +136,7 @@ async function getPageSignals(tabId) {
   }
 }
 
-async function readScanResult(response) {
+async function readScanResult(response, loadingEl) {
   const contentType = response.headers.get('content-type') || '';
   if (contentType.includes('application/json')) {
     return response.json();
@@ -125,6 +154,12 @@ async function readScanResult(response) {
     const lines = buffer.split('\n');
     buffer = lines.pop() || '';
     for (const line of lines) {
+      if (line.startsWith('PLAN:') && loadingEl) {
+        loadingEl.textContent = line.slice(5).trim().slice(0, 80) || 'Running planned checks…';
+      }
+      if (line.startsWith('TOOL:') && loadingEl) {
+        loadingEl.textContent = line.slice(5).trim().slice(0, 80) || 'Running security tools…';
+      }
       if (line.startsWith('COMPLETE:')) {
         finalReport = JSON.parse(line.slice(9));
       }
@@ -177,8 +212,14 @@ function showResults(data) {
   
   // Findings
   const findingsEl = document.getElementById('findings');
-  const findings = data.top_findings || [];
-  findingsEl.innerHTML = findings.map(f => {
+  const findings = data.top_findings || data.findings || [];
+  
+  const summaryEl = document.getElementById('summary-text');
+  if (summaryEl && data.summary) {
+    summaryEl.textContent = data.summary;
+    summaryEl.style.display = 'block';
+  }
+  findingsEl.innerHTML = findings.slice(0, 5).map(f => {
     const severity = f.severity || 'info';
     return `<div class="finding-pill finding-${severity.toLowerCase()}">
       <strong>${severity}:</strong> ${escapeHtml(f.name || f.title || 'Unknown issue')}
@@ -191,7 +232,8 @@ function showResults(data) {
   
   // Full report button
   document.getElementById('full-report-btn').onclick = () => {
-    chrome.tabs.create({ url: `https://akili.com.ng/report/${data.scan_id || ''}` });
+    const id = data.scan_id || '';
+    chrome.tabs.create({ url: id ? `https://akili.com.ng/report.html?id=${id}` : 'https://akili.com.ng/scan-website.html' });
   };
   
   // Rescan button
@@ -232,18 +274,7 @@ function scoreFromGrade(grade) {
 }
 
 function showConnectPrompt() {
-  document.getElementById('loading').style.display = 'none';
-  document.getElementById('results').style.display = 'none';
-  document.getElementById('error').style.display = 'none';
-  document.getElementById('connect-prompt').style.display = 'block';
-  
-  document.getElementById('save-key-btn').onclick = async () => {
-    const apiKey = document.getElementById('api-key-input').value.trim();
-    if (apiKey) {
-      await chrome.storage.local.set({ apiKey });
-      location.reload();
-    }
-  };
+  showError('Add your API key in the bar below for deep scanning.');
 }
 
 async function getCachedResult(domain) {

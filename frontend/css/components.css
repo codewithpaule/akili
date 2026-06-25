@@ -294,3 +294,39 @@ button.is-loading::before {
 .code-block .copy-btn { position: absolute; top: 0.5rem; right: 0.5rem; }
 
 .hidden { display: none !important; }
+
+/* Access gate */
+.access-gate { padding: 1.5rem; }
+.access-gate-head { display: flex; gap: 1rem; align-items: flex-start; margin-bottom: 1.25rem; }
+.access-gate-icon {
+  width: 48px; height: 48px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.access-gate-icon svg { width: 24px; height: 24px; }
+.access-gate-title { margin: 0 0 0.35rem; font-size: 1.25rem; color: var(--navy); }
+.access-gate-lead { margin: 0; color: var(--slate); font-size: 0.95rem; line-height: 1.55; }
+.access-gate-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem; }
+.access-gate-list { margin: 0.5rem 0 0; padding-left: 1.2rem; color: var(--slate); font-size: 0.9rem; line-height: 1.6; }
+.access-gate-distinct li { color: var(--navy); }
+.access-gate-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.access-gate-locked { opacity: 0.45; pointer-events: none; user-select: none; }
+
+/* Detailed footer */
+.footer-grid-detailed { grid-template-columns: 1.4fr repeat(4, 1fr); gap: 1.5rem 2rem; }
+.footer-brand-col .footer-tagline { color: var(--slate); margin-top: 0.5rem; font-size: 0.95rem; font-weight: 500; }
+.footer-desc { color: var(--slate); font-size: 0.85rem; line-height: 1.6; margin: 0.75rem 0; max-width: 36ch; }
+.footer-badges { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.75rem; }
+.footer-heading { display: block; margin-bottom: 0.65rem; color: var(--navy); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.site-footer a { display: block; font-size: 0.88rem; color: var(--slate); margin-bottom: 0.35rem; }
+.site-footer a:hover { color: var(--blue); }
+.footer-bottom-inner {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem 1.5rem;
+  font-size: 0.8rem; color: var(--slate);
+}
+@media (max-width: 900px) {
+  .access-gate-columns { grid-template-columns: 1fr; }
+  .footer-grid-detailed { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 560px) {
+  .footer-grid-detailed { grid-template-columns: 1fr; }
+}

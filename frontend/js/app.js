@@ -207,7 +207,7 @@
       if (a.getAttribute('data-page') === path) a.classList.add('active');
     });
     const apiDocs = document.getElementById('nav-api-docs');
-    if (apiDocs) apiDocs.href = `${API()}/docs`;
+    if (apiDocs) apiDocs.href = 'docs.html';
   }
 
   const HEALTH_COLORS = { ok: '#22C55E', warn: '#F59E0B', err: '#EF4444', idle: '#94A3B8' };
@@ -459,6 +459,19 @@
     });
   }
 
+  async function loadFooter() {
+    const mount = document.getElementById('footer-mount');
+    if (!mount || mount.dataset.loaded) return;
+    try {
+      const r = await fetch('partials/footer.html');
+      mount.innerHTML = await r.text();
+      mount.dataset.loaded = '1';
+      const y = mount.querySelector('#footer-year');
+      if (y) y.textContent = new Date().getFullYear();
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    } catch (_) {}
+  }
+
   async function loadNav() {
     const mount = document.getElementById('nav-mount');
     if (!mount) return;
@@ -574,7 +587,7 @@
 
   function initSidebarLayout() {
     const path = location.pathname.split('/').pop() || 'index.html';
-    const PUBLIC_PAGES = ['index.html', 'about.html', 'login.html', 'signup.html', 'privacy.html', 'terms.html', 'contact.html'];
+    const PUBLIC_PAGES = ['index.html', 'about.html', 'login.html', 'signup.html', 'privacy.html', 'terms.html', 'contact.html', 'docs.html', 'access.html', 'quick-scan.html'];
     if (PUBLIC_PAGES.includes(path)) return;
     if (document.querySelector('.dashboard-layout') || document.querySelector('.admin-layout') || document.querySelector('.admin-topbar')) return;
     if (!localStorage.getItem('akili_token')) return;
@@ -618,8 +631,8 @@
       // Relationship Graph removed
     ];
     const TOOL_MODULES = [
-      { href: 'api-search.html', icon: 'search', color: 'var(--navy)', name: 'API Search', desc: 'Search the API and docs' },
-      { href: 'quick-scan.html', icon: 'zap', color: '#f59e0b', name: 'Quick Scan', desc: 'No login — light website or email check' },
+      { href: 'docs.html', icon: 'book-open', color: 'var(--navy)', name: 'API docs', desc: 'Public reference — no login to read' },
+      { href: 'quick-scan.html', icon: 'zap', color: '#f59e0b', name: 'Quick Scan', desc: 'No login — guest website or email check' },
       { href: 'developer.html', icon: 'terminal', color: 'var(--navy)', name: 'Developers', desc: 'Named API keys & limits' },
     ];
 
@@ -788,7 +801,7 @@
     }
 
     const globalDocs = layout.querySelector('#global-sidebar-api-docs');
-    if (globalDocs) globalDocs.href = `${API().replace(/\/$/, '')}/docs`;
+    if (globalDocs) globalDocs.href = 'docs.html';
 
     if (typeof lucide !== 'undefined') {
       lucide.createIcons();
@@ -813,6 +826,7 @@
       setTimeout(() => btn.classList.remove('is-loading'), 1200);
     }, true);
     loadNav();
+    loadFooter();
     watchNavMount();
     setTimeout(updateNavAuth, 300);
     setInterval(() => {

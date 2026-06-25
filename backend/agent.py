@@ -56,16 +56,20 @@ from cache import cache_get, cache_set, cache_key
 from scan_messages import get as scan_msg, PERSON_MESSAGES
 
 
-PLANNING_PROMPT = """You are AKILI, an autonomous cybersecurity intelligence agent.
-A scan has just been requested. Before running anything, think carefully about what
-actually matters for this target.
+PLANNING_PROMPT = """You are AKILI, a senior cybersecurity analyst running a defensive investigation.
+Think like a practitioner on a pentest retest: chain evidence, chase attack surface, and
+do not stop at surface headers.
 
 Scan type: {module}
 Target: {target}
 
-Your job is to build a focused investigation plan. Choose only the tools that will
-reveal genuine security value for this specific target. Do not include tools just because
-they exist. Prefer depth over breadth.
+Before any tool runs, build an investigation plan that goes deeper than a checklist scan.
+Prioritize tools that expose real risk: admin/login surfaces, exposed databases, weak TLS,
+missing headers, technology versions with CVEs, leaked configs/backups, subdomain sprawl,
+open dangerous ports, mail/DNS misconfig, and public breach or reputation signals.
+
+Use web_search when you need current CVE news, breach context, or identity corroboration.
+Chain tools logically (e.g. fingerprint → cve_lookup, subdomains → link_crawler on interesting hosts).
 
 Available tools: {available_tools}
 
@@ -78,7 +82,7 @@ Reply in valid JSON only:
   "investigation_goal": "one sentence describing what you are trying to find out"
 }}
 
-Maximum {max_tools} tools. Order them from most important to least important."""
+Maximum {max_tools} tools. Order from highest risk impact to supporting evidence."""
 
 CONFIDENCE_REVISE_PROMPT = """You are AKILI reviewing an ongoing security investigation.
 Based on findings so far, respond in valid JSON only:
@@ -91,8 +95,10 @@ confidence means how sure you are you have enough evidence for a meaningful repo
 Only include tools not in already_used. Maximum 6 tools in plan."""
 
 AGENT_SYSTEM_PROMPT = """You are AKILI, an autonomous cybersecurity intelligence agent.
-Run security tools to investigate the target. Use web_search when scan evidence is not
-enough to draw a conclusion. Respond with tool calls when you need more data."""
+Investigate like a senior analyst: run tools, read results, and request follow-ups until
+the picture is clear. Use web_search for CVE details, breach news, or corroboration when
+on-tool evidence is thin. Prefer chaining tools (tech fingerprint then CVE lookup, subdomains
+then crawler) over repeating the same check. Respond with tool calls when you need more data."""
 
 def _target_param_schema(description: str = "URL, hostname, IP, email, or identifier"):
     return {
@@ -629,15 +635,23 @@ def run_tool(name: str, target: str, context: dict, tool_args: dict | None = Non
 def get_available_tools(module: str) -> list[str]:
     if module == "person":
         return ["osint_person", "web_search"]
-    base = ["headers", "ssl_check", "whois_check", "dns", "ports", "port_scanner", "fingerprint", "tech_fingerprint", "cve_lookup", "exposed_files", "link_crawler", "vulnerability", "subdomains", "web_search"]
+    base = [
+        "headers", "ssl_check", "whois_check", "dns", "ports", "port_scanner",
+        "fingerprint", "tech_fingerprint", "cve_lookup", "exposed_files",
+        "link_crawler", "vulnerability", "subdomains", "web_search",
+    ]
     if module == "ip":
-        return ["ip_intel", "ports", "port_scanner"]
+        return ["ip_intel", "ports", "port_scanner", "headers", "web_search"]
     if module == "email":
-        return ["email_intel"]
+        return ["email_intel", "whois_check", "domain_rep", "web_search"]
     if module == "domain":
-        return ["domain_rep", "whois_check"]
+        return ["domain_rep", "whois_check", "dns", "subdomains", "web_search"]
     if module == "organization":
-        return ["org_scan", "subdomains"]
+        return ["org_scan", "subdomains", "whois_check", "web_search"]
+    if module == "company":
+        return ["org_scan", "subdomains", "whois_check", "fingerprint", "web_search"]
+    if module == "api":
+        return ["headers", "fingerprint", "vulnerability", "exposed_files", "link_crawler", "web_search"]
     return base
 
 
@@ -847,7 +861,8 @@ def run_agent(
     prof = profile_for_tier(scan_tier)
     if scan_tier == "guest":
         lite = True
-    max_plan_tools = 2 if lite else 6
+    max_plan_tools = int(prof.get("max_plan_tools") or (4 if lite else 10))
+    tier_max_iterations = int(prof.get("max_iterations") or MAX_ITERATIONS)
 
     def _emit(kind: str, msg: str) -> str:
         line = stream_line(kind, msg)
@@ -909,9 +924,11 @@ def run_agent(
     pending_tool_call_id: str | None = None
 
     def _should_stop() -> bool:
-        if tool_count >= MAX_ITERATIONS:
+        if tool_count >= min(MAX_ITERATIONS, tier_max_iterations):
             return True
-        if confidence > 85 and tool_count >= 3:
+        if confidence > 88 and tool_count >= 4:
+            return True
+        if lite and tool_count >= tier_max_iterations:
             return True
         return False
 
@@ -1005,7 +1022,7 @@ def run_agent(
             "module": module,
             "target": target,
         }, default=str)
-        revision = ask_groq(CONFIDENCE_REVISE_PROMPT, revise_user, scan_tier, max_tokens=400)
+        revision = ask_groq(CONFIDENCE_REVISE_PROMPT, revise_user, scan_tier, max_tokens=500)
         if isinstance(revision, dict):
             try:
                 confidence = int(revision.get("confidence", confidence))
@@ -1013,7 +1030,8 @@ def run_agent(
                 pass
             if revision.get("investigation_goal"):
                 context["investigation_goal"] = revision["investigation_goal"]
-            for item in (revision.get("plan") or [])[:6]:
+            revise_cap = 3 if lite else 8
+            for item in (revision.get("plan") or [])[:revise_cap]:
                 tname = str(item.get("tool") or "").strip().lower()
                 if tname and tname not in context.get("tools_used", []) and (tname in allowed_set or tname == "web_search"):
                     if not any(p.get("tool") == tname for p in plan_queue):

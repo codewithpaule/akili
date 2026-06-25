@@ -87,10 +87,10 @@ class TestAPIKeyValidation:
             assert r.status_code in [401, 403]
     
     @pytest.mark.asyncio
-    async def test_docs_blocked_without_key(self):
+    async def test_docs_public(self):
         async with AsyncClient(app=app, base_url=BASE) as client:
             r = await client.get("/docs")
-            assert r.status_code == 401
+            assert r.status_code == 200
 
 
 class TestBreaches:

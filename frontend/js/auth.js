@@ -59,8 +59,8 @@
         localStorage.removeItem(USER_KEY);
       }
       const next = location.pathname.split('/').pop() || 'developer.html';
-      const sep = redirectTo.includes('?') ? '&' : '?';
-      location.href = redirectTo + sep + 'next=' + encodeURIComponent(next);
+      const feature = (window.AKILI_GATE && AKILI_GATE.featureForPage(next)) || next.replace(/\.html$/, '') || 'workspace';
+      location.href = `access.html?feature=${encodeURIComponent(feature)}&next=${encodeURIComponent(next)}`;
       return false;
     }
     return true;

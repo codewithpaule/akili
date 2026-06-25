@@ -220,13 +220,48 @@
       margin-bottom: 1rem;
     }
     
-    .input-group input {
-      width: 100%;
-      padding: 0.6rem 0.8rem;
-      border: 1px solid #e2e8f0;
+    .mode-badge {
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.2rem 0.5rem;
+      border-radius: 999px;
+      background: #eff6ff;
+      color: #1d4ed8;
+      margin-left: auto;
+    }
+    .mode-badge.deep { background: #ecfdf5; color: #047857; }
+    .summary-text {
+      font-size: 0.82rem;
+      color: #64748b;
+      line-height: 1.5;
+      margin-bottom: 1rem;
+      padding: 0.65rem;
+      background: #f8fafc;
       border-radius: 6px;
-      font-family: inherit;
-      font-size: 0.9rem;
+    }
+    .footer-links {
+      display: flex;
+      gap: 0.75rem;
+      justify-content: center;
+      margin-top: 0.75rem;
+      font-size: 0.75rem;
+    }
+    .footer-links a { color: #2563eb; text-decoration: none; }
+    .settings-bar {
+      padding: 0.65rem 1rem;
+      border-top: 1px solid #e2e8f0;
+      background: #f8fafc;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.75rem;
+    }
+    .settings-bar input {
+      flex: 1;
+      padding: 0.35rem 0.5rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      font-size: 0.75rem;
     }
   </style>
 </head>
@@ -240,6 +275,7 @@
       </svg>
     </div>
     <div class="title">AKILI Security</div>
+    <span class="mode-badge" id="mode-badge">Guest</span>
   </div>
   
   <div class="domain" id="current-domain">Loading...</div>
@@ -253,7 +289,7 @@
           <circle cx="18" cy="14" r="2" fill="#fff"/>
         </svg>
       </div>
-      <div class="loading-text">Scanning page security...</div>
+      <div class="loading-text" id="loading-text">Planning investigation…</div>
     </div>
     
     <div class="results" id="results">
@@ -264,11 +300,17 @@
       
       <div class="status-banner" id="status-banner"></div>
       
+      <div class="summary-text" id="summary-text" style="display:none"></div>
+      
       <div class="findings" id="findings"></div>
       
       <div class="buttons">
-        <button class="btn btn-primary" id="full-report-btn">Full Report</button>
+        <button class="btn btn-primary" id="full-report-btn">Full report on AKILI</button>
         <button class="btn btn-outline" id="rescan-btn">Rescan</button>
+      </div>
+      <div class="footer-links">
+        <a href="https://akili.com.ng/docs.html" target="_blank" rel="noopener">API docs</a>
+        <a href="https://akili.com.ng/developer" target="_blank" rel="noopener">Get API key</a>
       </div>
     </div>
     
@@ -285,6 +327,11 @@
         <a href="https://akili.com.ng/developer" target="_blank" style="color: #2563eb;">Get API Key →</a>
       </p>
     </div>
+  </div>
+  
+  <div class="settings-bar">
+    <input type="password" id="api-key-input" placeholder="API key for deep scans" autocomplete="off">
+    <button class="btn btn-outline btn-sm" id="save-key-btn" style="padding:0.35rem 0.6rem;font-size:0.75rem">Save</button>
   </div>
   
   <script src="popup.js"></script>

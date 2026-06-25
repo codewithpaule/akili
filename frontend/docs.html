@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Documentation | AKILI</title>
+  <meta name="description" content="Public AKILI API reference — streaming scans, authentication, and endpoints. No login required to read.">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/docs.css">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="docs-page">
+  <div id="nav-mount"></div>
+  <div class="docs-shell">
+    <aside class="docs-sidebar">
+      <div class="docs-sidebar-brand">AKILI API</div>
+      <div class="docs-sidebar-title">Documentation</div>
+      <nav>
+        <div class="docs-nav-group">
+          <span class="docs-nav-label">Start</span>
+          <a href="#overview">Overview</a>
+          <a href="#auth">Authentication</a>
+          <a href="#streaming">Streaming</a>
+          <a href="#distinct">Why AKILI</a>
+        </div>
+        <div class="docs-nav-group">
+          <span class="docs-nav-label">Guest (no key)</span>
+          <a href="#public-website">Public website scan</a>
+          <a href="#public-email">Public email scan</a>
+        </div>
+        <div class="docs-nav-group">
+          <span class="docs-nav-label">Scans (account)</span>
+          <a href="#scan-website">Website</a>
+          <a href="#scan-vuln">Vulnerability</a>
+          <a href="#scan-subdomains">Subdomains</a>
+          <a href="#scan-ip">IP</a>
+          <a href="#scan-org">Organization</a>
+          <a href="#scan-person">Person</a>
+          <a href="#scan-email">Email</a>
+          <a href="#scan-domain">Domain</a>
+        </div>
+        <div class="docs-nav-group">
+          <span class="docs-nav-label">Platform</span>
+          <a href="#history">History</a>
+          <a href="#keys">API keys</a>
+          <a href="#openapi">OpenAPI</a>
+        </div>
+      </nav>
+    </aside>
+
+    <main class="docs-main">
+      <header class="docs-hero" id="overview">
+        <h1>AKILI API</h1>
+        <p class="docs-hero-lead">REST API with <strong>streaming agent investigations</strong>. AKILI plans tools, runs them, revises confidence, and can search the web — you watch the log in real time. This page is public; you only need an account or API key to run scans.</p>
+        <div class="docs-badges">
+          <span class="docs-badge version">v1</span>
+          <span class="docs-badge">Streaming</span>
+          <span class="docs-badge">Agentic</span>
+          <span class="docs-badge">Free tier</span>
+        </div>
+        <div class="docs-base-url">
+          <span>Base URL</span>
+          <code id="docs-api-base">https://api.akili.com.ng</code>
+          <button type="button" class="btn btn-sm btn-outline" onclick="AKILI.copyText(document.getElementById('docs-api-base').textContent)">Copy</button>
+        </div>
+      </header>
+
+      <section class="docs-section" id="distinct">
+        <h2>What others don&apos;t do</h2>
+        <ul>
+          <li><strong>Planning-first</strong> — Groq builds a JSON tool plan per target before any check runs.</li>
+          <li><strong>Confidence loops</strong> — After each tool, AKILI scores confidence and can add more tools until evidence is solid.</li>
+          <li><strong>Web intel fallback</strong> — <code class="docs-inline-code">web_search</code> when on-tool data is thin (CVE news, breaches, corroboration).</li>
+          <li><strong>Tool chaining</strong> — e.g. tech fingerprint → CVE lookup, subdomains → link crawler on interesting hosts.</li>
+          <li><strong>Live stream</strong> — Token lines (<code class="docs-inline-code">PLAN:</code>, <code class="docs-inline-code">TOOL:</code>, <code class="docs-inline-code">COMPLETE:</code>) instead of waiting for a single JSON blob.</li>
+        </ul>
+      </section>
+
+      <section class="docs-section" id="auth">
+        <h2>Authentication</h2>
+        <p>Authenticated scans accept either:</p>
+        <ul>
+          <li><code class="docs-inline-code">Authorization: Bearer &lt;jwt&gt;</code> — from <code class="docs-inline-code">POST /api/v1/auth/login</code> or Google sign-in</li>
+          <li><code class="docs-inline-code">X-API-Key: ak_live_…</code> — create keys in the <a href="developer.html">developer console</a></li>
+        </ul>
+        <div class="docs-callout">Guest endpoints under <code class="docs-inline-code">/api/v1/public/scan/*</code> need no key. They use a lighter agent profile (fewer tools) and IP rate limits.</div>
+      </section>
+
+      <section class="docs-section" id="streaming">
+        <h2>Streaming responses</h2>
+        <p>Scan endpoints return <code class="docs-inline-code">text/plain</code> streams. Each line is prefixed:</p>
+        <div class="docs-table-wrap">
+          <table class="docs-table">
+            <thead><tr><th>Prefix</th><th>Meaning</th></tr></thead>
+            <tbody>
+              <tr><td><code>AKILI:</code></td><td>Agent narration</td></tr>
+              <tr><td><code>PLAN:</code></td><td>Investigation plan / tool choice</td></tr>
+              <tr><td><code>TOOL:</code></td><td>Tool execution</td></tr>
+              <tr><td><code>THINK:</code></td><td>Confidence revision</td></tr>
+              <tr><td><code>COMPLETE:</code></td><td>Final JSON report (parse this)</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="docs-section" id="public-website">
+        <h2>Public website scan</h2>
+        <div class="docs-endpoint">
+          <div class="docs-endpoint-head">
+            <span class="docs-method post">POST</span>
+            <span class="docs-endpoint-path">/api/v1/public/scan/website</span>
+          </div>
+          <div class="docs-endpoint-body">
+            <p>Guest agent scan — no auth. Streams lite investigation (planning + up to 4 tools).</p>
+            <div class="docs-code-wrap">
+              <button class="docs-copy-btn" type="button">Copy</button>
+              <pre id="ex-public-website">curl -N -X POST https://api.akili.com.ng/api/v1/public/scan/website \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com"}'</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="docs-section" id="public-email">
+        <h2>Public email scan</h2>
+        <div class="docs-endpoint">
+          <div class="docs-endpoint-head">
+            <span class="docs-method post">POST</span>
+            <span class="docs-endpoint-path">/api/v1/public/scan/email</span>
+          </div>
+          <div class="docs-endpoint-body">
+            <p>Breach check and MX validation without an account.</p>
+            <div class="docs-code-wrap">
+              <button class="docs-copy-btn" type="button">Copy</button>
+              <pre id="ex-public-email">curl -N -X POST https://api.akili.com.ng/api/v1/public/scan/email \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com"}'</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="docs-section" id="scan-website">
+        <h2>Full website scan</h2>
+        <div class="docs-endpoint">
+          <div class="docs-endpoint-head">
+            <span class="docs-method post">POST</span>
+            <span class="docs-endpoint-path">/api/v1/scan/website</span>
+          </div>
+          <div class="docs-endpoint-body">
+            <p>Deep agent: up to 10 planned tools, confidence follow-ups, CVE chaining.</p>
+            <div class="docs-code-wrap">
+              <button class="docs-copy-btn" type="button">Copy</button>
+              <pre id="ex-scan-website">curl -N -X POST https://api.akili.com.ng/api/v1/scan/website \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: ak_live_xxxx" \
+  -d '{"url":"https://example.com"}'</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="docs-section" id="scan-vuln">
+        <h2>Other scan endpoints</h2>
+        <p>Same streaming format and auth. Replace path segment:</p>
+        <div class="docs-table-wrap">
+          <table class="docs-table">
+            <thead><tr><th>POST path</th><th>Body field</th></tr></thead>
+            <tbody>
+              <tr><td><code>/api/v1/scan/vulnerability</code></td><td><code>url</code></td></tr>
+              <tr><td><code>/api/v1/scan/subdomains</code></td><td><code>domain</code></td></tr>
+              <tr><td><code>/api/v1/scan/ip</code></td><td><code>ip</code></td></tr>
+              <tr><td><code>/api/v1/scan/organization</code></td><td><code>organization</code></td></tr>
+              <tr><td><code>/api/v1/scan/person</code></td><td><code>name</code> (+ optional keywords)</td></tr>
+              <tr><td><code>/api/v1/scan/email</code></td><td><code>email</code></td></tr>
+              <tr><td><code>/api/v1/scan/domain</code></td><td><code>domain</code></td></tr>
+              <tr><td><code>/api/v1/scan/company</code></td><td><code>company</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="docs-section" id="history">
+        <h2>History & reports</h2>
+        <div class="docs-endpoint">
+          <div class="docs-endpoint-head">
+            <span class="docs-method get">GET</span>
+            <span class="docs-endpoint-path">/api/v1/history</span>
+          </div>
+          <div class="docs-endpoint-body"><p>List saved scans (Bearer JWT required).</p></div>
+        </div>
+        <div class="docs-endpoint">
+          <div class="docs-endpoint-head">
+            <span class="docs-method get">GET</span>
+            <span class="docs-endpoint-path">/api/v1/reports/{scan_id}</span>
+          </div>
+          <div class="docs-endpoint-body"><p>Fetch a report JSON by scan ID.</p></div>
+        </div>
+      </section>
+
+      <section class="docs-section" id="keys">
+        <h2>API keys</h2>
+        <p>Create keys via <code class="docs-inline-code">POST /api/v1/keys</code> (JWT). List with <code class="docs-inline-code">GET /api/v1/keys</code>. Revoke with <code class="docs-inline-code">DELETE /api/v1/keys/{id}</code>.</p>
+        <div class="docs-callout warn">Only scan targets you own or have written permission to test.</div>
+      </section>
+
+      <section class="docs-section" id="openapi">
+        <h2>OpenAPI (Swagger)</h2>
+        <p>Machine-readable schema and interactive UI (public, no API key required to view):</p>
+        <ul>
+          <li><a id="docs-swagger-link" href="#" target="_blank" rel="noopener">Swagger UI — /docs</a></li>
+          <li><a id="docs-redoc-link" href="#" target="_blank" rel="noopener">ReDoc — /redoc</a></li>
+          <li><a id="docs-openapi-link" href="#" target="_blank" rel="noopener">OpenAPI JSON — /openapi.json</a></li>
+        </ul>
+      </section>
+
+      <div class="docs-footer-cta">
+        <p>Ready to run deep scans? Free account — 5 scans per day, full agent depth.</p>
+        <a href="signup.html" class="btn btn-primary">Create account</a>
+        <a href="developer.html" class="btn btn-outline">Get API key</a>
+      </div>
+    </main>
+  </div>
+
+  <div id="footer-mount"></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    (function () {
+      const base = (window.AKILI && AKILI.API ? AKILI.API() : 'https://api.akili.com.ng').replace(/\/$/, '');
+      document.getElementById('docs-api-base').textContent = base;
+      document.getElementById('docs-swagger-link').href = base + '/docs';
+      document.getElementById('docs-redoc-link').href = base + '/redoc';
+      document.getElementById('docs-openapi-link').href = base + '/openapi.json';
+      ['ex-public-website','ex-public-email','ex-scan-website'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = el.textContent.replace(/https:\/\/api\.akili\.com\.ng/g, base);
+      });
+      document.querySelectorAll('.docs-copy-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const pre = btn.parentElement.querySelector('pre');
+          if (pre) AKILI.copyText(pre.textContent);
+        });
+      });
+      document.querySelectorAll('.docs-sidebar a[href^="#"]').forEach((a) => {
+        a.addEventListener('click', (e) => {
+          document.querySelectorAll('.docs-sidebar a').forEach((x) => x.classList.remove('is-active'));
+          a.classList.add('is-active');
+        });
+      });
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    })();
+  </script>
+</body>
+</html>

@@ -85,7 +85,7 @@
                 </a>
               </li>
               <li>
-                <a href="#" id="dash-sidebar-api-docs" class="sidebar-menu-item" style="--accent:var(--blue)" target="_blank" rel="noopener">
+                <a href="docs.html" id="dash-sidebar-api-docs" class="sidebar-menu-item" style="--accent:var(--blue)">
                   <span class="sidebar-menu-icon" style="background:var(--blue-light);color:var(--blue)"><i data-lucide="book-open"></i></span>
                   <span class="sidebar-menu-text">API Docs</span>
                 </a>
@@ -314,7 +314,7 @@
         { href: 'scan-ip.html', icon: 'network', color: 'var(--mod-ip)', title: 'IP intelligence', text: 'Hostnames, websites, ports, location' },
         { href: 'person.html', icon: 'user-search', color: 'var(--mod-person)', title: 'Person OSINT', text: 'Verified public profile signals' },
         { href: 'developer.html', icon: 'terminal', color: 'var(--navy)', title: 'API keys', text: 'Create keys and inspect usage' },
-        { href: '#', id: 'dash-action-api-docs', icon: 'book-open', color: 'var(--slate)', title: 'API docs', text: 'Interactive OpenAPI reference' },
+        { href: 'docs.html', id: 'dash-action-api-docs', icon: 'book-open', color: 'var(--slate)', title: 'API docs', text: 'Public API reference' },
       ];
       mount.innerHTML = actions.map((a) => `
         <a href="${a.href}" ${a.id ? `id="${a.id}"` : ''} class="card" style="display:flex;gap:0.75rem;align-items:flex-start;text-decoration:none;color:inherit;margin:0;border-top:3px solid ${a.color}" ${a.href === '#' ? 'target="_blank" rel="noopener"' : ''}>
@@ -466,7 +466,7 @@
     }
 
     renderDashboardActions();
-    const apiDocsUrl = AKILI.API().replace(/\/$/, '') + '/docs';
+    const apiDocsUrl = 'docs.html';
     const sideDocs = document.getElementById('dash-sidebar-api-docs');
     if (sideDocs) sideDocs.href = apiDocsUrl;
     const actionDocs = document.getElementById('dash-action-api-docs');

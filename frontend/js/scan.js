@@ -2,13 +2,7 @@
   // Read initial config to decide whether to allow public access.
   const _initial_cfg = window.AKILI_SCAN || {};
   const sandbox = _initial_cfg.sandbox || false;
-  if (!_initial_cfg.public && !sandbox) {
-    const token = localStorage.getItem('akili_token');
-    if (!token) {
-      location.href = 'signup.html';
-      return;
-    }
-  }
+  const _needsAuth = !_initial_cfg.public && !sandbox;
 
   function currentCfg() { return window.AKILI_SCAN || {}; }
   function currentModule() { return currentCfg().module || 'scan'; }
@@ -916,6 +910,10 @@
   }
 
   async function runScan() {
+    if (_needsAuth && !localStorage.getItem('akili_token')) {
+      if (window.AKILI) AKILI.showToast('Sign in to run a full scan', 'warning');
+      return;
+    }
     const body = currentBuildBody()();
     const cfg_now = currentCfg();
     if (cfg_now.validate && cfg_now.validate(body)) return;
@@ -1089,6 +1087,21 @@
   if (terminal) {
     terminal.innerHTML = '';
     ensureTerminalHeader();
+  }
+
+  if (_needsAuth) {
+    const mountGate = () => {
+      if (window.AKILI_GATE) {
+        AKILI_GATE.mountScanGate(currentModule());
+      }
+    };
+    if (window.AKILI_GATE) mountGate();
+    else {
+      const s = document.createElement('script');
+      s.src = 'js/gate.js';
+      s.onload = mountGate;
+      document.head.appendChild(s);
+    }
   }
 
   btn?.addEventListener('click', runScan);
