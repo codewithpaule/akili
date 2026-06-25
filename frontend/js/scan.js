@@ -315,6 +315,15 @@
     return '';
   }
 
+  function findingMeta(f) {
+    const parts = [];
+    if (f.cve_id) parts.push(`<span class="badge badge-medium">${AKILI.escapeHtml(f.cve_id)}</span>`);
+    if (f.cvss) parts.push(`<span class="label-sm">CVSS ${AKILI.escapeHtml(String(f.cvss))}</span>`);
+    if (f.exploitable) parts.push(`<span class="label-sm">Exploit: ${AKILI.escapeHtml(f.exploitable)}</span>`);
+    if (f.attack_path) parts.push(`<p class="label-sm" style="margin:0.35rem 0;color:var(--navy)"><strong>Attack path:</strong> ${AKILI.escapeHtml(f.attack_path)}</p>`);
+    return parts.join(' ');
+  }
+
   function findingLink(f) {
     return AKILI.externalUrl(f.url || f.reference_url || f.link || '');
   }
@@ -344,6 +353,7 @@
                 ${AKILI.escapeHtml(f.name || f.title || 'Finding')}
                 ${findingLink(f) ? ` - ${AKILI.externalLink(findingLink(f), 'Open evidence')}` : ''}
                 ${f.explanation ? `<br><span class="label-sm">${AKILI.escapeHtml(f.explanation)}</span>` : ''}
+                ${findingMeta(f)}
                 ${f.recommendation ? `<br><span class="label-sm" style="color:var(--blue)">Fix: ${AKILI.escapeHtml(f.recommendation)}</span>` : ''}
               </li>
             `).join('')}</ul>
@@ -400,6 +410,7 @@
       fg.innerHTML = (report.findings || []).map((f) => `
         <div class="card"><span class="badge badge-${(f.severity || 'info').toLowerCase()}">${f.severity}</span>
         <h4>${AKILI.escapeHtml(f.name || '')}</h4><p>${AKILI.escapeHtml(f.explanation || '')}</p>
+        ${findingMeta(f)}
         ${findingLink(f) ? `<p>${AKILI.externalLink(findingLink(f), 'Open evidence')}</p>` : ''}
         <p style="color:var(--blue)">${AKILI.escapeHtml(f.recommendation || '')}</p></div>
       `).join('');

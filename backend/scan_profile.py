@@ -4,19 +4,19 @@
 SCAN_PROFILES = {
     "guest": {
         "label": "Quick scan (no account)",
-        "max_iterations": 8,
+        "max_iterations": 12,
         "lite": True,
-        "max_plan_tools": 4,
+        "max_plan_tools": 6,
         "ai_depth": "agent_lite",
-        "description": "Planning-first agent with up to 4 focused checks and live follow-up. Sign up for full depth.",
+        "description": "Planning-first agent with up to 6 focused checks and live follow-up. Sign up for full offensive depth.",
     },
     "account": {
         "label": "Full investigation",
-        "max_iterations": 24,
+        "max_iterations": 32,
         "lite": False,
-        "max_plan_tools": 10,
+        "max_plan_tools": 12,
         "ai_depth": "deep",
-        "description": "Senior-analyst depth: multi-tool planning, confidence-driven follow-ups, CVE/version chaining, web intel when evidence is thin.",
+        "description": "Offensive-depth recon: 12-tool plans, 32 follow-ups, CVE chaining, secret exposure, attack-path reporting.",
     },
 }
 

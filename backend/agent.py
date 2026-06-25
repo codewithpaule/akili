@@ -56,49 +56,54 @@ from cache import cache_get, cache_set, cache_key
 from scan_messages import get as scan_msg, PERSON_MESSAGES
 
 
-PLANNING_PROMPT = """You are AKILI, a senior cybersecurity analyst running a defensive investigation.
-Think like a practitioner on a pentest retest: chain evidence, chase attack surface, and
-do not stop at surface headers.
+PLANNING_PROMPT = """You are AKILI, an elite offensive security operator running authorized reconnaissance.
+Think like someone mapping a target before exploitation: find the paths that actually get owned —
+exposed .env, git repos, admin panels, DB ports, EOL software with known CVEs, hardcoded keys,
+GraphQL introspection, Spring actuators, phpMyAdmin, backup.zip, and subdomain takeover surface.
 
 Scan type: {module}
 Target: {target}
 
-Before any tool runs, build an investigation plan that goes deeper than a checklist scan.
-Prioritize tools that expose real risk: admin/login surfaces, exposed databases, weak TLS,
-missing headers, technology versions with CVEs, leaked configs/backups, subdomain sprawl,
-open dangerous ports, mail/DNS misconfig, and public breach or reputation signals.
+Build an aggressive investigation plan. Do NOT waste tools on redundant checks.
+Mandatory chains when applicable:
+  tech_fingerprint OR fingerprint → cve_lookup (always if versions found)
+  subdomains → link_crawler OR exposed_files on high-value hosts
+  headers → vulnerability (always for web targets)
+  ports → port_scanner if anything suspicious opens
+  exposed_files → web_search for leaked creds if critical paths found
 
-Use web_search when you need current CVE news, breach context, or identity corroboration.
-Chain tools logically (e.g. fingerprint → cve_lookup, subdomains → link_crawler on interesting hosts).
+Use web_search for: active CVE exploits, breach dumps, Pastebin/leak mentions, Shodan-style context.
 
 Available tools: {available_tools}
 
 Reply in valid JSON only:
 {{
   "plan": [
-    {{"tool": "tool_name", "reason": "one sentence explaining what this reveals", "priority": "high|medium|low"}},
+    {{"tool": "tool_name", "reason": "what attack surface this exposes", "priority": "high|medium|low"}},
     ...
   ],
-  "investigation_goal": "one sentence describing what you are trying to find out"
+  "investigation_goal": "the concrete compromise path you are trying to confirm or rule out"
 }}
 
-Maximum {max_tools} tools. Order from highest risk impact to supporting evidence."""
+Maximum {max_tools} tools. Order by exploitability and blast radius."""
 
-CONFIDENCE_REVISE_PROMPT = """You are AKILI reviewing an ongoing security investigation.
-Based on findings so far, respond in valid JSON only:
+CONFIDENCE_REVISE_PROMPT = """You are AKILI mid-intrusion assessment. Evidence so far is in the JSON.
+If confidence is below 90, you are NOT done — add more tools to confirm exploit paths.
+Respond in valid JSON only:
 {{
   "confidence": <0-100 integer>,
-  "plan": [{{"tool": "tool_name", "reason": "one sentence", "priority": "high|medium|low"}}],
-  "investigation_goal": "optional updated goal"
+  "plan": [{{"tool": "tool_name", "reason": "what this confirms for attackers", "priority": "high|medium|low"}}],
+  "investigation_goal": "updated compromise hypothesis"
 }}
-confidence means how sure you are you have enough evidence for a meaningful report.
-Only include tools not in already_used. Maximum 6 tools in plan."""
+confidence = how sure you are the report captures real exploitable risk (not just missing headers).
+Only tools not in already_used. If critical/high findings exist and confidence < 85, add cve_lookup or web_search.
+Maximum 8 tools in plan."""
 
-AGENT_SYSTEM_PROMPT = """You are AKILI, an autonomous cybersecurity intelligence agent.
-Investigate like a senior analyst: run tools, read results, and request follow-ups until
-the picture is clear. Use web_search for CVE details, breach news, or corroboration when
-on-tool evidence is thin. Prefer chaining tools (tech fingerprint then CVE lookup, subdomains
-then crawler) over repeating the same check. Respond with tool calls when you need more data."""
+AGENT_SYSTEM_PROMPT = """You are AKILI, an offensive security agent on an authorized assessment.
+Your job is to find what attackers would find: leaked secrets, known CVEs on detected versions,
+internet-exposed admin/database panels, weak auth, and takeover paths.
+Chain tools relentlessly. Never stop at headers alone. Use web_search for CVE exploitability and leak intel.
+Respond with tool calls when you need more data. No exploit code — recon and evidence only."""
 
 def _target_param_schema(description: str = "URL, hostname, IP, email, or identifier"):
     return {
@@ -156,18 +161,41 @@ TOOL_MAP = {
     "web_search": lambda t, c: _web_search(c.get("_tool_query", t), c.get("_tool_intent", ""), c),
 }
 
-FINAL_WEBSITE_PROMPT = """You are a senior cybersecurity analyst preparing a report that should make a real software owner want to patch. Use ONLY the evidence JSON provided.
-Produce assessment JSON:
-{{"grade":"A-F","score":0-100,"summary":"3 sentences for site owners","site_purpose":"what this website does — university, shop, blog, etc. Use page_title, page_h1, page_description, og fields","legitimacy":"likely_legit|suspicious|unclear","legitimacy_notes":"brief evidence-based note","findings":[{{"severity":"critical|high|medium|low|info","name":"","explanation":"","recommendation":""}}]}}
+FINAL_WEBSITE_PROMPT = """You are AKILI writing a penetration-test style report for the site owner.
+Use ONLY the evidence JSON. Be precise, brutal, and accurate — no fear-mongering, no invented CVEs.
+
+Produce JSON:
+{{
+  "grade":"A-F",
+  "score":0-100,
+  "summary":"3 sentences: worst risks first, what an attacker would do next",
+  "site_purpose":"what this site actually is",
+  "legitimacy":"likely_legit|suspicious|unclear",
+  "legitimacy_notes":"evidence only",
+  "attack_surface_summary":"2 sentences on total exposure",
+  "findings":[
+    {{
+      "severity":"critical|high|medium|low|info",
+      "name":"short title",
+      "explanation":"what was found and why attackers care",
+      "recommendation":"exact fix",
+      "cve_id":"CVE-YYYY-NNNN if evidence supports it, else empty string",
+      "cvss":0.0,
+      "attack_path":"one-line chain e.g. exposed .env → DB creds → data exfil",
+      "exploitable":"confirmed|likely|unknown"
+    }}
+  ]
+}}
+
 Rules:
-- Actively look for exposed admin/login surfaces, public databases, dangerous ports, missing or weak TLS, missing security headers, old frameworks/CMS/plugins, CVEs tied to detected versions, leaked config/backup files, directory listings, risky CORS, mixed content, insecure cookies, suspicious redirects, weak DNS posture, and excessive attack surface.
-- For each finding, explain why it matters to attackers and what the owner should patch or configure.
-- Do not soften real high-risk evidence. Use critical/high when internet-exposed management services, databases, known exploitable CVEs, leaked secrets, or takeover paths are supported by evidence.
-- .edu / .edu.ng / .gov / university in title → likely_legit unless clear malware/phishing signals.
-- Missing security headers alone must NOT yield grade F or score below 55 for institutional sites.
-- Do not invent breaches, malware, or scams without evidence in the payload.
-- site_purpose must describe the actual organization (e.g. Nigerian university portal), not generic filler.
-NEVER include exploit code."""
+- Merge duplicate findings. Include ALL critical/high items from tool_findings and confirmed_exposed_paths.
+- Use critical when: .env/git/credentials exposed, RCE CVEs on detected versions, public DB admin, open Redis/Mongo/MySQL, hardcoded cloud keys.
+- Use high when: missing CSP/HSTS on auth sites, CSRF on login, phpMyAdmin public, directory listing, SQL errors, debug traces.
+- Include cve_id ONLY when cve_matches or technologies+cve data support it.
+- exploitable=confirmed only with direct evidence (exposed file content, matching CVE on exact version).
+- Do not invent breach data or malware. No exploit code or payloads.
+- .edu/.gov sites: likely_legit unless phishing/malware evidence. Missing headers alone ≠ F grade.
+- Score: start 100, subtract critical×25, high×12, medium×5. Floor 35 for .edu unless critical exposure."""
 
 IP_PROMPT = """You are a senior cybersecurity analyst reviewing public IP intelligence for defensive remediation.
 Use ONLY the evidence JSON. Tell the owner what this IP exposes and what to fix first.
@@ -381,7 +409,9 @@ def _build_website_ai_payload(context: dict) -> dict:
         "technologies": [],
         "confirmed_exposed_paths": [],
         "open_ports": [],
-        "tool_findings": context.get("findings", [])[:20],
+        "tool_findings": context.get("findings", [])[:40],
+        "cve_matches": [],
+        "vulnerability_scan": [],
     }
     for tr in context.get("tool_results", []):
         raw = tr.get("raw", {})
@@ -417,6 +447,16 @@ def _build_website_ai_payload(context: dict) -> dict:
             payload["confirmed_exposed_paths"] = raw.get("probes", [])[:30]
         if tool == "ports":
             payload["open_ports"] = raw.get("ports", [])[:15]
+        if tool == "port_scanner":
+            payload["port_scan"] = raw.get("ports", raw.get("open_ports", []))[:20]
+        if tool == "cve_lookup":
+            payload["cve_matches"] = raw.get("cves", raw.get("matches", []))[:25]
+        if tool == "vulnerability":
+            payload["vulnerability_scan"] = raw.get("vulnerabilities", [])[:25]
+        if tool == "link_crawler":
+            payload["hidden_paths"] = raw.get("hidden_paths", raw.get("interesting_links", []))[:20]
+        if tool == "subdomains":
+            payload["subdomains"] = (raw.get("active_subdomains") or raw.get("subdomains") or [])[:15]
     if host and (host.endswith(".edu.ng") or ".edu." in host or host.endswith(".edu")):
         payload["domain_profile"] = "academic"
     return payload
@@ -627,9 +667,47 @@ def run_tool(name: str, target: str, context: dict, tool_args: dict | None = Non
         context.setdefault("tool_results", []).append(result)
         for f in result.get("findings", []):
             context.setdefault("findings", []).append(f)
+        _auto_chain_tools(name, result, context, allowed)
         return result
     except Exception as e:
         return {"tool": name, "severity": "info", "title": "Error", "summary": str(e)[:200], "findings": []}
+
+
+def _auto_chain_tools(name: str, result: dict, context: dict, allowed: set) -> None:
+    """Queue follow-up tools when evidence demands deeper checks."""
+    if not result:
+        return
+    queue = context.setdefault("_auto_chain_queue", [])
+    used = set(context.get("tools_used", []))
+    raw = result.get("raw", {}) or {}
+
+    if name in ("fingerprint", "tech_fingerprint"):
+        techs = raw.get("technologies") or raw.get("tech_stack") or []
+        if techs:
+            context["technologies"] = techs
+            if "cve_lookup" not in used and ("cve_lookup" in allowed or not allowed):
+                queue.append({"tool": "cve_lookup", "reason": "Map CVEs to detected software versions"})
+
+    if name in ("headers", "fingerprint") and context.get("module") in ("website", "vulnerability", "api", "company"):
+        if "vulnerability" not in used and "vulnerability" in allowed:
+            queue.append({"tool": "vulnerability", "reason": "Deep vuln pass on fetched HTTP surface"})
+
+    if name == "exposed_files":
+        critical = [p for p in (raw.get("probes") or []) if p.get("accessible") and str(p.get("severity", "")).upper() == "CRITICAL"]
+        if critical and "web_search" not in used:
+            host = context.get("target", "")
+            queue.append({"tool": "web_search", "reason": "Check if exposed paths appear in public leak indexes", "query": f"{host} leaked credentials site:pastebin OR site:github"})
+
+    if name == "ports":
+        risky = {3306, 5432, 6379, 27017, 9200, 5984, 8080, 8443, 3389, 445, 23, 21}
+        open_ports = {int(p.get("port", 0)) for p in (raw.get("ports") or []) if p.get("open")}
+        if open_ports & risky and "port_scanner" not in used and "port_scanner" in allowed:
+            queue.append({"tool": "port_scanner", "reason": "Extended scan on internet-exposed database/admin ports"})
+
+    if name == "subdomains":
+        active = raw.get("active_subdomains") or raw.get("subdomains") or []
+        if len(active) >= 3 and "link_crawler" not in used and "link_crawler" in allowed:
+            queue.append({"tool": "link_crawler", "reason": "Crawl active subdomains for hidden admin/API paths"})
 
 
 def get_available_tools(module: str) -> list[str]:
@@ -651,7 +729,12 @@ def get_available_tools(module: str) -> list[str]:
     if module == "company":
         return ["org_scan", "subdomains", "whois_check", "fingerprint", "web_search"]
     if module == "api":
-        return ["headers", "fingerprint", "vulnerability", "exposed_files", "link_crawler", "web_search"]
+        return ["headers", "fingerprint", "tech_fingerprint", "vulnerability", "exposed_files", "link_crawler", "cve_lookup", "web_search"]
+    if module == "vulnerability":
+        return [
+            "vulnerability", "exposed_files", "headers", "ssl_check", "tech_fingerprint",
+            "fingerprint", "cve_lookup", "ports", "port_scanner", "link_crawler", "subdomains", "web_search",
+        ]
     return base
 
 
@@ -729,6 +812,7 @@ def _merge_website_report(context: dict, ai: dict) -> dict:
     report["site_purpose"] = ai.get("site_purpose", report.get("site_purpose", ""))
     report["legitimacy"] = ai.get("legitimacy", report.get("legitimacy", "unclear"))
     report["legitimacy_notes"] = ai.get("legitimacy_notes", report.get("legitimacy_notes", ""))
+    report["attack_surface_summary"] = ai.get("attack_surface_summary", "")
     if not report.get("site_purpose"):
         parts = [
             report.get("page_title"),
@@ -902,8 +986,18 @@ def run_agent(
             plan_queue.append(item)
 
     if not plan_queue and allowed_set:
-        fallback_tool = "email_intel" if module == "email" else "osint_person" if module == "person" else next(iter(sorted(allowed_set)), "headers")
-        plan_queue = [{"tool": fallback_tool, "reason": "Initial focused check", "priority": "high"}]
+        defaults = {
+            "email": "email_intel",
+            "person": "osint_person",
+            "vulnerability": "vulnerability",
+            "ip": "ip_intel",
+        }
+        first = defaults.get(module) or "headers"
+        plan_queue = [{"tool": first, "reason": "Initial attack-surface mapping", "priority": "high"}]
+        if module in ("website", "vulnerability", "api"):
+            for extra in ("exposed_files", "tech_fingerprint", "cve_lookup"):
+                if extra in allowed_set and len(plan_queue) < max_plan_tools:
+                    plan_queue.append({"tool": extra, "reason": f"Deep check: {extra}", "priority": "high"})
 
     context["plan"] = plan_queue
     context["investigation_goal"] = plan_data.get("investigation_goal", "")
@@ -924,9 +1018,13 @@ def run_agent(
     pending_tool_call_id: str | None = None
 
     def _should_stop() -> bool:
-        if tool_count >= min(MAX_ITERATIONS, tier_max_iterations):
+        cap = min(MAX_ITERATIONS, tier_max_iterations)
+        if tool_count >= cap:
             return True
-        if confidence > 88 and tool_count >= 4:
+        crit = sum(1 for f in context.get("findings", []) if str(f.get("severity", "")).lower() == "critical")
+        if confidence > 92 and tool_count >= 6:
+            return True
+        if confidence > 88 and tool_count >= 8 and crit == 0:
             return True
         if lite and tool_count >= tier_max_iterations:
             return True
@@ -1036,6 +1134,15 @@ def run_agent(
                 if tname and tname not in context.get("tools_used", []) and (tname in allowed_set or tname == "web_search"):
                     if not any(p.get("tool") == tname for p in plan_queue):
                         plan_queue.append(item)
+
+        for item in context.pop("_auto_chain_queue", []) or []:
+            tname = str(item.get("tool") or "").strip().lower()
+            if tname and tname not in context.get("tools_used", []) and (not allowed_set or tname in allowed_set or tname == "web_search"):
+                if not any(p.get("tool") == tname for p in plan_queue):
+                    plan_queue.append(item)
+                    chain_reason = (item.get("reason") or "")[:100]
+                    yield _emit("PLAN", f"Auto-chain → {_tool_label(tname)}" + (f": {chain_reason}" if chain_reason else ""))
+                    time.sleep(0)
 
         yield _emit("THINK", scan_msg("thinking", module))
         time.sleep(0)
