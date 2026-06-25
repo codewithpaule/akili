@@ -388,7 +388,7 @@
       let eduNote = document.getElementById('site-edu-note');
       if (report.domain_profile === 'education') {
         if (!eduNote) {
-          purposeEl.insertAdjacentHTML('afterend', '<p id="site-edu-note" class="label-sm" style="margin-top:0.5rem;color:var(--blue)">Educational / institutional site — scored with university-appropriate expectations.</p>');
+          purposeEl.insertAdjacentHTML('afterend', '<p id="site-edu-note" class="label-sm" style="margin-top:0.5rem;color:var(--blue)">Educational / institutional site, scored with university appropriate expectations.</p>');
         }
       } else if (eduNote) eduNote.remove();
     }
