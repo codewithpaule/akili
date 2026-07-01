@@ -48,6 +48,8 @@ Rules:
 - web_search_queries: 4 to 6 queries. One should target LinkedIn. One should target personal
   websites or portfolios. One should be a broad name-and-keyword search. One should search
   news or mentions.
+- For musicians, creators, and public figures, include targeted searches for Instagram,
+  Spotify, YouTube, TikTok, SoundCloud, and Facebook before X.
 - image_search_queries: 2 queries specifically for finding this person's photo.
 - Do not limit yourself to developer platforms. Think about the whole internet.
 - Do not invent private data. Only construct public-pattern URLs."""
@@ -135,6 +137,7 @@ PLATFORM_URL_TEMPLATES = {
     "behance": "https://www.behance.net/{slug}",
     "dribbble": "https://www.dribbble.com/{slug}",
     "soundcloud": "https://soundcloud.com/{slug}",
+    "tiktok": "https://www.tiktok.com/@{slug}",
 }
 
 
@@ -189,7 +192,7 @@ def build_candidate_urls(name: str, keywords: str, plan: dict) -> list[dict]:
         if isinstance(item, dict) and item.get("url"):
             add(str(item.get("platform", "profile")), item["url"], item.get("reason", "AI planned"))
 
-    priority = plan.get("priority_platforms") or ["linkedin", "x", "instagram", "youtube"]
+    priority = plan.get("priority_platforms") or ["linkedin", "instagram", "youtube", "facebook", "tiktok", "spotify", "soundcloud", "x"]
     for variant in plan.get("username_variants") or username_variants(name, keywords):
         slug = re.sub(r"[^\w\-\.]", "", str(variant).lower())[:39]
         if not slug:
@@ -211,11 +214,14 @@ def plan_investigation(name: str, keywords: str) -> dict:
             "investigation_summary": f"Check public profiles and web mentions for {name}",
             "person_type": "general",
             "username_variants": username_variants(name, keywords),
-            "priority_platforms": ["linkedin", "x", "instagram", "youtube", "facebook"],
+            "priority_platforms": ["linkedin", "instagram", "youtube", "facebook", "tiktok", "spotify", "soundcloud", "x"],
             "profile_urls_to_check": [],
             "web_search_queries": [
                 f'"{name}" {keywords}'.strip(),
                 f'site:linkedin.com/in "{name}" {keywords}'.strip(),
+                f'site:instagram.com "{name}" {keywords}'.strip(),
+                f'site:open.spotify.com "{name}" {keywords}'.strip(),
+                f'site:youtube.com "{name}" {keywords}'.strip(),
                 f'"{name}" {keywords} news'.strip(),
             ],
             "image_search_queries": [

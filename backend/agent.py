@@ -61,6 +61,9 @@ Think like someone mapping a target before exploitation: find the paths that act
 exposed .env, git repos, admin panels, DB ports, EOL software with known CVEs, hardcoded keys,
 GraphQL introspection, Spring actuators, phpMyAdmin, backup.zip, and subdomain takeover surface.
 
+Stay non-destructive. Do not exploit, write files, mutate data, brute force, bypass authentication,
+or run payloads that could disrupt a target. Be brutal in coverage and evidence quality, not in impact.
+
 Scan type: {module}
 Target: {target}
 
@@ -570,6 +573,22 @@ def _tool_label(name: str) -> str:
     return TOOL_LABELS.get(name, name.replace("_", " "))
 
 
+def _safe_tool_error(exc: Exception) -> str:
+    raw = str(exc or "").strip()
+    lowered = raw.lower()
+    noisy_transport = (
+        "tcptransport" in lowered
+        or "handler is closed" in lowered
+        or "transport closed" in lowered
+        or "connection closed" in lowered
+    )
+    if noisy_transport:
+        return "A network source closed during collection; the agent continued with the remaining evidence."
+    if not raw:
+        return "This check could not complete; the agent continued with the remaining evidence."
+    return raw[:200]
+
+
 def _normalize_tech_hint(hint: dict) -> dict:
     version = hint.get("version")
     if version and not isinstance(version, str):
@@ -670,7 +689,7 @@ def run_tool(name: str, target: str, context: dict, tool_args: dict | None = Non
         _auto_chain_tools(name, result, context, allowed)
         return result
     except Exception as e:
-        return {"tool": name, "severity": "info", "title": "Error", "summary": str(e)[:200], "findings": []}
+        return {"tool": name, "severity": "info", "title": "Check incomplete", "summary": _safe_tool_error(e), "findings": []}
 
 
 def _auto_chain_tools(name: str, result: dict, context: dict, allowed: set) -> None:

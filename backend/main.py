@@ -2,6 +2,7 @@ import logging
 import os
 import time
 import httpx
+import threading
 from llm import ask_llm, API_SCAN_PROMPT
 import uuid
 from typing import Optional
@@ -88,6 +89,8 @@ ALLOWED_ORIGINS = [o.strip() for o in origins_raw.split(",") if o.strip()]
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("akili.api")
+SCAN_OWNERS: dict[str, str] = {}
+SCAN_TARGETS: dict[str, str] = {}
 
 
 def log_scan(scan_id: str, scan_type: str):
@@ -476,6 +479,8 @@ class AuthScanBody(BaseModel):
 
 
 def _stream_agent(module: str, target: str, scan_id: str, user_id: str = "", scan_tier: str = "trial"):
+    SCAN_OWNERS[scan_id] = user_id or ""
+    SCAN_TARGETS[scan_id] = target
     # Record usage counters for authenticated users
     try:
         if user_id:
@@ -486,9 +491,11 @@ def _stream_agent(module: str, target: str, scan_id: str, user_id: str = "", sca
     except Exception:
         pass
 
-    # If a REDIS_URL is configured, enqueue the scan job for background workers
+    background_scans = (os.getenv("BACKGROUND_SCANS", "1") or "1").strip().lower() not in ("0", "false", "no")
+
+    # If a REDIS_URL is configured, enqueue the scan job for background workers.
     REDIS_URL = os.getenv('REDIS_URL') or os.getenv('REDIS_URI')
-    if REDIS_URL:
+    if background_scans and REDIS_URL:
         try:
             from rq import Queue
             import redis as _redis
@@ -496,10 +503,22 @@ def _stream_agent(module: str, target: str, scan_id: str, user_id: str = "", sca
             conn = _redis.from_url(REDIS_URL)
             q = Queue('scans', connection=conn)
             q.enqueue(run_agent_job, module, target, scan_id, user_id, scan_tier)
-            return JSONResponse({"status": "queued", "scan_id": scan_id})
+            return JSONResponse({"status": "queued", "scan_id": scan_id, "background": True})
         except Exception:
-            # Fall back to streaming if queuing fails
+            # Fall back to local background execution if queuing fails.
             pass
+
+    if background_scans:
+        from worker import run_agent_job
+
+        thread = threading.Thread(
+            target=run_agent_job,
+            args=(module, target, scan_id, user_id, scan_tier),
+            daemon=True,
+            name=f"akili-scan-{scan_id[:8]}",
+        )
+        thread.start()
+        return JSONResponse({"status": "queued", "scan_id": scan_id, "background": True})
 
     from starlette.concurrency import iterate_in_threadpool
 
@@ -1308,9 +1327,22 @@ async def scan_logs(request: Request, scan_id: str, since: int = 0):
                 raise HTTPException(401, "Sign in required")
             if user.get("user_id") != owner and user.get("role") != "admin":
                 raise HTTPException(403, "Not allowed")
+    else:
+        owner = SCAN_OWNERS.get(scan_id, "")
+        if owner:
+            if not user:
+                raise HTTPException(401, "Sign in required")
+            if user.get("user_id") != owner and user.get("role") != "admin":
+                raise HTTPException(403, "Not allowed")
 
     items = get_scan_logs(scan_id, since)
-    return {"items": items}
+    return {
+        "items": items,
+        "status": "done" if report else "running",
+        "report": report,
+        "scan_id": scan_id,
+        "target": (report or {}).get("target") or SCAN_TARGETS.get(scan_id, ""),
+    }
 
 
 @app.post("/api/v1/public/scan/website")

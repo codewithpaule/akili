@@ -28,7 +28,7 @@ PLATFORM_PATTERNS = {
     "researchgate": r"researchgate\.net/profile/[\w\-]+",
     "academia": r"(?:[\w]+\.)?academia\.edu/[\w]+",
     "soundcloud": r"soundcloud\.com/[\w\-]+",
-    "spotify": r"open\.spotify\.com/artist/[\w]+",
+    "spotify": r"open\.spotify\.com/(?:artist|user|show|playlist)/[\w]+",
     "imdb": r"imdb\.com/name/nm[\d]+",
     "crunchbase": r"crunchbase\.com/person/[\w\-]+",
     "wikipedia": r"(?:en\.)?wikipedia\.org/wiki/[\w\(\)]+",
@@ -61,19 +61,19 @@ def _confidence_breakdown(
 
     for card in high_confidence:
         score += 20
-        signals.append(f"Verified {card['platform']} profile with strong content match (+20)")
+        signals.append(f"Verified {card['platform']} profile with a strong public-content match")
 
     for card in medium_confidence:
         score += 10
-        signals.append(f"Likely {card['platform']} profile found (+10)")
+        signals.append(f"Likely {card['platform']} profile found")
 
     if len(found_platforms) >= 3:
         score += 10
-        signals.append(f"Presence on {len(found_platforms)} platforms is consistent (+10)")
+        signals.append(f"Presence across {len(found_platforms)} platforms looks consistent")
 
     if personal_website and personal_website.get("url"):
         score += 15
-        signals.append(f"Personal website found at {personal_website['url']} (+15)")
+        signals.append("Personal website found")
 
     if not social_cards:
         red_flags.append("No profiles could be verified from the available search results.")
@@ -83,7 +83,7 @@ def _confidence_breakdown(
         "score": max(0, min(100, score)),
         "signals": signals,
         "red_flags": red_flags,
-        "breakdown_visible": True,
+        "breakdown_visible": False,
     }
 
 
@@ -120,6 +120,9 @@ def _handle_from_url(url: str, platform: str) -> str | None:
         "youtube": r"youtube\.com/@([\w\-]+)",
         "reddit": r"reddit\.com/u(?:ser)?/([\w\-]+)",
         "medium": r"medium\.com/@([\w\-]+)",
+        "spotify": r"open\.spotify\.com/(?:artist|user|show|playlist)/([\w]+)",
+        "soundcloud": r"soundcloud\.com/([\w\-]+)",
+        "tiktok": r"tiktok\.com/@([\w\.]+)",
     }
     pat = patterns.get(platform)
     if not pat:
@@ -200,6 +203,58 @@ def _build_profile_images(social_cards: list) -> list[dict]:
             "confidence": card.get("confidence", "medium"),
         })
     return out
+
+
+def _apply_search_result_profiles(
+    name: str,
+    keywords: str,
+    platforms: dict,
+    social_cards: list,
+    web_results: list[dict],
+) -> None:
+    name_tokens = {t.lower() for t in re.findall(r"[a-zA-Z0-9]+", name) if len(t) > 1}
+    kw_tokens = {t.lower() for t in re.findall(r"[a-zA-Z0-9]+", keywords or "") if len(t) > 2}
+    for item in (web_results or [])[:40]:
+        url = _abs_url(item.get("link") or item.get("url") or "")
+        if not url:
+            continue
+        platform = _platform_from_url(url)
+        if not platform:
+            continue
+        haystack = " ".join([
+            str(item.get("title") or ""),
+            str(item.get("snippet") or ""),
+            url,
+        ]).lower()
+        name_hits = sum(1 for t in name_tokens if t in haystack)
+        kw_hits = sum(1 for t in kw_tokens if t in haystack)
+        if name_hits == 0 and kw_hits == 0:
+            continue
+        confidence = "medium" if name_hits >= max(1, min(2, len(name_tokens))) or kw_hits else "low"
+        handle = _handle_from_url(url, platform)
+        if platform not in platforms:
+            platforms[platform] = {"found": False, "url": None}
+        existing = platforms.get(platform) or {}
+        if not existing.get("found") or existing.get("identity_confidence") in ("low", None):
+            platforms[platform] = {
+                "found": True,
+                "url": url,
+                "handle": handle,
+                "identity_confidence": confidence,
+                "evidence": [item.get("title") or item.get("snippet") or "Search result matched the provided identity context"],
+                "ai_verified": False,
+            }
+        if not any((c.get("profile_url") or c.get("url")) == url for c in social_cards):
+            social_cards.append({
+                "platform": platform,
+                "profile_url": url,
+                "url": url,
+                "handle": handle,
+                "bio": item.get("snippet") or "",
+                "display_name": item.get("title") or "",
+                "confidence": confidence,
+                "ai_verified": False,
+            })
 
 
 def _dedupe_images(*groups: list[dict], limit: int = 20) -> list[dict]:
@@ -401,6 +456,7 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
         personal_website = None
 
     _apply_verified_profiles(platforms, social_cards, verified_list)
+    _apply_search_result_profiles(name, keywords, platforms, social_cards, web_results)
 
     for vp in verified_list:
         u = vp.get("url")

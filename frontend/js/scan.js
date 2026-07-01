@@ -105,7 +105,7 @@
       s.lines.forEach((line) => {
         const el = document.createElement('div');
         el.className = lineClass(line);
-        el.textContent = line;
+        el.textContent = humanizeTerminalLine(line);
         terminal.appendChild(el);
       });
       terminal.scrollTop = terminal.scrollHeight;
@@ -191,7 +191,7 @@
     document.body.classList.add('akili-scan-active');
   }
 
-  function appendTerminal(text, scanId) {
+  function appendTerminal(text, scanId, store = true) {
     if (currentModule() === 'person' && /\d+\s+results\b/i.test(text)) {
       return;
     }
@@ -208,7 +208,7 @@
         }
       }
       const display = humanizeTerminalLine(trimmed);
-      if (session) session.lines.push(display);
+      if (session && store) session.lines.push(trimmed);
       const el = document.createElement('div');
       el.className = lineClass(trimmed);
       el.textContent = display;
@@ -237,20 +237,21 @@
     let lastTs = 0;
     const tick = async () => {
       if (stopped) return;
-      const data = await fetchScanLogsOnce(scanId, lastTs);
+      const data = await fetchScanLogsOnce(scanId, lastTs > 0 ? Math.max(0, lastTs - 1) : 0);
       if (!data || !Array.isArray(data.items)) return;
       const items = data.items || [];
-      if (!items.length) return;
       const session = sessionStore.get(scanId) || {
         id: scanId,
-        targetLabel: scanId,
+        targetLabel: data.target || scanId,
         status: 'running',
         started: Date.now(),
         lines: [],
         report: null,
       };
+      if (data.target) session.targetLabel = data.target;
+      if (!items.length && !data.report) return;
       const existing = new Set(session.lines || []);
-      let status = 'running';
+      let status = data.status === 'done' ? 'done' : 'running';
       items.forEach((it) => {
         if (!it) return;
         lastTs = Math.max(lastTs || 0, it.timestamp || 0);
@@ -263,10 +264,8 @@
         }
         if (kind === 'DONE') status = 'done';
       });
-      // If report present in latest item(s), try to parse JSON from COMPLETE: payload
-      const lastItem = items[items.length - 1] || {};
-      if (lastItem.message && typeof lastItem.message === 'string' && lastItem.message.startsWith('COMPLETE:')) {
-        try { session.report = JSON.parse(lastItem.message.slice(9)); } catch (_) {}
+      if (data.report) {
+        session.report = data.report;
         status = 'done';
       }
       session.status = status;
@@ -275,7 +274,7 @@
       if (activeScanId === scanId) {
         terminal.innerHTML = '';
         ensureTerminalHeader();
-        session.lines.forEach((line) => appendTerminal(line, scanId));
+        session.lines.forEach((line) => appendTerminal(line, scanId, false));
         if (session.status === 'done' && session.report) renderResults(session.report, scanId);
       }
       if (session.status !== 'running') stopPollingScanLogs(scanId);
@@ -842,10 +841,11 @@
     else if (mod_now === 'subdomains') renderSubdomains(report);
     else renderWebsite(report);
     AKILI.showToast('Scan complete', 'success');
-    if (!currentCfg().public && 'Notification' in window) {
+    if (!currentCfg().public && 'Notification' in window && (!session || !session.notified)) {
       const notify = () => new Notification('AKILI scan ready', { body: `${currentModule()} scan finished for ${report.target || report.url || 'your target'}` });
       if (Notification.permission === 'granted') notify();
       else if (Notification.permission !== 'denied') Notification.requestPermission().then((p) => { if (p === 'granted') notify(); });
+      if (session) session.notified = true;
     }
     if (report.scan_id && !sandbox) {
       const view = document.createElement('p');
@@ -880,7 +880,7 @@
   const EMIT_LABELS = {
     THINK: 'Thinking through the findings...',
     TOOL: 'Running a check...',
-    FOUND: 'Found something worth noting',
+    FOUND: 'Evidence found',
     CRITICAL: 'Found a serious issue',
     PLAN: 'Planning the next step',
     OK: 'Check complete',
@@ -963,6 +963,9 @@
     }
     showResultsLoading(true);
     AKILI.showToast(`${currentModule()} scan started`, 'info');
+    if (!cfg_now.public && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
     document.body.classList.add('akili-scan-active');
     if (cfg_now.public) {
       appendTerminal(`[AKILI] Starting guest ${currentModule()} quick scan`, thisScanId);
@@ -1037,9 +1040,24 @@
       if (contentType.includes('application/json')) {
         const j = await res.json().catch(() => null);
         if (j && j.status === 'queued') {
-          appendTerminal('[PROGRESS] Scan queued for background processing', thisScanId);
-          // start polling persisted logs
-          startPollingScanLogs(j.scan_id || thisScanId);
+          const serverScanId = j.scan_id || thisScanId;
+          if (serverScanId !== thisScanId) {
+            const current = sessionStore.get(thisScanId);
+            sessionStore.delete(thisScanId);
+            sessionStore.set(serverScanId, {
+              ...(current || {}),
+              id: serverScanId,
+              targetLabel: label,
+              status: 'running',
+              lines: current?.lines || [],
+              report: null,
+            });
+            activeScanId = serverScanId;
+            if (terminal) terminal.dataset.scanId = serverScanId;
+            renderSessionList();
+          }
+          appendTerminal('[PROGRESS] Scan queued for background processing', serverScanId);
+          startPollingScanLogs(serverScanId);
           return;
         }
         if (cfg_now.public) appendTerminal('[FOUND] Public scan returned structured results', thisScanId);
