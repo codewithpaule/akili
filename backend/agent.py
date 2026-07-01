@@ -106,7 +106,7 @@ AGENT_SYSTEM_PROMPT = """You are AKILI, an offensive security agent on an author
 Your job is to find what attackers would find: leaked secrets, known CVEs on detected versions,
 internet-exposed admin/database panels, weak auth, and takeover paths.
 Chain tools relentlessly. Never stop at headers alone. Use web_search for CVE exploitability and leak intel.
-Respond with tool calls when you need more data. No exploit code — recon and evidence only."""
+Respond with tool calls when you need more data. No exploit code, no credential attacks, no destructive checks. Recon and evidence only."""
 
 def _target_param_schema(description: str = "URL, hostname, IP, email, or identifier"):
     return {
@@ -1020,9 +1020,6 @@ def run_agent(
 
     context["plan"] = plan_queue
     context["investigation_goal"] = plan_data.get("investigation_goal", "")
-    for item in plan_queue:
-        yield _emit("PLAN", scan_msg("tool_running", module, tool=_tool_label(item.get("tool", ""))))
-        time.sleep(0)
 
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": AGENT_SYSTEM_PROMPT},

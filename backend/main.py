@@ -530,7 +530,7 @@ def _stream_agent(module: str, target: str, scan_id: str, user_id: str = "", sca
     return StreamingResponse(
         gen(),
         media_type="text/plain",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "X-Scan-Id": scan_id},
     )
 
 

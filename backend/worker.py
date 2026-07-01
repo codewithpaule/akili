@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from agent import run_agent
-from database import append_scan_log
+from database import append_scan_log, save_scan
 
 logger = logging.getLogger('akili.worker')
 

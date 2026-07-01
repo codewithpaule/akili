@@ -82,7 +82,7 @@ TOOL_RUNNING = {
 }
 
 FOUND_MESSAGES = {
-    "website":  "Found something worth noting",
+    "website":  "Evidence found",
     "ip":       "Found a relevant detail",
     "person":   "Found a public record",
     "email":    "Found relevant email data",

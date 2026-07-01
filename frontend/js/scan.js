@@ -1036,6 +1036,26 @@
         throw new Error(scanErrorMessage(err, res.statusText));
       }
 
+      const responseScanId = res.headers.get('X-Scan-Id');
+      let liveScanId = thisScanId;
+      if (responseScanId && responseScanId !== thisScanId) {
+        const current = sessionStore.get(thisScanId);
+        sessionStore.delete(thisScanId);
+        sessionStore.set(responseScanId, {
+          ...(current || {}),
+          id: responseScanId,
+          targetLabel: label,
+          status: 'running',
+          lines: current?.lines || [],
+          report: null,
+        });
+        activeScanId = responseScanId;
+        liveScanId = responseScanId;
+        if (terminal) terminal.dataset.scanId = responseScanId;
+        renderSessionList();
+        startPollingScanLogs(responseScanId);
+      }
+
       const contentType = res.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
         const j = await res.json().catch(() => null);
@@ -1056,6 +1076,7 @@
             if (terminal) terminal.dataset.scanId = serverScanId;
             renderSessionList();
           }
+          liveScanId = serverScanId;
           appendTerminal('[PROGRESS] Scan queued for background processing', serverScanId);
           startPollingScanLogs(serverScanId);
           return;
@@ -1073,40 +1094,44 @@
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        if (thisScanId !== activeScanId) break;
+        if (liveScanId !== activeScanId) break;
         buf += dec.decode(value, { stream: true });
         const parts = buf.split('\n');
         buf = parts.pop() || '';
         for (const line of parts) {
           if (line.startsWith('COMPLETE:')) {
-            try { renderResults(JSON.parse(line.slice(9)), thisScanId); } catch (_) {}
+            try { renderResults(JSON.parse(line.slice(9)), liveScanId); } catch (_) {}
           } else {
-            appendTerminal(line, thisScanId);
+            appendTerminal(line, liveScanId);
           }
         }
       }
-      if (buf.startsWith('COMPLETE:') && thisScanId === activeScanId) {
-        try { renderResults(JSON.parse(buf.slice(9)), thisScanId); } catch (_) {}
+      if (buf.startsWith('COMPLETE:') && liveScanId === activeScanId) {
+        try { renderResults(JSON.parse(buf.slice(9)), liveScanId); } catch (_) {}
       }
     } catch (e) {
       if (e.name === 'AbortError') return;
-      const message = scanErrorMessage(e, 'Scan failed');
-      AKILI.showToast(message, 'error');
-      appendTerminal('[CRITICAL] ' + message, thisScanId);
-      showResultsLoading(false);
-      const session = sessionStore.get(thisScanId);
+      const recoverId = activeScanId || thisScanId;
+      const session = sessionStore.get(recoverId);
       if (session) {
-        session.status = 'done';
+        session.status = 'running';
         renderSessionList();
       }
-      document.body.classList.remove('akili-scan-active');
+      AKILI.showToast('Connection dropped. AKILI will keep syncing this scan when the server is reachable.', 'warning');
+      appendTerminal('[PROGRESS] Connection dropped. Reconnecting to the background scan session...', recoverId);
+      startPollingScanLogs(recoverId, 3000);
+      showResultsLoading(true);
     } finally {
       if (thisScanId === activeScanId) {
           btn.disabled = false;
           const cfg_end = currentCfg();
           btn.textContent = cfg_end.buttonLabel || 'SCAN';
-          if (statusBar) statusBar.classList.remove('active');
-          document.body.classList.remove('akili-scan-active');
+          const activeSession = sessionStore.get(activeScanId);
+          const stillRunning = activeSession && activeSession.status === 'running';
+          if (!stillRunning) {
+            if (statusBar) statusBar.classList.remove('active');
+            document.body.classList.remove('akili-scan-active');
+          }
           if (typeof AKILI.refreshHealth === 'function') AKILI.refreshHealth();
         }
     }
