@@ -1,9 +1,91 @@
 (function () {
   const API = () => ((window.AKILI_CONFIG && AKILI_CONFIG.API_BASE) || 'http://localhost:8000').replace(/\/+$/, '');
   const ICONS = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
+  const LOCAL_HOST = typeof location !== 'undefined' && /localhost|127\.0\.0\.1|5500|5501/.test(location.hostname);
+  const PENDING_SCANS_KEY = 'akili_pending_scans';
+
+  function pageSlug() {
+    const p = (location.pathname.split('/').pop() || '').replace(/\.html$/i, '');
+    return p || 'index';
+  }
+
+  function linkPath(page) {
+    const slug = String(page || '').replace(/^\//, '').replace(/\.html$/i, '');
+    if (!slug || slug === 'index') return LOCAL_HOST ? '/index.html' : '/';
+    return LOCAL_HOST ? `/${slug}.html` : `/${slug}`;
+  }
+
+  function pageMatches(href) {
+    const slug = String(href || '').replace(/^\//, '').replace(/\.html$/i, '').split('/').pop() || 'index';
+    return pageSlug() === slug;
+  }
+
+  function getPendingScans() {
+    try { return JSON.parse(localStorage.getItem(PENDING_SCANS_KEY) || '[]'); } catch { return []; }
+  }
+
+  function trackPendingScan(scanId, module, target, returnPage) {
+    if (!scanId) return;
+    const list = getPendingScans().filter((s) => s.scanId !== scanId);
+    list.unshift({
+      scanId,
+      module: module || 'scan',
+      target: (target || '').slice(0, 120),
+      returnPage: returnPage || location.pathname,
+      started: Date.now(),
+    });
+    localStorage.setItem(PENDING_SCANS_KEY, JSON.stringify(list.slice(0, 30)));
+  }
+
+  function clearPendingScan(scanId) {
+    const list = getPendingScans().filter((s) => s.scanId !== scanId);
+    localStorage.setItem(PENDING_SCANS_KEY, JSON.stringify(list));
+  }
+
+  function notifyScanComplete(module, target) {
+    const title = `${(module || 'Scan').replace(/_/g, ' ')} complete`;
+    const body = target ? `Results ready for ${target}` : 'Your background scan finished.';
+    showToast(body, 'success', 6000);
+    if ('Notification' in window && Notification.permission === 'granted') {
+      try {
+        const n = new Notification(title, { body, icon: '/logo.svg', tag: `akili-scan-${Date.now()}` });
+        n.onclick = () => { window.focus(); n.close(); };
+      } catch (_) {}
+    }
+  }
+
+  async function pollPendingScans() {
+    const pending = getPendingScans();
+    if (!pending.length) return;
+    const token = getToken();
+    const key = getApiKey();
+    if (!token && !key) return;
+
+    for (const job of pending.slice(0, 8)) {
+      try {
+        const headers = {};
+        if (token) headers.Authorization = `Bearer ${token}`;
+        if (key) headers['X-API-Key'] = key;
+        const res = await fetch(`${API()}/api/v1/scan/${encodeURIComponent(job.scanId)}/logs`, { headers });
+        if (!res.ok) continue;
+        const data = await res.json();
+        if (data.status === 'done' || data.report) {
+          clearPendingScan(job.scanId);
+          notifyScanComplete(job.module, job.target);
+        }
+      } catch (_) {}
+    }
+  }
 
   window.AKILI = {
     API,
+    pageSlug,
+    linkPath,
+    pageMatches,
+    trackPendingScan,
+    clearPendingScan,
+    notifyScanComplete,
+    normalizeLocalLinks,
     showToast,
     openModal,
     closeModal,
@@ -198,16 +280,17 @@
         localStorage.removeItem('akili_token');
         localStorage.removeItem('akili_user');
         localStorage.removeItem('akili_api_key');
-        location.href = 'index.html';
+        location.href = linkPath('index');
       });
     }
 
-    const path = location.pathname.split('/').pop() || 'index.html';
+    const path = pageSlug();
     document.querySelectorAll('.nav-links a[data-page]').forEach((a) => {
-      if (a.getAttribute('data-page') === path) a.classList.add('active');
+      const dp = (a.getAttribute('data-page') || '').replace(/\.html$/i, '');
+      if (dp === path || pageMatches(a.getAttribute('href'))) a.classList.add('active');
     });
     const apiDocs = document.getElementById('nav-api-docs');
-    if (apiDocs) apiDocs.href = 'docs.html';
+    if (apiDocs) apiDocs.href = linkPath('docs');
   }
 
   const HEALTH_COLORS = { ok: '#22C55E', warn: '#F59E0B', err: '#EF4444', idle: '#94A3B8' };
@@ -472,6 +555,15 @@
     } catch (_) {}
   }
 
+  function normalizeLocalLinks(root) {
+    if (!LOCAL_HOST || !root) return;
+    root.querySelectorAll('a[href^="/"]').forEach((a) => {
+      const href = a.getAttribute('href') || '/';
+      if (href === '/') a.setAttribute('href', '/index.html');
+      else if (!/\.html$/i.test(href)) a.setAttribute('href', `${href}.html`);
+    });
+  }
+
   async function loadNav() {
     const mount = document.getElementById('nav-mount');
     if (!mount) return;
@@ -479,6 +571,7 @@
       try {
         const r = await fetch('partials/nav.html');
         mount.innerHTML = await r.text();
+        normalizeLocalLinks(mount);
       } catch (_) { return; }
     }
     initNav();
@@ -534,7 +627,7 @@
           localStorage.removeItem('akili_token');
           localStorage.removeItem('akili_user');
           localStorage.removeItem('akili_api_key');
-          location.href = 'index.html';
+          location.href = linkPath('index');
         });
       }
       // Fetch and update scan counter
@@ -586,8 +679,8 @@
   }
 
   function initSidebarLayout() {
-    const path = location.pathname.split('/').pop() || 'index.html';
-    const PUBLIC_PAGES = ['index.html', 'about.html', 'login.html', 'signup.html', 'privacy.html', 'terms.html', 'contact.html', 'docs.html', 'access.html', 'quick-scan.html'];
+    const path = pageSlug();
+    const PUBLIC_PAGES = ['index', 'about', 'login', 'signup', 'privacy', 'terms', 'contact', 'docs', 'access', 'quick-scan'];
     if (PUBLIC_PAGES.includes(path)) return;
     if (document.querySelector('.dashboard-layout') || document.querySelector('.admin-layout') || document.querySelector('.admin-topbar')) return;
     if (!localStorage.getItem('akili_token')) return;
@@ -615,25 +708,23 @@
     layout.className = 'dashboard-layout';
 
     const SCAN_MODULES = [
-      { href: 'scan-website.html', icon: 'globe', color: 'var(--mod-website)', name: 'Website Scan', desc: 'Headers, SSL, DNS, ports' },
-      { href: 'scan-vulnerability.html', icon: 'bug', color: 'var(--mod-vuln)', name: 'Vulnerability', desc: 'CORS, CSRF, misconfigs' },
-      { href: 'scan-subdomains.html', icon: 'git-branch', color: 'var(--mod-subdomain)', name: 'Subdomain Finder', desc: 'Scan a domain to find its subdomains (very effective!)' },
-      { href: 'scan-ip.html', icon: 'network', color: 'var(--mod-ip)', name: 'IP Intelligence', desc: 'Geo, ports, reputation' },
-      { href: 'scan-organization.html', icon: 'building-2', color: 'var(--mod-org)', name: 'Organization', desc: 'ASN and footprint' },
-      { href: 'scan-auth.html', icon: 'lock', color: '#6366F1', name: 'Authenticated Scan', desc: 'Authorized login testing' },
+      { href: 'scan-website', icon: 'globe', color: 'var(--mod-website)', name: 'Website Scan', desc: 'Headers, SSL, DNS, ports' },
+      { href: 'scan-vulnerability', icon: 'bug', color: 'var(--mod-vuln)', name: 'Vulnerability', desc: 'CORS, CSRF, misconfigs' },
+      { href: 'scan-subdomains', icon: 'git-branch', color: 'var(--mod-subdomain)', name: 'Subdomain Finder', desc: 'Scan a domain to find its subdomains (very effective!)' },
+      { href: 'scan-ip', icon: 'network', color: 'var(--mod-ip)', name: 'IP Intelligence', desc: 'Geo, ports, reputation' },
+      { href: 'scan-organization', icon: 'building-2', color: 'var(--mod-org)', name: 'Organization', desc: 'ASN and footprint' },
+      { href: 'scan-auth', icon: 'lock', color: '#9A8470', name: 'Authenticated Scan', desc: 'Authorized login testing' },
     ];
     const INTEL_MODULES = [
-        { href: 'person.html', icon: 'user-search', color: 'var(--mod-person)', name: 'Person Search', desc: 'Public OSINT due diligence' },
-      { href: 'company.html', icon: 'briefcase', color: 'var(--mod-company)', name: 'Company Intel', desc: 'Domains, people, stack' },
-      { href: 'email.html', icon: 'mail', color: 'var(--mod-email)', name: 'Email Investigator', desc: 'MX, breaches, validity' },
-      { href: 'domain.html', icon: 'shield-check', color: 'var(--mod-domain)', name: 'Domain Reputation', desc: 'Age, typos, safe browsing' },
-      // { href: 'breaches.html', icon: 'shield-alert', color: '#EF4444', name: 'Nigerian Breaches', desc: 'Nigerian compromised infrastructure data feed' },
-      // Relationship Graph removed
+        { href: 'person', icon: 'user-search', color: 'var(--mod-person)', name: 'Person Search', desc: 'Public OSINT due diligence' },
+      { href: 'company', icon: 'briefcase', color: 'var(--mod-company)', name: 'Company Intel', desc: 'Domains, people, stack' },
+      { href: 'email', icon: 'mail', color: 'var(--mod-email)', name: 'Email Investigator', desc: 'MX, breaches, validity' },
+      { href: 'domain', icon: 'shield-check', color: 'var(--mod-domain)', name: 'Domain Reputation', desc: 'Age, typos, safe browsing' },
     ];
     const TOOL_MODULES = [
-      { href: 'docs.html', icon: 'book-open', color: 'var(--navy)', name: 'API docs', desc: 'Public reference — no login to read' },
-      { href: 'quick-scan.html', icon: 'zap', color: '#f59e0b', name: 'Quick Scan', desc: 'No login — guest website or email check' },
-      { href: 'developer.html', icon: 'terminal', color: 'var(--navy)', name: 'Developers', desc: 'Named API keys & limits' },
+      { href: 'docs', icon: 'book-open', color: 'var(--navy)', name: 'API docs', desc: 'Public reference — no login to read' },
+      { href: 'quick-scan', icon: 'zap', color: '#B8956B', name: 'Quick Scan', desc: 'No login — guest website or email check' },
+      { href: 'developer', icon: 'terminal', color: 'var(--navy)', name: 'Developers', desc: 'Named API keys & limits' },
     ];
 
     function renderMenuHTML(items) {
@@ -641,7 +732,7 @@
         const isActive = path === m.href ? ' active' : '';
         return `
           <li>
-            <a href="${m.href}" class="sidebar-menu-item${isActive}${m.premium ? ' is-premium' : ''}" style="--accent:${m.color}" title="${escapeHtml(m.desc)}">
+            <a href="${linkPath(m.href)}" class="sidebar-menu-item${isActive}${m.premium ? ' is-premium' : ''}" style="--accent:${m.color}" title="${escapeHtml(m.desc)}">
               <span class="sidebar-menu-icon" style="background:${m.color}15;color:${m.color}">
                 <i data-lucide="${m.icon}"></i>
               </span>
@@ -656,10 +747,10 @@
     const sidebarHtml = `
       <aside class="dash-sidebar" id="dash-sidebar">
         <div class="sidebar-header">
-          <a href="dashboard.html" class="logo">
+          <a href="${linkPath('dashboard')}" class="logo">
             <svg class="akili-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-              <circle cx="16" cy="16" r="14" stroke="#2563EB" stroke-width="2"/>
-              <circle cx="16" cy="16" r="6" fill="#2563EB"/>
+              <circle cx="16" cy="16" r="14" stroke="#8B7355" stroke-width="2"/>
+              <circle cx="16" cy="16" r="6" fill="#8B7355"/>
               <circle cx="18" cy="14" r="2" fill="#fff"/>
             </svg>
             AKILI
@@ -673,7 +764,7 @@
               <span class="sidebar-group-title">Navigation</span>
               <ul class="sidebar-menu">
                 <li>
-                  <a href="dashboard.html" class="sidebar-menu-item${path === 'dashboard.html' ? ' active' : ''}" style="--accent:var(--blue)">
+                  <a href="${linkPath('dashboard')}" class="sidebar-menu-item${path === 'dashboard' ? ' active' : ''}" style="--accent:var(--blue)">
                     <span class="sidebar-menu-icon" style="background:var(--blue-light);color:var(--blue)">
                       <i data-lucide="layout-dashboard"></i>
                     </span>
@@ -702,13 +793,13 @@
               <span class="sidebar-group-title">Account</span>
               <ul class="sidebar-menu">
                 <li>
-                  <a href="profile.html" class="sidebar-menu-item${path === 'profile.html' ? ' active' : ''}" style="--accent:var(--blue)">
+                  <a href="${linkPath('profile')}" class="sidebar-menu-item${path === 'profile' ? ' active' : ''}" style="--accent:var(--blue)">
                     <span class="sidebar-menu-icon" style="background:var(--blue-light);color:var(--blue)"><i data-lucide="user"></i></span>
                     <span class="sidebar-menu-text">Profile Details</span>
                   </a>
                 </li>
                 <li>
-                  <a href="history.html" class="sidebar-menu-item${path === 'history.html' ? ' active' : ''}" style="--accent:var(--blue)">
+                  <a href="${linkPath('history')}" class="sidebar-menu-item${path === 'history' ? ' active' : ''}" style="--accent:var(--blue)">
                     <span class="sidebar-menu-icon" style="background:var(--blue-light);color:var(--blue)"><i data-lucide="clock"></i></span>
                     <span class="sidebar-menu-text">Scan History</span>
                   </a>
@@ -745,8 +836,8 @@
         <button class="sidebar-toggle" id="sidebar-toggle-global" aria-label="Open menu"><i data-lucide="menu"></i></button>
         <div class="dash-topbar-brand">
           <svg class="akili-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true" style="width:24px;height:24px;">
-            <circle cx="16" cy="16" r="14" stroke="#2563EB" stroke-width="2"/>
-            <circle cx="16" cy="16" r="6" fill="#2563EB"/>
+            <circle cx="16" cy="16" r="14" stroke="#8B7355" stroke-width="2"/>
+            <circle cx="16" cy="16" r="6" fill="#8B7355"/>
             <circle cx="18" cy="14" r="2" fill="#fff"/>
           </svg>
           <span style="font-weight:700;color:var(--navy);font-size:1.15rem;margin-left:0.35rem;">AKILI</span>
@@ -796,12 +887,12 @@
         localStorage.removeItem('akili_token');
         localStorage.removeItem('akili_user');
         localStorage.removeItem('akili_api_key');
-        location.href = 'index.html';
+        location.href = linkPath('index');
       });
     }
 
     const globalDocs = layout.querySelector('#global-sidebar-api-docs');
-    if (globalDocs) globalDocs.href = 'docs.html';
+    if (globalDocs) globalDocs.href = linkPath('docs');
 
     if (typeof lucide !== 'undefined') {
       lucide.createIcons();
@@ -832,5 +923,10 @@
     setInterval(() => {
       if (document.getElementById('health-dot')) initHealth();
     }, 60000);
+    pollPendingScans();
+    setInterval(pollPendingScans, 8000);
+    if ('Notification' in window && Notification.permission === 'default') {
+      setTimeout(() => Notification.requestPermission().catch(() => {}), 3000);
+    }
   });
 })();

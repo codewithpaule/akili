@@ -277,7 +277,15 @@
         session.lines.forEach((line) => appendTerminal(line, scanId, false));
         if (session.status === 'done' && session.report) renderResults(session.report, scanId);
       }
-      if (session.status !== 'running') stopPollingScanLogs(scanId);
+      if (session.status !== 'running') {
+        stopPollingScanLogs(scanId);
+        if (session.status === 'done' && session.report) {
+          if (typeof AKILI.clearPendingScan === 'function') AKILI.clearPendingScan(scanId);
+          if (typeof AKILI.notifyScanComplete === 'function') {
+            AKILI.notifyScanComplete(currentModule(), session.targetLabel);
+          }
+        }
+      }
     };
     const id = setInterval(tick, intervalMs);
     pollers.set(scanId, { id, stop: () => { stopped = true; clearInterval(id); } });
@@ -1077,7 +1085,10 @@
             renderSessionList();
           }
           liveScanId = serverScanId;
-          appendTerminal('[PROGRESS] Scan queued for background processing', serverScanId);
+          appendTerminal('[PROGRESS] Scan queued — runs in background. You can leave this page.', serverScanId);
+          if (typeof AKILI.trackPendingScan === 'function') {
+            AKILI.trackPendingScan(serverScanId, currentModule(), label, location.pathname);
+          }
           startPollingScanLogs(serverScanId);
           return;
         }

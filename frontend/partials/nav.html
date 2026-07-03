@@ -1,52 +1,65 @@
-<nav class="navbar">
-  <a href="index.html" class="logo" id="nav-logo">
-    <svg class="akili-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><circle cx="16" cy="16" r="14" stroke="#2563EB" stroke-width="2"/><circle cx="16" cy="16" r="6" fill="#2563EB"/><circle cx="18" cy="14" r="2" fill="#fff"/></svg>
+<!-- Primary nav: brand + main sections -->
+<nav class="navbar navbar-primary">
+  <a href="/" class="logo" id="nav-logo">
+    <svg class="akili-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><circle cx="16" cy="16" r="14" stroke="#8B7355" stroke-width="2"/><circle cx="16" cy="16" r="6" fill="#8B7355"/><circle cx="18" cy="14" r="2" fill="#fff"/></svg>
     AKILI
   </a>
   <button class="hamburger" id="nav-hamburger" aria-label="Menu"><i data-lucide="menu"></i></button>
   <div class="nav-inner" id="nav-inner">
     <div class="nav-drawer-header">
       <div class="nav-drawer-brand">
-        <svg class="akili-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><circle cx="16" cy="16" r="14" stroke="#2563EB" stroke-width="2"/><circle cx="16" cy="16" r="6" fill="#2563EB"/><circle cx="18" cy="14" r="2" fill="#fff"/></svg>
+        <svg class="akili-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><circle cx="16" cy="16" r="14" stroke="#8B7355" stroke-width="2"/><circle cx="16" cy="16" r="6" fill="#8B7355"/><circle cx="18" cy="14" r="2" fill="#fff"/></svg>
         <span>AKILI</span>
       </div>
       <button class="nav-drawer-close" id="nav-drawer-close" aria-label="Close menu"><i data-lucide="x"></i></button>
     </div>
     <ul class="nav-links">
-      <li><a href="index.html" data-page="index.html" id="nav-home">Home</a></li>
-      <li class="nav-guest-only"><a href="quick-scan.html" data-page="quick-scan.html" id="nav-quick-scan">Quick Scan</a></li>
-      <!-- <li><a href="breaches.html" data-page="breaches.html" id="nav-breaches">Breaches</a></li> -->
-      <li class="nav-guest-only"><a href="docs.html" id="nav-api-docs" data-page="docs.html">API docs</a></li>
+      <li><a href="/" data-page="index" id="nav-home">Home</a></li>
+      <li class="nav-guest-only"><a href="/quick-scan" data-page="quick-scan" id="nav-quick-scan">Quick Scan</a></li>
+      <li class="nav-guest-only"><a href="/docs" id="nav-api-docs" data-page="docs">Docs</a></li>
     </ul>
     <div class="nav-drawer-auth nav-guest-only">
-      <a href="login.html" class="drawer-signin">Sign in</a>
-      <a href="signup.html" class="drawer-cta">Start free</a>
+      <a href="/login" class="drawer-signin">Sign in</a>
+      <a href="/signup" class="drawer-cta">Start free</a>
     </div>
     <div class="nav-drawer-auth nav-auth-only" style="display:none">
-      <a href="dashboard.html" class="drawer-signin">Dashboard</a>
-      <a href="profile.html" class="drawer-signin">Profile</a>
+      <a href="/dashboard" class="drawer-signin">Dashboard</a>
+      <a href="/profile" class="drawer-signin">Profile</a>
       <button type="button" class="drawer-cta" id="nav-drawer-logout">Sign out</button>
     </div>
   </div>
   <div class="nav-right">
-    <a href="dashboard.html" class="hide-mobile nav-auth-only" id="nav-dashboard" style="display:none;font-weight:600">Dashboard</a>
-    <a href="profile.html" class="hide-mobile nav-auth-only" id="nav-profile" style="display:none">Profile</a>
+    <a href="/dashboard" class="hide-mobile nav-auth-only" id="nav-dashboard" style="display:none;font-weight:600">Dashboard</a>
+    <a href="/profile" class="hide-mobile nav-auth-only" id="nav-profile" style="display:none">Profile</a>
     <div class="hide-mobile nav-auth-only" id="nav-scan-counter" style="display:none;margin-right:0.5rem;text-align:right">
-      <div style="font-size:0.75rem;color:#64748B">Scans today</div>
+      <div style="font-size:0.75rem;color:var(--slate)">Scans today</div>
       <div style="font-size:0.85rem;font-weight:600;color:var(--navy)">
         <span id="scan-used">0</span>/<span id="scan-limit">5</span>
       </div>
-      <div id="scan-progress" style="height:3px;background:#E2E8F0;border-radius:2px;margin-top:2px;overflow:hidden">
-        <div id="scan-progress-bar" style="height:100%;background:#10B981;width:0%;transition:width 0.3s"></div>
+      <div id="scan-progress" style="height:3px;background:var(--border);border-radius:2px;margin-top:2px;overflow:hidden">
+        <div id="scan-progress-bar" style="height:100%;background:var(--green);width:0%;transition:width 0.3s"></div>
       </div>
     </div>
     <button type="button" class="btn btn-outline btn-sm hide-mobile nav-auth-only" id="nav-logout" style="display:none">Sign out</button>
-    <a href="login.html" class="hide-mobile nav-guest-only" id="nav-login">Sign in</a>
-    <!-- <a href="signup.html" class="hide-mobile nav-guest-only" id="nav-signup" style="font-size:0.85rem">Sign up</a> -->
+    <a href="/login" class="hide-mobile nav-guest-only" id="nav-login">Sign in</a>
     <span id="health-dot" class="health-dot" title="API status"></span>
-    <span id="health-label" class="hide-mobile" style="font-size:0.7rem;color:#64748B;margin-left:4px">…</span>
-    <a href="signup.html" class="btn btn-primary btn-sm hide-mobile nav-guest-only" id="nav-cta">Start free</a>
+    <span id="health-label" class="hide-mobile" style="font-size:0.7rem;color:var(--slate);margin-left:4px">…</span>
+    <a href="/signup" class="btn btn-primary btn-sm hide-mobile nav-guest-only" id="nav-cta">Start free</a>
   </div>
   <div class="nav-overlay" id="nav-overlay"></div>
 </nav>
 
+<!-- Secondary nav: scan categories -->
+<nav class="navbar navbar-secondary" aria-label="Scan modules">
+  <div class="nav-secondary-inner container">
+    <span class="nav-secondary-label">Modules</span>
+    <ul class="nav-secondary-links">
+      <li><a href="/scan-website">Website</a></li>
+      <li><a href="/scan-vulnerability">Vuln</a></li>
+      <li><a href="/person">OSINT</a></li>
+      <li><a href="/email">Email</a></li>
+      <li><a href="/scan-ip">IP</a></li>
+      <li><a href="/developer">API</a></li>
+    </ul>
+  </div>
+</nav>

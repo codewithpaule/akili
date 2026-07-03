@@ -52,6 +52,11 @@ def run_agent_job(module: str, target: str, scan_id: str, user_id: str = '', sca
                 append_scan_log(scan_id, 'CRITICAL', 'Agent job terminated due to timeout')
                 break
         # completed
+        try:
+            from scan_cleanup import schedule_scan_purge
+            schedule_scan_purge(scan_id)
+        except Exception:
+            pass
     except Exception:
         logger.exception('run_agent_job failed')
         append_scan_log(scan_id, 'CRITICAL', 'The background agent stopped unexpectedly. Please retry the scan.')

@@ -24,15 +24,24 @@
 
         <div id="pin-step" style="display:none">
           <p class="sub">Credentials verified. Enter your admin security PIN.</p>
-          <div class="auth-field"><label>Admin PIN</label><input type="password" id="admin-pin" placeholder="Admin PIN" autocomplete="off"></div>
+          <div class="auth-field"><label>Admin PIN</label><input type="password" id="admin-pin" placeholder="Admin PIN (if configured)" autocomplete="off"></div>
           <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
             <button type="button" id="pin-back" class="btn btn-outline" style="flex:1">Back</button>
-            <button type="submit" id="pin-submit" class="btn btn-primary" style="flex:1">Sign in to admin</button>
+            <button type="submit" id="pin-submit" class="btn btn-primary" style="flex:1">Send verification code</button>
+          </div>
+        </div>
+
+        <div id="otp-step" style="display:none">
+          <p class="sub">A one-time code was sent to your admin email. Enter it below to complete sign-in.</p>
+          <div class="auth-field"><label>Verification code</label><input type="text" id="admin-otp" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="6-digit code" autocomplete="one-time-code" required></div>
+          <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
+            <button type="button" id="otp-back" class="btn btn-outline" style="flex:1">Back</button>
+            <button type="submit" id="otp-submit" class="btn btn-primary" style="flex:1">Verify &amp; enter panel</button>
           </div>
         </div>
       </form>
       <p style="margin-top:1.25rem;font-size:0.85rem;color:var(--slate)">
-        <a href="index.html">← Back to site</a> · <a href="login.html">User login</a>
+        <a href="/">← Back to site</a> · <a href="/login">User login</a>
       </p>
     </div>
   </div>
@@ -47,11 +56,11 @@
     }
     // Only allow access via the secret admin base path
     if (!location.pathname.startsWith(ADMIN_BASE)) {
-      location.replace('index.html');
+      location.replace('/');
     }
     // Hide admin page unless you came through admin-entry with a key.
     if (!sessionStorage.getItem('akili_admin_entry') || !sessionStorage.getItem('akili_admin_key')) {
-      location.replace('index.html');
+      location.replace('/');
     }
     if (AKILI_ADMIN.getToken() && AKILI_ADMIN.getUser()?.is_admin) {
       location.href = ADMIN_BASE + '/panel';
@@ -60,62 +69,77 @@
       const form = document.getElementById('admin-login-form');
       const credStep = document.getElementById('credentials-step');
       const pinStep = document.getElementById('pin-step');
+      const otpStep = document.getElementById('otp-step');
       const emailEl = document.getElementById('email');
       const passwordEl = document.getElementById('password');
       const pinEl = document.getElementById('admin-pin');
+      const otpEl = document.getElementById('admin-otp');
+
+      function showStep(step) {
+        credStep.style.display = step === 'cred' ? '' : 'none';
+        pinStep.style.display = step === 'pin' ? '' : 'none';
+        otpStep.style.display = step === 'otp' ? '' : 'none';
+      }
 
       async function verifyCredentials(email, password) {
-        try {
-          const data = await AKILI_ADMIN.api('/api/v1/auth/login', {
-            method: 'POST',
-            body: JSON.stringify({ email, password }),
-          });
-          return data;
-        } catch (e) {
-          throw e;
-        }
+        const data = await AKILI_ADMIN.api('/api/v1/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({ email, password }),
+        });
+        return data;
       }
 
       form.onsubmit = async (e) => {
         e.preventDefault();
         try {
           if (credStep.style.display !== 'none') {
-            // First step: verify email/password
-            const email = emailEl.value;
+            const email = emailEl.value.trim();
             const password = passwordEl.value;
             const data = await verifyCredentials(email, password);
             if (!data.user?.is_admin) throw new Error('Not an administrator');
-            // Move to PIN step
-            credStep.style.display = 'none';
-            pinStep.style.display = '';
+            showStep('pin');
             pinEl.focus();
             return;
           }
 
-          // PIN step: submit admin login with PIN
-          const payload = {
-            email: emailEl.value,
-            password: passwordEl.value,
-            admin_pin: pinEl.value,
-          };
-          const out = await AKILI_ADMIN.api('/api/v1/admin/login', {
+          if (pinStep.style.display !== 'none') {
+            const payload = {
+              email: emailEl.value.trim(),
+              password: passwordEl.value,
+              admin_pin: pinEl.value || '',
+            };
+            const out = await AKILI_ADMIN.api('/api/v1/admin/login', {
+              method: 'POST',
+              body: JSON.stringify(payload),
+            });
+            if (!out.otp_sent) throw new Error(out.message || 'Could not send verification code');
+            AKILI.showToast('Verification code sent to your admin email', 'success');
+            showStep('otp');
+            otpEl.focus();
+            return;
+          }
+
+          const otp = (otpEl.value || '').trim();
+          if (!otp) throw new Error('Enter the verification code from your email');
+          const verified = await AKILI_ADMIN.api('/api/v1/admin/verify-otp', {
             method: 'POST',
-            body: JSON.stringify(payload),
+            body: JSON.stringify({
+              email: emailEl.value.trim(),
+              password: passwordEl.value,
+              admin_pin: otp,
+            }),
           });
-          if (!out.user?.is_admin) throw new Error('Not an administrator');
-          AKILI_ADMIN.setSession(out.token, out.user);
+          if (!verified.user?.is_admin) throw new Error('Not an administrator');
+          AKILI_ADMIN.setSession(verified.token, verified.user);
           AKILI.showToast('Admin signed in', 'success');
           location.href = ADMIN_BASE + '/panel';
         } catch (err) {
-          AKILI.showToast(err.message, 'error');
-          // on error, if during PIN step, go back to credentials so user can re-try password
+          AKILI.showToast(err.message || 'Sign-in failed', 'error');
         }
       };
 
-      document.getElementById('pin-back').addEventListener('click', () => {
-        pinStep.style.display = 'none';
-        credStep.style.display = '';
-      });
+      document.getElementById('pin-back').addEventListener('click', () => showStep('cred'));
+      document.getElementById('otp-back').addEventListener('click', () => showStep('pin'));
     })();
   </script>
 </body>

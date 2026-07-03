@@ -1,6 +1,18 @@
 {
   "cleanUrls": true,
   "trailingSlash": false,
+  "redirects": [
+    {
+      "source": "/((?!admin-)[^/]+)\\.html",
+      "destination": "/$1",
+      "permanent": true
+    },
+    {
+      "source": "/index.html",
+      "destination": "/",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     { "source": "/x9Qp3-admin", "destination": "/admin-entry.html" },
     { "source": "/x9Qp3-admin/login", "destination": "/admin-login.html" },

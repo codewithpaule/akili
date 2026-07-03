@@ -35,6 +35,7 @@ from tools.port_scanner import run_port_scan
 from tools.tech_fingerprint import run_tech_fingerprint
 from tools.cve_lookup import run_cve_lookup
 from tools.link_crawler import run_link_crawler
+from tools.security_teams import run_red_team, run_blue_team
 
 load_dotenv()
 logger = logging.getLogger("akili.agent")
@@ -42,7 +43,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 MAX_ITERATIONS = int(os.getenv("MAX_ITERATIONS", "18") or 18)
 # Support an "unlimited" mode for MAX_AGENT_ACTIONS via env values like '*', 'unlimited', '0', or empty
-_raw_max_actions = (os.getenv("MAX_AGENT_ACTIONS", "6") or "").strip()
+_raw_max_actions = (os.getenv("MAX_AGENT_ACTIONS", "10") or "").strip()
 if _raw_max_actions.lower() in ("", "*", "unlimited", "0", "none"):
     MAX_AGENT_ACTIONS = None
 else:
@@ -134,6 +135,8 @@ TOOL_DEFINITIONS = [
     {"type": "function", "function": {"name": "domain_rep", "description": "Domain reputation and blacklist checks", "parameters": _target_param_schema("Domain name")}},
     {"type": "function", "function": {"name": "osint_person", "description": "Person OSINT across public profiles and web sources", "parameters": _target_param_schema("Person name or name|keywords")}},
     {"type": "function", "function": {"name": "link_crawler", "description": "Crawl links and discover hidden paths on a website", "parameters": _target_param_schema()}},
+    {"type": "function", "function": {"name": "red_team", "description": "Offensive recon map attack surface, risky ports, exposed paths, EOL software without exploitation", "parameters": _target_param_schema()}},
+    {"type": "function", "function": {"name": "blue_team", "description": "Defensive review missing security headers, hardening score, monitoring gaps", "parameters": _target_param_schema()}},
     {"type": "function", "function": {"name": "web_search", "description": "Search the web for current threat intelligence, CVE details, breach news, or public information about a target. Use when scan evidence is not enough.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "A focused search query"}, "intent": {"type": "string", "description": "What you are hoping to find"}}, "required": ["query"]}}},
 ]
 
@@ -161,6 +164,8 @@ TOOL_MAP = {
     "tech_fingerprint": lambda t, c: run_tech_fingerprint(_as_url(t), c),
     "cve_lookup": lambda t, c: run_cve_lookup(c.get("technologies", []), c),
     "link_crawler": lambda t, c: run_link_crawler(_as_url(t), c),
+    "red_team": lambda t, c: run_red_team(t, c),
+    "blue_team": lambda t, c: run_blue_team(t, c),
     "web_search": lambda t, c: _web_search(c.get("_tool_query", t), c.get("_tool_intent", ""), c),
 }
 
@@ -565,6 +570,12 @@ TOOL_LABELS = {
     "domain_rep": "domain reputation",
     "osint_person": "person OSINT (AI-led)",
     "web_search": "web threat intelligence search",
+    "red_team": "red team attack surface",
+    "blue_team": "blue team hardening review",
+    "tech_fingerprint": "deep tech fingerprint",
+    "cve_lookup": "CVE version lookup",
+    "port_scanner": "extended port scan",
+    "link_crawler": "link crawler",
     "dns": "DNS records",
 }
 
@@ -710,6 +721,12 @@ def _auto_chain_tools(name: str, result: dict, context: dict, allowed: set) -> N
     if name in ("headers", "fingerprint") and context.get("module") in ("website", "vulnerability", "api", "company"):
         if "vulnerability" not in used and "vulnerability" in allowed:
             queue.append({"tool": "vulnerability", "reason": "Deep vuln pass on fetched HTTP surface"})
+        if "blue_team" not in used and "blue_team" in allowed:
+            queue.append({"tool": "blue_team", "reason": "Defensive hardening review on HTTP surface"})
+
+    if name in ("vulnerability", "exposed_files", "ports", "tech_fingerprint"):
+        if "red_team" not in used and "red_team" in allowed:
+            queue.append({"tool": "red_team", "reason": "Offensive attack surface synthesis"})
 
     if name == "exposed_files":
         critical = [p for p in (raw.get("probes") or []) if p.get("accessible") and str(p.get("severity", "")).upper() == "CRITICAL"]
@@ -731,11 +748,12 @@ def _auto_chain_tools(name: str, result: dict, context: dict, allowed: set) -> N
 
 def get_available_tools(module: str) -> list[str]:
     if module == "person":
-        return ["osint_person", "web_search"]
+        return ["osint_person", "web_search", "domain_rep", "email_intel"]
     base = [
         "headers", "ssl_check", "whois_check", "dns", "ports", "port_scanner",
         "fingerprint", "tech_fingerprint", "cve_lookup", "exposed_files",
         "link_crawler", "vulnerability", "subdomains", "web_search",
+        "red_team", "blue_team",
     ]
     if module == "ip":
         return ["ip_intel", "ports", "port_scanner", "headers", "web_search"]

@@ -74,7 +74,7 @@
     return data;
   }
 
-  function requireAdmin(redirectTo = 'admin-login.html') {
+  function requireAdmin(redirectTo) {
     const u = getUser();
     if (!getToken() || !u?.is_admin) {
       location.href = redirectTo || (adminBase() + '/login');
@@ -85,7 +85,7 @@
 
   function logout() {
     clearSession();
-    location.href = 'index.html';
+    location.href = '/';
   }
 
   function fmtTime(ts) {

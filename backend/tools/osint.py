@@ -228,9 +228,15 @@ def _apply_search_result_profiles(
         ]).lower()
         name_hits = sum(1 for t in name_tokens if t in haystack)
         kw_hits = sum(1 for t in kw_tokens if t in haystack)
-        if name_hits == 0 and kw_hits == 0:
+        min_name = max(2, min(len(name_tokens), 3)) if len(name_tokens) >= 2 else 1
+        if name_hits < min_name and kw_hits == 0:
             continue
-        confidence = "medium" if name_hits >= max(1, min(2, len(name_tokens))) or kw_hits else "low"
+        if name_hits >= min_name and (not kw_tokens or kw_hits >= 1):
+            confidence = "high"
+        elif name_hits >= max(1, min_name - 1) or kw_hits >= 1:
+            confidence = "medium"
+        else:
+            continue
         handle = _handle_from_url(url, platform)
         if platform not in platforms:
             platforms[platform] = {"found": False, "url": None}
@@ -416,9 +422,19 @@ async def _collect_async(name: str, keywords: str) -> dict[str, Any]:
     agentic_notes.append(plan.get("investigation_summary") or "AI planned profile verification")
     profile_urls = plan.get("profile_urls_to_check") or plan.get("candidates") or []
 
+    extra_queries = [
+        f'"{name}" {keywords}'.strip(),
+        f'site:linkedin.com/in "{name}" {keywords}'.strip(),
+        f'"{name}" {keywords} portfolio OR "about me"'.strip(),
+        f'"{name}" {keywords} news OR interview OR profile'.strip(),
+    ]
+    merged_queries = list(dict.fromkeys(
+        (plan.get("web_search_queries") or []) + [q for q in extra_queries if q.strip()]
+    ))[:8]
+
     phase2 = await asyncio.gather(
         _fetch_all_profile_pages(profile_urls),
-        _run_all_search_queries(plan.get("web_search_queries") or []),
+        _run_all_search_queries(merged_queries),
         _run_image_searches(plan.get("image_search_queries") or []),
         _check_breach_databases(name),
         return_exceptions=True,

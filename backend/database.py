@@ -19,14 +19,15 @@ if DATABASE_URL.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
     engine = create_engine(DATABASE_URL, connect_args=connect_args)
 else:
-    # PostgreSQL with SSL connection pool settings for cloud environments
+    pool_size = int(os.getenv("DB_POOL_SIZE", "20") or 20)
+    max_overflow = int(os.getenv("DB_MAX_OVERFLOW", "40") or 40)
     engine = create_engine(
         DATABASE_URL,
         poolclass=QueuePool,
-        pool_size=5,
-        max_overflow=10,
-        pool_pre_ping=True,  # Verify connections before using
-        pool_recycle=3600,  # Recycle connections after 1 hour
+        pool_size=pool_size,
+        max_overflow=max_overflow,
+        pool_pre_ping=True,
+        pool_recycle=1800,
         connect_args={
             "sslmode": "require",
             "connect_timeout": 10,
@@ -467,6 +468,29 @@ def delete_scan(scan_id: str, user_id: str = "") -> bool:
             q = q.filter(Scan.user_id == user_id)
         n = q.delete()
         return n > 0
+
+
+def purge_scan_ephemeral(scan_id: str) -> bool:
+    """Remove scan record and all associated logs (ephemeral / privacy mode)."""
+    if not scan_id:
+        return False
+    with get_db() as db:
+        db.query(ScanLog).filter(ScanLog.scan_id == scan_id).delete()
+        n = db.query(Scan).filter(Scan.scan_id == scan_id).delete()
+        return n > 0
+
+
+def purge_scans_older_than(max_age_seconds: int) -> int:
+    """Batch purge scans and logs older than max_age_seconds."""
+    cutoff = int(time.time()) - max(60, int(max_age_seconds))
+    with get_db() as db:
+        old_ids = [
+            r.scan_id for r in db.query(Scan.scan_id).filter(Scan.timestamp < cutoff).limit(500).all()
+        ]
+        if not old_ids:
+            return 0
+        db.query(ScanLog).filter(ScanLog.scan_id.in_(old_ids)).delete(synchronize_session=False)
+        return db.query(Scan).filter(Scan.scan_id.in_(old_ids)).delete(synchronize_session=False)
 
 
 def delete_all_scans(user_id: str = "") -> int:
